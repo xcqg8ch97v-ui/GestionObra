@@ -9,7 +9,7 @@ const App = (() => {
     canvas: 'Mesa de Trabajo',
     dashboard: 'Proveedores y Presupuestos',
     timeline: 'Cronograma de Obra',
-    diary: 'Diario de Incidencias',
+    diary: 'Diario de Obra',
     files: 'Documentos de Obra',
     participants: 'Participantes de la Obra'
   };
@@ -117,6 +117,9 @@ const App = (() => {
       const photoHTML = p.clientPhoto
         ? `<img class="project-card-photo" src="${p.clientPhoto}" alt="">`
         : '';
+      const deadlineHTML = p.targetEndDate
+        ? `<div class="project-card-deadline">Entrega objetivo: ${formatDate(p.targetEndDate)}</div>`
+        : '<div class="project-card-deadline">Entrega objetivo: sin definir</div>';
       return `
         <div class="project-card" onclick="App.enterProject(${p.id})">
           <div class="project-card-header">
@@ -124,6 +127,7 @@ const App = (() => {
             <div>
               <div class="project-card-name">${escapeHTML(p.name)}</div>
               <div class="project-card-client">${escapeHTML(p.client || 'Sin cliente')}</div>
+              ${deadlineHTML}
             </div>
           </div>
           <div class="project-card-meta">
@@ -179,13 +183,19 @@ const App = (() => {
         <label>Dirección</label>
         <input type="text" id="proj-address" value="${isEdit ? escapeHTML(project.address || '') : ''}" placeholder="Dirección de la obra">
       </div>
-      <div class="form-group">
-        <label>Estado</label>
-        <select id="proj-status">
-          <option value="active" ${isEdit && project.status === 'active' ? 'selected' : ''}>Activa</option>
-          <option value="paused" ${isEdit && project.status === 'paused' ? 'selected' : ''}>En pausa</option>
-          <option value="finished" ${isEdit && project.status === 'finished' ? 'selected' : ''}>Finalizada</option>
-        </select>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fecha objetivo original</label>
+          <input type="date" id="proj-target-end" value="${isEdit ? escapeHTML(project.targetEndDate || '') : ''}">
+        </div>
+        <div class="form-group">
+          <label>Estado</label>
+          <select id="proj-status">
+            <option value="active" ${isEdit && project.status === 'active' ? 'selected' : ''}>Activa</option>
+            <option value="paused" ${isEdit && project.status === 'paused' ? 'selected' : ''}>En pausa</option>
+            <option value="finished" ${isEdit && project.status === 'finished' ? 'selected' : ''}>Finalizada</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <label>Notas</label>
@@ -241,12 +251,14 @@ const App = (() => {
     document.getElementById('btn-save-project').addEventListener('click', async () => {
       const name = document.getElementById('proj-name').value.trim();
       if (!name) { toast('El nombre es obligatorio', 'warning'); return; }
+      const targetEndDate = document.getElementById('proj-target-end').value;
 
       const data = {
         name,
         client: document.getElementById('proj-client').value.trim(),
         clientPhoto: clientPhotoData || null,
         address: document.getElementById('proj-address').value.trim(),
+        targetEndDate: targetEndDate || '',
         status: document.getElementById('proj-status').value,
         notes: document.getElementById('proj-notes').value.trim(),
         updatedAt: new Date().toISOString()
@@ -256,10 +268,13 @@ const App = (() => {
         data.id = project.id;
         data.createdAt = project.createdAt;
         await DB.put('projects', data);
+        await syncProjectDeadlineMilestone(data);
         toast('Obra actualizada', 'success');
       } else {
         data.createdAt = new Date().toISOString();
-        await DB.add('projects', data);
+        const newId = await DB.add('projects', data);
+        data.id = newId;
+        await syncProjectDeadlineMilestone(data);
         toast('Obra creada', 'success');
       }
 
@@ -460,6 +475,8 @@ const App = (() => {
     const project = await DB.getById('projects', id);
     if (!project) return;
 
+    await syncProjectDeadlineMilestone(project);
+
     currentProjectId = id;
     currentProjectName = project.name;
 
@@ -497,6 +514,54 @@ const App = (() => {
     safeIcons();
 
     navigateTo('overview');
+  }
+
+  async function syncProjectDeadlineMilestone(project) {
+    if (!project || !project.id) return;
+
+    const projectTasks = await DB.getAllForProject('tasks', project.id);
+    const milestone = projectTasks.find(task => task.systemTag === 'project-deadline-milestone');
+
+    if (!project.targetEndDate) {
+      if (milestone) await DB.remove('tasks', milestone.id);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const milestoneData = {
+      name: 'Hito · Fin objetivo de obra',
+      category: 'General',
+      responsible: '',
+      startDate: project.targetEndDate,
+      endDate: project.targetEndDate,
+      progress: project.status === 'finished' ? 100 : 0,
+      dependencies: milestone?.dependencies || [],
+      projectId: project.id,
+      updatedAt: now,
+      createdAt: milestone?.createdAt || now,
+      baselineStartDate: milestone?.baselineStartDate || milestone?.startDate || project.targetEndDate,
+      baselineEndDate: milestone?.baselineEndDate || milestone?.endDate || project.targetEndDate,
+      systemTag: 'project-deadline-milestone',
+      isMilestone: true,
+      lockedBySystem: true
+    };
+
+    if (milestone) {
+      milestoneData.id = milestone.id;
+      await DB.put('tasks', milestoneData);
+      return;
+    }
+
+    await DB.add('tasks', milestoneData);
+  }
+
+  function openIncident(id) {
+    navigateTo('diary');
+    setTimeout(() => {
+      if (typeof DiaryModule !== 'undefined' && DiaryModule.focusIncident) {
+        DiaryModule.focusIncident(id);
+      }
+    }, 80);
   }
 
   // ========================================
@@ -732,6 +797,10 @@ const App = (() => {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
 
+      if (currentSection === 'timeline' && typeof TimelineModule !== 'undefined' && TimelineModule.captureContextMenuTarget) {
+        TimelineModule.captureContextMenuTarget(e.target, e.clientX);
+      }
+
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY);
     });
@@ -853,8 +922,8 @@ const App = (() => {
 
       case 'diary':
         return [
-          { type: 'header', label: 'Diario de Incidencias' },
-          { action: 'add-incident',    icon: 'plus-circle',  label: 'Nueva incidencia' },
+          { type: 'header', label: 'Diario de Obra' },
+          { action: 'add-incident',    icon: 'plus-circle',  label: 'Nueva entrada' },
           { type: 'sep' },
           { action: 'filter-all',      icon: 'list',          label: 'Mostrar todas' },
           { action: 'filter-pending',  icon: 'clock',         label: 'Solo pendientes' },
@@ -956,8 +1025,16 @@ const App = (() => {
 
       // Timeline
       case 'add-task':
-        if (currentSection !== 'timeline') navigateTo('timeline');
-        setTimeout(() => document.getElementById('btn-add-task').click(), 50);
+        if (currentSection !== 'timeline') {
+          navigateTo('timeline');
+          setTimeout(() => document.getElementById('btn-add-task').click(), 50);
+          break;
+        }
+        if (typeof TimelineModule !== 'undefined' && TimelineModule.openTaskFromContext) {
+          TimelineModule.openTaskFromContext();
+        } else {
+          document.getElementById('btn-add-task').click();
+        }
         break;
       case 'view-gantt':
         document.getElementById('btn-view-gantt').click();
@@ -1037,6 +1114,8 @@ const App = (() => {
     deleteProject,
     exportProject,
     importProject,
+    syncProjectDeadlineMilestone,
+    openIncident,
     get currentSection() { return currentSection; },
     get projectId() { return currentProjectId; }
   };

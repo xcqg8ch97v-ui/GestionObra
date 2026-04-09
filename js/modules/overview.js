@@ -1,6 +1,6 @@
 /* ========================================
    Overview Module - Vista General del Proyecto
-   Resumen con estadísticas y actividad reciente
+   Alertas, hitos, actividad reciente y acciones rápidas
    ======================================== */
 
 const OverviewModule = (() => {
@@ -8,94 +8,382 @@ const OverviewModule = (() => {
 
   function init(pid) {
     projectId = pid;
+    bindActions();
     refresh();
+  }
+
+  function bindActions() {
+    const grid = document.getElementById('overview-grid');
+    if (!grid || grid.dataset.bound === 'true') return;
+
+    grid.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-overview-action]');
+      if (!trigger) return;
+
+      const action = trigger.dataset.overviewAction;
+      if (action === 'new-task') {
+        App.navigateTo('timeline');
+        setTimeout(() => document.getElementById('btn-add-task')?.click(), 60);
+      }
+      if (action === 'new-incident') {
+        App.navigateTo('diary');
+        setTimeout(() => document.getElementById('btn-add-incident')?.click(), 60);
+      }
+      if (action === 'new-comment') {
+        App.navigateTo('diary');
+        setTimeout(() => document.getElementById('btn-add-comment')?.click(), 60);
+      }
+      if (action === 'upload-file') {
+        App.navigateTo('files');
+        setTimeout(() => document.getElementById('btn-upload-file')?.click(), 60);
+      }
+      if (action === 'new-participant') {
+        App.navigateTo('participants');
+        setTimeout(() => document.getElementById('btn-add-participant')?.click(), 60);
+      }
+      if (action === 'open-incident') {
+        const incidentId = parseInt(trigger.dataset.incidentId, 10);
+        if (incidentId) App.openIncident(incidentId);
+      }
+    });
+
+    grid.dataset.bound = 'true';
   }
 
   async function refresh() {
     if (!projectId) return;
 
-    const [tasks, budgets, incidents, suppliers] = await Promise.all([
+    const [project, tasks, budgets, incidents, suppliers, files] = await Promise.all([
+      DB.getById('projects', projectId),
       DB.getAllForProject('tasks', projectId),
       DB.getAllForProject('budgets', projectId),
       DB.getAllForProject('incidents', projectId),
-      DB.getAllForProject('suppliers', projectId)
+      DB.getAllForProject('suppliers', projectId),
+      DB.getAllForProject('files', projectId)
     ]);
 
-    renderCards(tasks, budgets, incidents, suppliers);
+    renderCards(project, tasks, budgets, incidents, suppliers, files);
   }
 
-  // Construction phases (mirrors TimelineModule.PHASES)
-  const PHASES = [
-    { key: 'Demolición',    icon: 'hammer',       color: '#EF4444' },
-    { key: 'Estructura',    icon: 'building-2',   color: '#8B5CF6' },
-    { key: 'Albañilería',   icon: 'brick-wall',   color: '#F97316' },
-    { key: 'Fontanería',    icon: 'droplets',     color: '#3B82F6' },
-    { key: 'Electricidad',  icon: 'zap',          color: '#EAB308' },
-    { key: 'Carpintería',   icon: 'axe',          color: '#A16207' },
-    { key: 'Pintura',       icon: 'paintbrush',   color: '#EC4899' },
-    { key: 'Acabados',      icon: 'sparkles',     color: '#14B8A6' },
-    { key: 'Limpieza',      icon: 'spray-can',    color: '#06B6D4' },
-    { key: 'General',       icon: 'layers',       color: '#64748B' }
-  ];
+  function startOfDay(value) {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
 
-  function groupTasksByPhase(taskList) {
-    const groups = [];
-    for (const phase of PHASES) {
-      const phaseTasks = taskList.filter(t => (t.category || 'General') === phase.key);
-      if (phaseTasks.length > 0) {
-        const completed = phaseTasks.filter(t => (t.progress || 0) >= 100).length;
-        const avgProgress = Math.round(phaseTasks.reduce((s, t) => s + (t.progress || 0), 0) / phaseTasks.length);
-        groups.push({ ...phase, tasks: phaseTasks, completed, total: phaseTasks.length, avgProgress });
-      }
+  function daysDiff(from, to) {
+    return Math.round((startOfDay(to) - startOfDay(from)) / (1000 * 60 * 60 * 24));
+  }
+
+  function formatRelativeDay(targetDate) {
+    const days = daysDiff(new Date(), targetDate);
+    if (days === 0) return 'Hoy';
+    if (days === 1) return 'Mañana';
+    if (days > 1) return `En ${days} días`;
+    return `Hace ${Math.abs(days)} días`;
+  }
+
+  function buildDeliverySummary(project) {
+    if (!project?.targetEndDate) {
+      return {
+        value: 'Sin fecha',
+        detail: 'Define una entrega objetivo para medir riesgo y crear el hito final.'
+      };
     }
-    return groups;
+
+    const relative = formatRelativeDay(project.targetEndDate);
+    return {
+      value: App.formatDate(project.targetEndDate),
+      detail: `Entrega objetivo ${relative.toLowerCase()}`
+    };
   }
 
-  function renderCards(tasks, budgets, incidents, suppliers) {
+  function addDays(value, days) {
+    const date = startOfDay(value);
+    date.setDate(date.getDate() + days);
+    return date;
+  }
+
+  function buildScheduleRiskAlert(project, tasks) {
+    if (!project?.targetEndDate) return null;
+
+    const today = startOfDay(new Date());
+    const targetEnd = startOfDay(project.targetEndDate);
+    const relevantTasks = tasks.filter(task => task.systemTag !== 'project-deadline-milestone');
+    const progress = relevantTasks.length > 0
+      ? Math.round(relevantTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / relevantTasks.length)
+      : 0;
+
+    const startPool = [project.createdAt, ...relevantTasks.map(task => task.startDate)].filter(Boolean);
+    const projectStart = startOfDay(new Date(Math.min(...startPool.map(item => startOfDay(item).getTime()))));
+    const totalDays = Math.max(1, daysDiff(projectStart, targetEnd));
+    const elapsedDays = Math.max(0, daysDiff(projectStart, today));
+    const remainingDays = Math.max(0, daysDiff(today, targetEnd));
+    const expectedProgress = Math.min(100, Math.round((elapsedDays / totalDays) * 100));
+
+    let projectedEnd = null;
+    if (elapsedDays > 0 && progress > 0 && progress < 100) {
+      const projectedTotalDays = Math.round(elapsedDays / (progress / 100));
+      projectedEnd = addDays(projectStart, projectedTotalDays);
+    }
+
+    const behindSchedule = progress + 10 < expectedProgress;
+    const projectedDelayDays = projectedEnd ? Math.max(0, daysDiff(targetEnd, projectedEnd)) : 0;
+    const closeToDeadline = remainingDays <= 21;
+
+    if (!closeToDeadline && !behindSchedule && projectedDelayDays === 0) return null;
+    if (progress >= 100) return null;
+
+    return {
+      level: projectedDelayDays > 7 || remainingDays <= 7 ? 'danger' : 'warning',
+      icon: 'siren',
+      title: 'Riesgo de no llegar a plazo',
+      detail: projectedDelayDays > 0
+        ? `Al ritmo actual, acabaríamos con ${projectedDelayDays} día(s) de retraso`
+        : `Quedan ${remainingDays} día(s) y el avance real va por detrás del esperado`,
+      meta: `Objetivo ${App.formatDate(project.targetEndDate)} · Avance ${progress}% · Esperado ${expectedProgress}%`
+    };
+  }
+
+  function buildAlerts(project, tasks, budgets, incidents, suppliers) {
+    const today = startOfDay(new Date());
+    const totalEstimated = budgets.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
+    const totalReal = budgets.reduce((sum, item) => sum + (item.realCost || 0), 0);
+    const budgetDeviation = totalEstimated > 0 ? ((totalReal - totalEstimated) / totalEstimated) * 100 : 0;
+
+    const delayedTasks = tasks.filter(task => {
+      const end = startOfDay(task.endDate);
+      const start = startOfDay(task.startDate);
+      const progress = task.progress || 0;
+      return progress < 100 && (end < today || (start < today && progress === 0));
+    });
+
+    const activeTasks = tasks.filter(task => {
+      const start = startOfDay(task.startDate);
+      const end = startOfDay(task.endDate);
+      const progress = task.progress || 0;
+      return progress > 0 && progress < 100 && start <= today && end >= today;
+    });
+
+    const pendingIncidents = incidents.filter(item => item.entryType === 'incident' && item.status === 'pending');
+    const pendingSuppliers = suppliers.filter(item => (item.status || '').toLowerCase() === 'pendiente');
+
+    const alerts = [];
+    const scheduleRiskAlert = buildScheduleRiskAlert(project, tasks);
+    if (scheduleRiskAlert) alerts.push(scheduleRiskAlert);
+
+    if (delayedTasks.length > 0) {
+      alerts.push({
+        level: 'danger',
+        icon: 'triangle-alert',
+        title: 'Tareas retrasadas',
+        detail: `${delayedTasks.length} tarea(s) fuera de plazo`,
+        meta: delayedTasks.slice(0, 2).map(task => task.name).join(' · ')
+      });
+    }
+    if (activeTasks.length > 0) {
+      alerts.push({
+        level: 'success',
+        icon: 'play-circle',
+        title: 'Tareas en ejecución',
+        detail: `${activeTasks.length} tarea(s) activas hoy`,
+        meta: activeTasks.slice(0, 2).map(task => task.name).join(' · ')
+      });
+    }
+    pendingIncidents.slice(0, 3).forEach(item => {
+      alerts.push({
+        level: 'warning',
+        icon: 'shield-alert',
+        title: 'Incidencia pendiente',
+        detail: item.description,
+        meta: `${App.formatDateTime(item.date)} · ${item.category || 'Sin categoría'}`,
+        action: 'open-incident',
+        incidentId: item.id,
+        actionLabel: 'Abrir incidencia'
+      });
+    });
+    if (budgetDeviation > 5) {
+      alerts.push({
+        level: 'danger',
+        icon: 'wallet-cards',
+        title: 'Desviación presupuestaria',
+        detail: `+${Math.round(budgetDeviation)}% sobre lo previsto`,
+        meta: `${App.formatCurrency(totalReal)} vs ${App.formatCurrency(totalEstimated)}`
+      });
+    }
+    if (pendingSuppliers.length > 0) {
+      alerts.push({
+        level: 'info',
+        icon: 'users-round',
+        title: 'Proveedores pendientes',
+        detail: `${pendingSuppliers.length} proveedor(es) por activar`,
+        meta: pendingSuppliers.slice(0, 2).map(item => item.name).join(' · ')
+      });
+    }
+
+    return alerts.slice(0, 6);
+  }
+
+  function buildMilestones(tasks) {
+    const today = startOfDay(new Date());
+    const limit = startOfDay(new Date());
+    limit.setDate(limit.getDate() + 14);
+
+    return tasks
+      .filter(task => {
+        const end = startOfDay(task.endDate);
+        return (task.progress || 0) < 100 && end >= today && end <= limit;
+      })
+      .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+      .slice(0, 6)
+      .map(task => ({
+        id: task.id,
+        title: task.name,
+        date: task.endDate,
+        relative: formatRelativeDay(task.endDate),
+        progress: task.progress || 0,
+        phase: task.category || 'General'
+      }));
+  }
+
+  function buildRecentActivity(tasks, incidents, files) {
+    const items = [];
+
+    tasks.forEach(task => {
+      items.push({
+        type: 'task',
+        icon: 'gantt-chart',
+        title: task.name,
+        subtitle: `${task.category || 'General'} · ${task.progress || 0}%`,
+        date: task.updatedAt || task.createdAt || task.endDate
+      });
+    });
+
+    incidents.forEach(entry => {
+      const entryType = entry.entryType || 'incident';
+      const labels = {
+        incident: 'Incidencia',
+        comment: 'Comentario',
+        evolution: 'Evolución'
+      };
+      const icons = {
+        incident: 'triangle-alert',
+        comment: 'message-square',
+        evolution: 'book-open'
+      };
+      items.push({
+        type: 'diary',
+        icon: icons[entryType],
+        title: entry.description,
+        subtitle: labels[entryType],
+        date: entry.updatedAt || entry.createdAt || entry.date
+      });
+    });
+
+    files.forEach(file => {
+      items.push({
+        type: 'file',
+        icon: 'paperclip',
+        title: file.name || 'Documento',
+        subtitle: 'Documento subido',
+        date: file.uploadedAt || file.createdAt
+      });
+    });
+
+    return items
+      .filter(item => item.date)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 8);
+  }
+
+  function renderCards(project, tasks, budgets, incidents, suppliers, files) {
     const grid = document.getElementById('overview-grid');
     if (!grid) return;
 
-    // --- Task stats ---
     const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.progress === 100).length;
+    const completedTasks = tasks.filter(task => (task.progress || 0) >= 100).length;
     const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const overdueTasks = tasks.filter(t => {
-      const end = new Date(t.endDate);
-      return end < new Date() && t.progress < 100;
-    }).length;
-
-    // --- Budget stats ---
-    const totalEstimated = budgets.reduce((s, b) => s + (b.estimatedCost || 0), 0);
-    const totalReal = budgets.reduce((s, b) => s + (b.realCost || 0), 0);
+    const totalEstimated = budgets.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
+    const totalReal = budgets.reduce((sum, item) => sum + (item.realCost || 0), 0);
     const budgetDeviation = totalEstimated > 0 ? Math.round(((totalReal - totalEstimated) / totalEstimated) * 100) : 0;
+    const diaryEntries = incidents.length;
+    const deliverySummary = buildDeliverySummary(project);
 
-    // --- Incident stats ---
-    const pendingIncidents = incidents.filter(i => i.status === 'pending').length;
-    const inProgressIncidents = incidents.filter(i => i.status === 'in-progress').length;
-    const resolvedIncidents = incidents.filter(i => i.status === 'resolved').length;
-
-    // --- Upcoming tasks (next 7 days) ---
-    const now = new Date();
-    const nextWeek = new Date(now);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const upcoming = tasks
-      .filter(t => {
-        const end = new Date(t.endDate);
-        return end >= now && end <= nextWeek && t.progress < 100;
-      })
-      .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
-      .slice(0, 5);
-
-    // --- Recent incidents ---
-    const recentIncidents = [...incidents]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 5);
-
-    // --- Phase breakdown ---
-    const phaseGroups = groupTasksByPhase(tasks);
+    const alerts = buildAlerts(project, tasks, budgets, incidents, suppliers);
+    const milestones = buildMilestones(tasks);
+    const activity = buildRecentActivity(tasks, incidents, files);
 
     grid.innerHTML = `
-      <!-- Progreso General -->
+      <div class="overview-card overview-card-wide overview-hero-card">
+        <div class="overview-card-header">
+          <i data-lucide="sparkles"></i>
+          <span>Panel Ejecutivo</span>
+        </div>
+        <div class="overview-hero-stats">
+          <div class="overview-hero-stat">
+            <strong>${taskProgress}%</strong>
+            <span>avance global</span>
+          </div>
+          <div class="overview-hero-stat">
+            <strong>${App.formatCurrency(totalReal)}</strong>
+            <span>coste actual</span>
+          </div>
+          <div class="overview-hero-stat">
+            <strong>${diaryEntries}</strong>
+            <span>entradas de diario</span>
+          </div>
+          <div class="overview-hero-stat">
+            <strong>${suppliers.length}</strong>
+            <span>proveedores</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="overview-card overview-card-wide">
+        <div class="overview-card-header">
+          <i data-lucide="zap"></i>
+          <span>Acciones rápidas</span>
+        </div>
+        <div class="overview-quick-actions">
+          <button class="overview-quick-btn" data-overview-action="new-task"><i data-lucide="plus"></i><span>Nueva tarea</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-incident"><i data-lucide="triangle-alert"></i><span>Nueva incidencia</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-comment"><i data-lucide="message-square"></i><span>Nuevo comentario</span></button>
+          <button class="overview-quick-btn" data-overview-action="upload-file"><i data-lucide="upload"></i><span>Subir documento</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-participant"><i data-lucide="user-plus"></i><span>Añadir participante</span></button>
+        </div>
+      </div>
+
+      <div class="overview-card overview-card-wide">
+        <div class="overview-card-header">
+          <i data-lucide="siren"></i>
+          <span>Alertas automáticas</span>
+        </div>
+        ${alerts.length > 0 ? `
+          <div class="overview-alert-list">
+            ${alerts.map(alert => `
+              <div class="overview-alert overview-alert-${alert.level} ${alert.action ? 'is-clickable' : ''}">
+                <div class="overview-alert-icon"><i data-lucide="${alert.icon}"></i></div>
+                <div class="overview-alert-content">
+                  <div class="overview-alert-title">${App.escapeHTML(alert.title)}</div>
+                  <div class="overview-alert-detail">${App.escapeHTML(alert.detail)}</div>
+                  ${alert.meta ? `<div class="overview-alert-meta">${App.escapeHTML(alert.meta)}</div>` : ''}
+                  ${alert.action ? `<button class="overview-alert-link" data-overview-action="${alert.action}" data-incident-id="${alert.incidentId || ''}">${App.escapeHTML(alert.actionLabel || 'Abrir')}</button>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="overview-card-detail">No hay alertas relevantes ahora mismo</div>'}
+      </div>
+
+      <div class="overview-card">
+        <div class="overview-card-header">
+          <i data-lucide="flag"></i>
+          <span>Entrega objetivo</span>
+        </div>
+        <div class="overview-card-value">${deliverySummary.value}</div>
+        <div class="overview-card-detail">${deliverySummary.detail}</div>
+      </div>
+
       <div class="overview-card">
         <div class="overview-card-header">
           <i data-lucide="check-circle-2"></i>
@@ -105,95 +393,70 @@ const OverviewModule = (() => {
         <div class="overview-progress-bar">
           <div class="overview-progress-fill" style="width:${taskProgress}%"></div>
         </div>
-        <div class="overview-card-detail">
-          ${completedTasks} de ${totalTasks} tareas completadas
-          ${overdueTasks > 0 ? `<br><span style="color:var(--red)">${overdueTasks} con retraso</span>` : ''}
-        </div>
+        <div class="overview-card-detail">${completedTasks} de ${totalTasks} tareas completadas</div>
       </div>
 
-      <!-- Presupuesto -->
       <div class="overview-card">
         <div class="overview-card-header">
           <i data-lucide="wallet"></i>
           <span>Presupuesto</span>
         </div>
-        <div class="overview-card-value">${App.formatCurrency(totalReal)} <span style="font-size:0.5em;color:var(--text-secondary)">/ ${App.formatCurrency(totalEstimated)}</span></div>
+        <div class="overview-card-value">${App.formatCurrency(totalReal)}</div>
         <div class="overview-card-detail">
+          Previsto: ${App.formatCurrency(totalEstimated)}<br>
           Desviación: <span style="color:${budgetDeviation > 0 ? 'var(--red)' : budgetDeviation < 0 ? 'var(--green)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
-          <br>${budgets.length} partidas · ${suppliers.length} proveedores
         </div>
       </div>
 
-      <!-- Incidencias -->
       <div class="overview-card">
         <div class="overview-card-header">
-          <i data-lucide="alert-triangle"></i>
-          <span>Incidencias</span>
+          <i data-lucide="clipboard-list"></i>
+          <span>Diario</span>
         </div>
-        <div class="overview-card-value">${incidents.length}</div>
-        <div class="overview-card-detail">
-          <span style="color:var(--amber)">${pendingIncidents} pendientes</span> ·
-          <span style="color:var(--cyan)">${inProgressIncidents} en proceso</span> ·
-          <span style="color:var(--green)">${resolvedIncidents} resueltas</span>
-        </div>
+        <div class="overview-card-value">${diaryEntries}</div>
+        <div class="overview-card-detail">${incidents.filter(item => (item.entryType || 'incident') === 'incident').length} incidencias · ${incidents.filter(item => (item.entryType || 'incident') !== 'incident').length} notas</div>
       </div>
 
-      <!-- Progreso por Fase -->
       <div class="overview-card overview-card-wide">
         <div class="overview-card-header">
-          <i data-lucide="layers"></i>
-          <span>Progreso por Fase</span>
+          <i data-lucide="calendar-range"></i>
+          <span>Próximos hitos</span>
         </div>
-        ${phaseGroups.length > 0 ? phaseGroups.map(g => `
-          <div class="overview-phase-row">
-            <div class="overview-phase-info">
-              <i data-lucide="${g.icon}" style="width:16px;height:16px;color:${g.color}"></i>
-              <span class="overview-phase-name">${g.key}</span>
-              <span class="overview-phase-count">${g.completed}/${g.total}</span>
+        ${milestones.length > 0 ? milestones.map(item => `
+          <div class="overview-list-item overview-list-item-rich">
+            <div>
+              <div class="overview-list-title">${App.escapeHTML(item.title)}</div>
+              <div class="overview-list-subtitle">${App.escapeHTML(item.phase)} · ${item.progress}%</div>
             </div>
-            <div class="overview-phase-bar-wrap">
-              <div class="overview-phase-track">
-                <div class="overview-phase-fill" style="width:${g.avgProgress}%;background:${g.color}"></div>
-              </div>
-              <span class="overview-phase-pct">${g.avgProgress}%</span>
+            <div class="overview-list-side">
+              <span class="overview-list-date">${App.formatDate(item.date)}</span>
+              <span class="overview-list-pill">${item.relative}</span>
             </div>
           </div>
-        `).join('') : '<div class="overview-card-detail">No hay tareas asignadas a fases</div>'}
+        `).join('') : '<div class="overview-card-detail">No hay hitos previstos en los próximos 14 días</div>'}
       </div>
 
-      <!-- Próximas entregas -->
-      <div class="overview-card overview-card-wide">
-        <div class="overview-card-header">
-          <i data-lucide="calendar-clock"></i>
-          <span>Próximas Entregas</span>
-        </div>
-        ${upcoming.length > 0 ? upcoming.map(t => `
-          <div class="overview-list-item">
-            <span>${App.escapeHTML(t.name)}</span>
-            <span class="overview-list-date">${App.formatDate(t.endDate)} · ${t.progress}%</span>
-          </div>
-        `).join('') : '<div class="overview-card-detail">No hay entregas próximas</div>'}
-      </div>
-
-      <!-- Actividad reciente -->
       <div class="overview-card overview-card-wide">
         <div class="overview-card-header">
           <i data-lucide="activity"></i>
-          <span>Últimas Incidencias</span>
+          <span>Actividad reciente</span>
         </div>
-        ${recentIncidents.length > 0 ? recentIncidents.map(i => {
-          const statusColors = { pending: 'var(--amber)', 'in-progress': 'var(--cyan)', resolved: 'var(--green)' };
-          return `
-            <div class="overview-list-item">
-              <span><span style="color:${statusColors[i.status]};margin-right:6px;">●</span>${App.escapeHTML(i.description.substring(0, 60))}${i.description.length > 60 ? '...' : ''}</span>
-              <span class="overview-list-date">${App.formatDate(i.date)}</span>
+        ${activity.length > 0 ? activity.map(item => `
+          <div class="overview-list-item overview-list-item-rich">
+            <div class="overview-activity-main">
+              <span class="overview-activity-icon"><i data-lucide="${item.icon}"></i></span>
+              <div>
+                <div class="overview-list-title">${App.escapeHTML((item.title || '').substring(0, 72))}${(item.title || '').length > 72 ? '...' : ''}</div>
+                <div class="overview-list-subtitle">${App.escapeHTML(item.subtitle || '')}</div>
+              </div>
             </div>
-          `;
-        }).join('') : '<div class="overview-card-detail">No hay incidencias registradas</div>'}
+            <span class="overview-list-date">${App.formatDateTime(item.date)}</span>
+          </div>
+        `).join('') : '<div class="overview-card-detail">Sin actividad reciente</div>'}
       </div>
     `;
 
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   return { init, refresh };

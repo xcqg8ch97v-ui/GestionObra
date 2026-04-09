@@ -160,23 +160,43 @@
           <button class="tool-btn" data-tool="arrow" title="Flecha">
             <i data-lucide="move-right"></i>
           </button>
+          <button class="tool-btn" data-tool="connector" title="Conector entre elementos">
+            <i data-lucide="git-merge"></i>
+          </button>
           <button class="tool-btn" data-tool="postit" title="Post-it">
             <i data-lucide="sticky-note"></i>
           </button>
           <button class="tool-btn" data-tool="text" title="Texto">
             <i data-lucide="type"></i>
           </button>
+          <button class="tool-btn" data-tool="shape-rect" title="Rectángulo con texto">
+            <i data-lucide="square"></i>
+          </button>
+          <button class="tool-btn" data-tool="shape-circle" title="Círculo con texto">
+            <i data-lucide="circle"></i>
+          </button>
+          <button class="tool-btn" data-tool="shape-diamond" title="Rombo con texto">
+            <i data-lucide="diamond"></i>
+          </button>
+          <button class="tool-btn" data-tool="shape-triangle" title="Triángulo con texto">
+            <i data-lucide="triangle"></i>
+          </button>
           <button class="tool-btn" data-tool="table" title="Tabla">
             <i data-lucide="table"></i>
           </button>
         </div>
         <div class="tool-group">
-          <input type="color" id="draw-color" class="color-picker" value="#EF4444" title="Color">
-          <select id="draw-width" class="draw-width" title="Grosor">
-            <option value="2">Fino</option>
-            <option value="4" selected>Normal</option>
-            <option value="8">Grueso</option>
+          <input type="color" id="draw-color" class="color-picker" value="#EF4444" title="Color de contorno">
+          <input type="color" id="fill-color" class="color-picker" value="#F8FAFC" title="Color de relleno">
+          <input type="color" id="text-border-color" class="color-picker" value="#0F172A" title="Color del marco del texto">
+          <input type="color" id="canvas-bg-color" class="color-picker" value="#1a1a2e" title="Color de fondo del canvas">
+          <select id="connector-arrow-mode" class="canvas-tool-select" title="Puntas del conector">
+            <option value="end">Punta destino</option>
+            <option value="start">Punta origen</option>
+            <option value="both">Puntas en ambos</option>
           </select>
+          <input type="range" id="draw-width" class="draw-width" min="1" max="16" step="1" value="4" title="Grosor">
+          <span id="draw-width-value" class="draw-width-value">4 px</span>
         </div>
         <div class="tool-group">
           <button class="tool-btn" id="btn-undo" title="Deshacer (Ctrl+Z)">
@@ -222,6 +242,11 @@
           <span class="tfmt-sep"></span>
           <button class="tfmt-btn" id="txt-bullet" title="Viñetas">•</button>
           <button class="tfmt-btn" id="txt-numbered" title="Lista numerada">1.</button>
+          <span class="tfmt-sep"></span>
+          <button class="tfmt-btn" id="txt-align-left" title="Alinear a la izquierda"><i data-lucide="align-left"></i></button>
+          <button class="tfmt-btn" id="txt-align-center" title="Centrar"><i data-lucide="align-center"></i></button>
+          <button class="tfmt-btn" id="txt-align-right" title="Alinear a la derecha"><i data-lucide="align-right"></i></button>
+          <button class="tfmt-btn" id="txt-align-justify" title="Justificar"><i data-lucide="align-justify"></i></button>
           <span class="tfmt-sep"></span>
           <select id="txt-font-size" class="tfmt-size" title="Tamaño">
             <option value="10">10</option>
@@ -381,6 +406,10 @@
             <input type="checkbox" id="tl-hide-done">
             <span>Ocultar completadas</span>
           </label>
+          <label class="tl-hide-completed" title="Mostrar u ocultar sábados y domingos">
+            <input type="checkbox" id="tl-show-weekends" checked>
+            <span>Fines de semana</span>
+          </label>
           <div class="view-toggle">
             <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt">
               <i data-lucide="gantt-chart"></i>
@@ -389,6 +418,15 @@
               <i data-lucide="list"></i>
             </button>
           </div>
+          <button class="btn btn-outline" id="btn-apply-template" title="Cargar plantilla base de cronograma">
+            <i data-lucide="layout-template"></i> Plantilla
+          </button>
+          <button class="btn btn-outline" id="btn-set-baseline" title="Guardar la planificación actual como referencia original para comparar después">
+            <i data-lucide="bookmark"></i> Guardar plan inicial
+          </button>
+          <button class="btn btn-outline" id="btn-clear-all-tasks" title="Borrar todas las tareas del cronograma">
+            <i data-lucide="trash-2"></i> Borrar todo
+          </button>
           <button class="btn btn-primary" id="btn-add-task">
             <i data-lucide="plus"></i> Nueva Tarea
           </button>
@@ -397,11 +435,17 @@
           </button>
         </div>
       </div>
+      <div class="timeline-summary" id="timeline-summary"></div>
+      <div class="timeline-help-note">
+        El plan inicial es la fecha original prevista de cada tarea. Sirve para comparar lo planificado con lo que realmente va ocurriendo. La ruta crítica es el conjunto de tareas que no tienen margen: si una de ellas se retrasa, también se retrasa la fecha final de la obra. Las dependencias indican qué tarea depende de otra: hasta que la anterior no termina, la siguiente no debería arrancar.
+      </div>
       <div class="timeline-legend">
         <span class="legend-item"><span class="legend-color" style="background:var(--cyan)"></span> Normal</span>
-        <span class="legend-item"><span class="legend-color" style="background:var(--red)"></span> Ruta Crítica</span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> En ejecución</span>
+        <span class="legend-item" title="La ruta crítica reúne las tareas sin margen. Si una de ellas se retrasa, se mueve la fecha final de la obra."><span class="legend-color" style="background:var(--red)"></span> Ruta Crítica</span>
         <span class="legend-item"><span class="legend-color" style="background:var(--amber)"></span> Retrasada</span>
         <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> Completada</span>
+        <span class="legend-item"><span class="legend-color legend-color-baseline"></span> Plan inicial</span>
       </div>
       <div class="timeline-container" id="timeline-container">
         <div class="timeline-header" id="timeline-header"></div>
@@ -429,20 +473,37 @@
       <div class="empty-state" id="timeline-empty">
         <i data-lucide="gantt-chart"></i>
         <p>No hay tareas en el cronograma</p>
-        <button class="btn btn-outline" id="btn-add-task-empty">Crear primera tarea</button>
+        <div class="empty-state-actions">
+          <button class="btn btn-outline" id="btn-add-task-empty">Crear primera tarea</button>
+          <button class="btn btn-outline" id="btn-apply-template-empty">Usar plantilla base</button>
+        </div>
       </div>
     </section>
 
     <section id="section-diary" class="content-section">
       <div class="panel-header">
-        <h2>Diario de Incidencias</h2>
+        <h2>Diario de Obra</h2>
         <div class="diary-actions">
           <button class="btn btn-primary" id="btn-add-incident">
-            <i data-lucide="plus"></i> Nueva Incidencia
+            <i data-lucide="alert-triangle"></i> Incidencia
+          </button>
+          <button class="btn btn-outline" id="btn-add-comment">
+            <i data-lucide="message-square"></i> Comentario
+          </button>
+          <button class="btn btn-outline" id="btn-add-evolution">
+            <i data-lucide="book-open"></i> Evolución
           </button>
           <div class="filter-group">
+            <select id="diary-type-filter" class="filter-select">
+              <option value="all">Todos los tipos</option>
+              <option value="incident">Incidencias</option>
+              <option value="comment">Comentarios</option>
+              <option value="evolution">Evolución</option>
+            </select>
+          </div>
+          <div class="filter-group">
             <select id="diary-filter" class="filter-select">
-              <option value="all">Todas</option>
+              <option value="all">Todos los estados</option>
               <option value="pending">Pendientes</option>
               <option value="in-progress">En proceso</option>
               <option value="resolved">Resueltas</option>
@@ -453,8 +514,12 @@
       <div class="diary-feed" id="diary-feed"></div>
       <div class="empty-state" id="diary-empty">
         <i data-lucide="clipboard-list"></i>
-        <p>No hay incidencias registradas</p>
-        <button class="btn btn-outline" id="btn-add-incident-empty">Registrar incidencia</button>
+        <p>No hay entradas registradas</p>
+        <div class="empty-state-actions diary-empty-actions">
+          <button class="btn btn-outline" id="btn-add-incident-empty">Crear incidencia</button>
+          <button class="btn btn-outline" id="btn-add-comment-empty">Crear comentario</button>
+          <button class="btn btn-outline" id="btn-add-evolution-empty">Crear evolución</button>
+        </div>
       </div>
     </section>
 

@@ -4,10 +4,14 @@
    ======================================== */
 
 const CanvasModule = (() => {
+  const DEFAULT_CANVAS_BACKGROUND = '#1a1a2e';
+  const CANVAS_SERIALIZATION_KEYS = ['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview','_isShapeGroup','_shapeType','_shapeRole','_canvasNodeId','_isConnector','_connectorStartId','_connectorEndId','_connectorArrowMode','_isTextFrame','_textOwnerId'];
   let canvas = null;
   let currentTool = 'select';
   let isDrawingArrow = false;
   let arrowStart = null;
+  let connectorStartTarget = null;
+  let mouseInsertHandled = false;
   let projectId = null;
 
   // Multi-sheet support
@@ -19,15 +23,383 @@ const CanvasModule = (() => {
   const MAX_HISTORY = 50;
   let historyLocked = false;
   let initialized = false;
+  let lastShapeClick = { time: 0, id: null };
 
   // Store references for cleanup
   let keydownHandler = null;
   let undoHandler = null;
   let resizeObserver = null;
 
+  function isShapeTool(tool) {
+    return ['shape-rect', 'shape-circle', 'shape-diamond', 'shape-triangle'].includes(tool);
+  }
+
+  function getStrokeColor() {
+    return document.getElementById('draw-color')?.value || '#EF4444';
+  }
+
+  function getFillColor() {
+    return document.getElementById('fill-color')?.value || '#F8FAFC';
+  }
+
+  function getStrokeWidth() {
+    return parseInt(document.getElementById('draw-width')?.value || '4', 10);
+  }
+
+  function getConnectorArrowMode() {
+    return document.getElementById('connector-arrow-mode')?.value || 'end';
+  }
+
+  function getCanvasBackgroundColor() {
+    return document.getElementById('canvas-bg-color')?.value || DEFAULT_CANVAS_BACKGROUND;
+  }
+
+  function setCanvasBackgroundColor(color, syncControl = true) {
+    const nextColor = color || DEFAULT_CANVAS_BACKGROUND;
+    if (!canvas) return;
+    canvas.backgroundColor = nextColor;
+    canvas.requestRenderAll();
+
+    if (syncControl) {
+      const input = document.getElementById('canvas-bg-color');
+      if (input) input.value = nextColor;
+    }
+  }
+
+  function updateDrawWidthDisplay() {
+    const value = getStrokeWidth();
+    const label = document.getElementById('draw-width-value');
+    if (label) label.textContent = `${value} px`;
+  }
+
+  function normalizeTextTransform(obj) {
+    if (!isTextObject(obj)) return;
+
+    const scaleX = obj.scaleX || 1;
+    const scaleY = obj.scaleY || 1;
+    if (Math.abs(scaleX - 1) < 0.001 && Math.abs(scaleY - 1) < 0.001) return;
+
+    const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+    const updates = {
+      fontSize: Math.max(8, Math.round((obj.fontSize || 16) * avgScale)),
+      scaleX: 1,
+      scaleY: 1,
+      objectCaching: false,
+      noScaleCache: false
+    };
+
+    if (obj.type === 'textbox') {
+      updates.width = Math.max(120, (obj.width || obj.getScaledWidth()) * Math.abs(scaleX));
+    }
+
+    obj.set(updates);
+    obj.setCoords();
+  }
+
+  function getViewportTransform() {
+    return canvas?.viewportTransform || [1, 0, 0, 1, 0, 0];
+  }
+
+  function getViewportZoom() {
+    return getViewportTransform()[0] || 1;
+  }
+
+  function screenToCanvasPoint(clientX, clientY) {
+    const container = document.querySelector('.canvas-container');
+    const rect = container.getBoundingClientRect();
+    const vpt = getViewportTransform();
+    const zoom = getViewportZoom();
+    return {
+      x: (clientX - rect.left - vpt[4]) / zoom,
+      y: (clientY - rect.top - vpt[5]) / zoom
+    };
+  }
+
+  function canvasToScreenPoint(x, y) {
+    const vpt = getViewportTransform();
+    const zoom = getViewportZoom();
+    return {
+      x: x * zoom + vpt[4],
+      y: y * zoom + vpt[5]
+    };
+  }
+
+  function isGridObject(obj) {
+    return Boolean(obj?._isGridLine);
+  }
+
+  function isTextObject(obj) {
+    return Boolean(obj && (obj.type === 'i-text' || obj.type === 'textbox'));
+  }
+
+  function isTextFrame(obj) {
+    return Boolean(obj?._isTextFrame);
+  }
+
+  function getFrameInsertionIndex() {
+    let gridCount = 0;
+    canvas.getObjects().forEach(obj => {
+      if (isGridObject(obj)) gridCount += 1;
+    });
+    return gridCount;
+  }
+
+  function findTextFrame(textObj) {
+    if (!textObj?._canvasNodeId) return null;
+    return canvas.getObjects().find(obj => obj._isTextFrame && obj._textOwnerId === textObj._canvasNodeId) || null;
+  }
+
+  function removeTextFrame(textObj) {
+    const frame = findTextFrame(textObj);
+    if (frame) canvas.remove(frame);
+  }
+
+  function applyTextFrameStyle(textObj, changes = {}) {
+    if (!isTextObject(textObj)) return;
+    ensureCanvasNodeId(textObj);
+
+    const existingFrame = findTextFrame(textObj);
+    const fill = changes.fill ?? existingFrame?.fill ?? 'transparent';
+    const stroke = changes.stroke ?? existingFrame?.stroke ?? '#0F172A';
+    const strokeWidth = changes.strokeWidth ?? existingFrame?.strokeWidth ?? 0;
+    const hasFrame = fill !== 'transparent' || (!!stroke && strokeWidth > 0);
+
+    if (!hasFrame) {
+      removeTextFrame(textObj);
+      canvas.requestRenderAll();
+      return;
+    }
+
+    const frame = existingFrame || new fabric.Rect({
+      selectable: false,
+      evented: false,
+      originX: 'left',
+      originY: 'top',
+      rx: 8,
+      ry: 8,
+      _isTextFrame: true,
+      _textOwnerId: textObj._canvasNodeId
+    });
+
+    frame.set({ fill, stroke, strokeWidth });
+    updateTextFrame(textObj, frame);
+
+    if (!existingFrame) {
+      canvas.add(frame);
+      canvas.moveTo(frame, getFrameInsertionIndex());
+      canvas.bringToFront(textObj);
+    }
+
+    canvas.requestRenderAll();
+  }
+
+  function updateTextFrame(textObj, providedFrame = null) {
+    if (!isTextObject(textObj)) return;
+    ensureCanvasNodeId(textObj);
+    const frame = providedFrame || findTextFrame(textObj);
+    if (!frame) return;
+
+    textObj.setCoords();
+    const bounds = textObj.getBoundingRect();
+    const padX = 10;
+    const padY = 8;
+    frame.set({
+      left: bounds.left - padX,
+      top: bounds.top - padY,
+      width: bounds.width + padX * 2,
+      height: bounds.height + padY * 2
+    });
+    frame.setCoords();
+    canvas.moveTo(frame, getFrameInsertionIndex());
+    canvas.bringToFront(textObj);
+  }
+
+  function applyTableViewport(wrapper, table) {
+    if (!wrapper || !table) return;
+    const zoom = getViewportZoom();
+    const point = canvasToScreenPoint(table.x, table.y);
+    wrapper.style.left = '0px';
+    wrapper.style.top = '0px';
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.transform = `translate(${point.x}px, ${point.y}px) scale(${zoom})`;
+  }
+
+  function syncCanvasOverlays() {
+    tables.forEach(table => {
+      const wrapper = document.getElementById(table.id);
+      if (wrapper) applyTableViewport(wrapper, table);
+    });
+
+    if (selectedTableId) positionTableToolbar();
+
+    const active = canvas?.getActiveObject();
+    if (active && (active.type === 'i-text' || active.type === 'textbox')) {
+      positionTextToolbar(active);
+    }
+  }
+
+  function setCanvasZoom(zoom, point = null) {
+    if (!canvas) return;
+    const container = document.querySelector('.canvas-container');
+    const rect = container?.getBoundingClientRect();
+    const zoomPoint = point || {
+      x: rect ? rect.width / 2 : canvas.width / 2,
+      y: rect ? rect.height / 2 : canvas.height / 2
+    };
+    canvas.zoomToPoint(zoomPoint, zoom);
+    canvas.requestRenderAll();
+    syncCanvasOverlays();
+    updateZoomDisplay();
+  }
+
+  function createCanvasNodeId() {
+    return 'node_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function ensureCanvasNodeId(obj) {
+    if (!obj || obj._isConnector || isGridObject(obj)) return obj?._canvasNodeId || null;
+    if (!obj._canvasNodeId) obj._canvasNodeId = createCanvasNodeId();
+    return obj._canvasNodeId;
+  }
+
+  function isConnectorEligible(obj) {
+    return Boolean(obj && !obj._isConnector && !isGridObject(obj) && obj.type !== 'activeSelection');
+  }
+
+  function getConnectorTargetFromEvent(opt) {
+    const pointerTarget = opt?.target || canvas.findTarget(opt?.e, false);
+    if (isConnectorEligible(pointerTarget)) {
+      ensureCanvasNodeId(pointerTarget);
+      return pointerTarget;
+    }
+
+    const activeTarget = canvas.getActiveObject();
+    if (isConnectorEligible(activeTarget)) {
+      ensureCanvasNodeId(activeTarget);
+      return activeTarget;
+    }
+
+    return null;
+  }
+
+  function getShapeEditTarget(opt) {
+    const active = canvas.getActiveObject();
+    const target = opt?.target || canvas.findTarget(opt?.e, false) || active;
+    if (target && target._isShapeGroup) return target;
+    if (active && active._isShapeGroup) return active;
+    return null;
+  }
+
+  function getObjectCenter(obj) {
+    return obj.getCenterPoint();
+  }
+
+  function getConnectorAnchor(obj, targetPoint) {
+    const center = getObjectCenter(obj);
+    const rect = obj.getBoundingRect(true, true);
+    const halfWidth = rect.width / 2;
+    const halfHeight = rect.height / 2;
+    const dx = targetPoint.x - center.x;
+    const dy = targetPoint.y - center.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      return { x: center.x + Math.sign(dx || 1) * halfWidth, y: center.y };
+    }
+
+    return { x: center.x, y: center.y + Math.sign(dy || 1) * halfHeight };
+  }
+
+  function buildConnectorHead(x, y, angle, color, visible) {
+    return new fabric.Triangle({
+      left: x,
+      top: y,
+      angle,
+      width: 15,
+      height: 15,
+      fill: color,
+      selectable: false,
+      evented: false,
+      originX: 'center',
+      originY: 'center',
+      opacity: visible ? 1 : 0
+    });
+  }
+
+  function getConnectorEndpoints(connector) {
+    const startObj = canvas.getObjects().find(obj => obj._canvasNodeId === connector._connectorStartId) || null;
+    const endObj = canvas.getObjects().find(obj => obj._canvasNodeId === connector._connectorEndId) || null;
+    return { startObj, endObj };
+  }
+
+  function updateConnector(connector) {
+    if (!connector || !connector._isConnector) return;
+    const { startObj, endObj } = getConnectorEndpoints(connector);
+    if (!startObj || !endObj) return;
+
+    const startCenter = getObjectCenter(startObj);
+    const endCenter = getObjectCenter(endObj);
+    const startPoint = getConnectorAnchor(startObj, endCenter);
+    const endPoint = getConnectorAnchor(endObj, startCenter);
+    const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+    const midX = (startPoint.x + endPoint.x) / 2;
+    const midY = (startPoint.y + endPoint.y) / 2;
+    const [line, startHead, endHead] = connector.getObjects();
+    const color = line.stroke || getStrokeColor();
+    const mode = connector._connectorArrowMode || 'end';
+
+    connector.set({ left: midX, top: midY, originX: 'center', originY: 'center' });
+    line.set({
+      x1: startPoint.x - midX,
+      y1: startPoint.y - midY,
+      x2: endPoint.x - midX,
+      y2: endPoint.y - midY
+    });
+    startHead.set({
+      left: startPoint.x - midX,
+      top: startPoint.y - midY,
+      angle: (angle * 180 / Math.PI) - 90,
+      fill: color,
+      opacity: mode === 'start' || mode === 'both' ? 1 : 0
+    });
+    endHead.set({
+      left: endPoint.x - midX,
+      top: endPoint.y - midY,
+      angle: (angle * 180 / Math.PI) + 90,
+      fill: color,
+      opacity: mode === 'end' || mode === 'both' ? 1 : 0
+    });
+
+    connector.addWithUpdate();
+    connector.setCoords();
+  }
+
+  function updateRelatedConnectors(obj) {
+    if (!obj || !obj._canvasNodeId) return;
+    canvas.getObjects().forEach(item => {
+      if (item._isConnector && (item._connectorStartId === obj._canvasNodeId || item._connectorEndId === obj._canvasNodeId)) {
+        updateConnector(item);
+      }
+    });
+  }
+
+  function refreshAllConnectors() {
+    canvas.getObjects().forEach(obj => {
+      if (isConnectorEligible(obj)) ensureCanvasNodeId(obj);
+    });
+    canvas.getObjects().forEach(obj => {
+      if (obj._isConnector) updateConnector(obj);
+    });
+  }
+
+  function removeConnectorsForObject(obj) {
+    if (!obj || !obj._canvasNodeId) return;
+    const related = canvas.getObjects().filter(item => item._isConnector && (item._connectorStartId === obj._canvasNodeId || item._connectorEndId === obj._canvasNodeId));
+    related.forEach(connector => canvas.remove(connector));
+  }
+
   function saveHistory() {
     if (historyLocked) return;
-    history.push(JSON.stringify(canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview'])));
+    history.push(JSON.stringify(canvas.toJSON(CANVAS_SERIALIZATION_KEYS)));
     if (history.length > MAX_HISTORY) history.shift();
   }
 
@@ -37,6 +409,7 @@ const CanvasModule = (() => {
     const prev = history.pop();
     canvas.loadFromJSON(prev, () => {
       reattachFileHandlers();
+      refreshAllConnectors();
       canvas.requestRenderAll();
       historyLocked = false;
     });
@@ -108,7 +481,7 @@ const CanvasModule = (() => {
     canvas = new fabric.Canvas('fabric-canvas', {
       width: rect.width,
       height: rect.height,
-      backgroundColor: '#1a1a2e',
+      backgroundColor: getCanvasBackgroundColor(),
       selection: true,
       preserveObjectStacking: true,
       allowTouchScrolling: false
@@ -123,6 +496,48 @@ const CanvasModule = (() => {
 
     const upperCanvas = container.querySelector('.upper-canvas') || canvas.upperCanvasEl;
     if (upperCanvas) {
+      upperCanvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || touchState.active) return;
+
+        if (currentTool === 'postit') {
+          e.preventDefault();
+          e.stopPropagation();
+          mouseInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addPostIt(pointer.x, pointer.y);
+          setTool('select');
+          return;
+        }
+
+        if (currentTool === 'text') {
+          e.preventDefault();
+          e.stopPropagation();
+          mouseInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addText(pointer.x, pointer.y);
+          setTool('select');
+          return;
+        }
+
+        if (currentTool === 'table') {
+          e.preventDefault();
+          e.stopPropagation();
+          mouseInsertHandled = true;
+          addTable(e.clientX, e.clientY);
+          setTool('select');
+          return;
+        }
+
+        if (isShapeTool(currentTool)) {
+          e.preventDefault();
+          e.stopPropagation();
+          mouseInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addShape(currentTool, pointer.x, pointer.y);
+          setTool('select');
+        }
+      }, true);
+
       upperCanvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
           e.preventDefault();
@@ -169,6 +584,16 @@ const CanvasModule = (() => {
           touchInsertHandled = true;
           addTable(touch.clientX, touch.clientY);
           setTool('select');
+          return;
+        }
+
+        if (isShapeTool(currentTool)) {
+          e.preventDefault();
+          e.stopPropagation();
+          touchInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addShape(currentTool, pointer.x, pointer.y);
+          setTool('select');
         }
       }, { passive: false, capture: true });
 
@@ -192,6 +617,7 @@ const CanvasModule = (() => {
           touchState.midY = curMidY;
 
           canvas.requestRenderAll();
+          syncCanvasOverlays();
           updateZoomDisplay();
         }
       }, { passive: false });
@@ -201,6 +627,7 @@ const CanvasModule = (() => {
           touchState.active = false;
           canvas.selection = currentTool === 'select';
           canvas.setViewportTransform(canvas.viewportTransform);
+          syncCanvasOverlays();
         }
         touchInsertHandled = false;
       });
@@ -212,8 +639,7 @@ const CanvasModule = (() => {
       let zoom = canvas.getZoom();
       zoom *= 0.999 ** delta;
       zoom = Math.min(Math.max(zoom, 0.1), 5);
-      canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-      updateZoomDisplay();
+      setCanvasZoom(zoom, { x: opt.e.offsetX, y: opt.e.offsetY });
       opt.e.preventDefault();
       opt.e.stopPropagation();
     });
@@ -224,6 +650,11 @@ const CanvasModule = (() => {
 
     canvas.on('mouse:down', (opt) => {
       const e = opt.e;
+      const clickTarget = opt.target || canvas.findTarget(opt.e, false);
+      if (mouseInsertHandled && e.type === 'mousedown') {
+        mouseInsertHandled = false;
+        return;
+      }
       if (touchInsertHandled && e.type === 'touchstart') return;
       const isTouchPan = e.type === 'touchstart' && currentTool === 'hand';
       if (e.altKey || e.button === 1 || currentTool === 'hand' || isTouchPan) {
@@ -235,10 +666,49 @@ const CanvasModule = (() => {
         return;
       }
 
+      if ((e.button === 0 || e.type === 'touchstart') && clickTarget && clickTarget._isShapeGroup) {
+        ensureCanvasNodeId(clickTarget);
+        const now = Date.now();
+        if (lastShapeClick.id === clickTarget._canvasNodeId && now - lastShapeClick.time < 350) {
+          lastShapeClick = { time: 0, id: null };
+          editShapeText(clickTarget);
+          return;
+        }
+        lastShapeClick = { time: now, id: clickTarget._canvasNodeId };
+      } else if (e.button === 0 || e.type === 'touchstart') {
+        lastShapeClick = { time: 0, id: null };
+      }
+
       if (currentTool === 'arrow' && !isDrawingArrow) {
         isDrawingArrow = true;
         const pointer = canvas.getPointer(opt.e);
         arrowStart = { x: pointer.x, y: pointer.y };
+        drawArrowPreview(pointer.x, pointer.y, pointer.x, pointer.y);
+        return;
+      }
+
+      if (currentTool === 'connector') {
+        const target = getConnectorTargetFromEvent(opt);
+        if (!target) return;
+
+        if (!connectorStartTarget) {
+          connectorStartTarget = target;
+          canvas.setActiveObject(target);
+          canvas.requestRenderAll();
+          App.toast('Selecciona el elemento de destino para crear el conector', 'info');
+          return;
+        }
+
+        if (target === connectorStartTarget) {
+          App.toast('Selecciona otro elemento como destino', 'warning');
+          return;
+        }
+
+        clearArrowPreview();
+        createConnector(connectorStartTarget, target, getConnectorArrowMode());
+        connectorStartTarget = null;
+        setTool('select');
+        return;
       }
 
       if (currentTool === 'postit') {
@@ -257,6 +727,13 @@ const CanvasModule = (() => {
         const p = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : opt.e;
         addTable(p.clientX, p.clientY);
         setTool('select');
+        return;
+      }
+
+      if (isShapeTool(currentTool)) {
+        const pointer = canvas.getPointer(opt.e);
+        addShape(currentTool, pointer.x, pointer.y);
+        setTool('select');
       }
     });
 
@@ -268,8 +745,20 @@ const CanvasModule = (() => {
         vpt[4] += p.clientX - lastPosX;
         vpt[5] += p.clientY - lastPosY;
         canvas.requestRenderAll();
+        syncCanvasOverlays();
         lastPosX = p.clientX;
         lastPosY = p.clientY;
+      }
+
+      if (currentTool === 'arrow' && isDrawingArrow && arrowStart) {
+        const pointer = canvas.getPointer(opt.e);
+        drawArrowPreview(arrowStart.x, arrowStart.y, pointer.x, pointer.y);
+      }
+
+      if (currentTool === 'connector' && connectorStartTarget) {
+        const pointer = canvas.getPointer(opt.e);
+        const startPoint = getConnectorAnchor(connectorStartTarget, pointer);
+        drawArrowPreview(startPoint.x, startPoint.y, pointer.x, pointer.y);
       }
     });
 
@@ -278,6 +767,7 @@ const CanvasModule = (() => {
         isPanning = false;
         canvas.selection = currentTool === 'select';
         canvas.setViewportTransform(canvas.viewportTransform);
+        syncCanvasOverlays();
         if (currentTool === 'hand') {
           canvas.defaultCursor = 'grab';
         }
@@ -286,9 +776,15 @@ const CanvasModule = (() => {
 
       if (currentTool === 'arrow' && isDrawingArrow) {
         const pointer = canvas.getPointer(opt.e);
+        clearArrowPreview();
         addArrow(arrowStart.x, arrowStart.y, pointer.x, pointer.y);
         isDrawingArrow = false;
         arrowStart = null;
+        return;
+      }
+
+      if (currentTool === 'connector') {
+        clearArrowPreview();
       }
     });
 
@@ -302,7 +798,10 @@ const CanvasModule = (() => {
         
         const active = canvas.getActiveObjects();
         if (active.length) {
-          active.forEach(obj => canvas.remove(obj));
+          active.forEach(obj => {
+            if (!obj._isConnector) removeConnectorsForObject(obj);
+            canvas.remove(obj);
+          });
           canvas.discardActiveObject();
           canvas.requestRenderAll();
         }
@@ -314,6 +813,13 @@ const CanvasModule = (() => {
     canvas.on('object:added', () => saveHistory());
     canvas.on('object:modified', () => saveHistory());
     canvas.on('object:removed', () => saveHistory());
+    canvas.on('object:moving', (opt) => updateRelatedConnectors(opt.target));
+    canvas.on('object:scaling', (opt) => updateRelatedConnectors(opt.target));
+    canvas.on('object:rotating', (opt) => updateRelatedConnectors(opt.target));
+    canvas.on('object:modified', (opt) => {
+      normalizeTextTransform(opt.target);
+      updateRelatedConnectors(opt.target);
+    });
 
     // Ctrl+Z undo
     undoHandler = (e) => {
@@ -341,6 +847,13 @@ const CanvasModule = (() => {
           canvas.requestRenderAll();
           showCanvasFileMenu(opt.e.clientX, opt.e.clientY, target);
         }
+      }
+    });
+
+    canvas.on('mouse:dblclick', (opt) => {
+      const target = getShapeEditTarget(opt);
+      if (target && target._isShapeGroup) {
+        editShapeText(target);
       }
     });
 
@@ -382,16 +895,20 @@ const CanvasModule = (() => {
   }
 
   function drawGrid() {
-    // Lightweight grid via pattern — doesn't add objects
+    // Grid lines stay outside interaction and export flows.
     const gridSize = 30;
     const gridColor = 'rgba(255,255,255,0.03)';
     
     for (let i = 0; i < 3000; i += gridSize) {
       canvas.add(new fabric.Line([i, 0, i, 3000], {
-        stroke: gridColor, selectable: false, evented: false, excludeFromExport: true
+        stroke: gridColor, selectable: false, evented: false, excludeFromExport: true,
+        hasControls: false, hasBorders: false, lockMovementX: true, lockMovementY: true,
+        hoverCursor: 'default', _isGridLine: true
       }));
       canvas.add(new fabric.Line([0, i, 3000, i], {
-        stroke: gridColor, selectable: false, evented: false, excludeFromExport: true
+        stroke: gridColor, selectable: false, evented: false, excludeFromExport: true,
+        hasControls: false, hasBorders: false, lockMovementX: true, lockMovementY: true,
+        hoverCursor: 'default', _isGridLine: true
       }));
     }
   }
@@ -406,7 +923,7 @@ const CanvasModule = (() => {
     document.getElementById('btn-clear-canvas').addEventListener('click', () => {
       if (confirm('¿Limpiar toda la mesa de trabajo?')) {
         canvas.clear();
-        canvas.backgroundColor = '#1a1a2e';
+        setCanvasBackgroundColor(getCanvasBackgroundColor(), false);
         drawGrid();
         canvas.requestRenderAll();
         // Clear HTML tables too
@@ -419,28 +936,34 @@ const CanvasModule = (() => {
 
     document.getElementById('btn-save-canvas').addEventListener('click', saveState);
     document.getElementById('btn-export-canvas').addEventListener('click', exportCanvas);
+    document.getElementById('canvas-bg-color').addEventListener('input', (e) => {
+      setCanvasBackgroundColor(e.target.value, false);
+    });
+    document.getElementById('canvas-bg-color').addEventListener('change', (e) => {
+      setCanvasBackgroundColor(e.target.value, false);
+    });
 
     // Zoom
     document.getElementById('btn-zoom-in').addEventListener('click', () => {
       const zoom = Math.min(canvas.getZoom() * 1.2, 5);
-      canvas.setZoom(zoom);
-      updateZoomDisplay();
+      setCanvasZoom(zoom);
     });
 
     document.getElementById('btn-zoom-out').addEventListener('click', () => {
       const zoom = Math.max(canvas.getZoom() / 1.2, 0.1);
-      canvas.setZoom(zoom);
-      updateZoomDisplay();
+      setCanvasZoom(zoom);
     });
 
     document.getElementById('btn-zoom-fit').addEventListener('click', () => {
-      canvas.setZoom(1);
       canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      canvas.requestRenderAll();
+      syncCanvasOverlays();
       updateZoomDisplay();
     });
 
     // Undo button
     document.getElementById('btn-undo').addEventListener('click', () => undo());
+    updateDrawWidthDisplay();
 
     // Draw color / width — also apply to selected objects
     document.getElementById('draw-color').addEventListener('change', (e) => {
@@ -452,6 +975,10 @@ const CanvasModule = (() => {
       const active = canvas.getActiveObjects();
       if (active.length) {
         active.forEach(obj => {
+          if (obj._isShapeGroup) {
+            applyShapeStyle(obj, { stroke: color });
+            return;
+          }
           if (obj.type === 'i-text' || obj.type === 'text') {
             obj.set('fill', color);
           } else if (obj.type === 'path') {
@@ -473,15 +1000,55 @@ const CanvasModule = (() => {
       }
     });
 
-    document.getElementById('draw-width').addEventListener('change', (e) => {
-      if (canvas.isDrawingMode) {
-        canvas.freeDrawingBrush.width = parseInt(e.target.value);
-      }
+    document.getElementById('fill-color').addEventListener('change', (e) => {
+      const fill = e.target.value;
+      const active = canvas.getActiveObjects();
+      if (!active.length) return;
+
+      active.forEach(obj => {
+        if (obj._isShapeGroup) {
+          applyShapeStyle(obj, { fill });
+        } else if (obj.type === 'rect' || obj.type === 'circle' || obj.type === 'ellipse' || obj.type === 'triangle' || obj.type === 'polygon') {
+          obj.set('fill', fill);
+        }
+      });
+      canvas.requestRenderAll();
     });
+
+    const widthInput = document.getElementById('draw-width');
+    const handleWidthChange = (e) => {
+      const width = parseInt(e.target.value, 10);
+      updateDrawWidthDisplay();
+      if (canvas.isDrawingMode) {
+        canvas.freeDrawingBrush.width = width;
+      }
+      const active = canvas.getActiveObjects();
+      if (active.length) {
+        active.forEach(obj => {
+          if (obj._isShapeGroup) {
+            applyShapeStyle(obj, { strokeWidth: width });
+          } else if (obj.stroke) {
+            obj.set('strokeWidth', width);
+          }
+        });
+        canvas.requestRenderAll();
+      }
+    };
+
+    widthInput.addEventListener('input', handleWidthChange);
+    widthInput.addEventListener('change', handleWidthChange);
   }
 
   function setTool(tool) {
     currentTool = tool;
+    if (tool !== 'arrow' && tool !== 'connector') {
+      isDrawingArrow = false;
+      arrowStart = null;
+      connectorStartTarget = null;
+      clearArrowPreview();
+    } else if (tool !== 'connector') {
+      connectorStartTarget = null;
+    }
 
     // Update active button
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
@@ -498,7 +1065,15 @@ const CanvasModule = (() => {
       canvas.discardActiveObject();
       canvas.requestRenderAll();
     } else {
-      canvas.forEachObject(o => { o.selectable = true; o.evented = true; });
+      canvas.forEachObject(o => {
+        if (isGridObject(o)) {
+          o.selectable = false;
+          o.evented = false;
+          return;
+        }
+        o.selectable = true;
+        o.evented = true;
+      });
     }
 
     if (tool === 'draw') {
@@ -514,7 +1089,7 @@ const CanvasModule = (() => {
     if (tool === 'hand') {
       canvas.defaultCursor = 'grab';
       canvas.hoverCursor = 'grab';
-    } else if (tool === 'postit' || tool === 'text' || tool === 'table') {
+    } else if (tool === 'postit' || tool === 'text' || tool === 'table' || isShapeTool(tool) || tool === 'connector') {
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'move';
     } else if (tool === 'arrow') {
@@ -528,7 +1103,7 @@ const CanvasModule = (() => {
 
   function addArrow(x1, y1, x2, y2) {
     const color = document.getElementById('draw-color').value;
-    const width = parseInt(document.getElementById('draw-width').value);
+    const width = getStrokeWidth();
 
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -564,6 +1139,91 @@ const CanvasModule = (() => {
     canvas.requestRenderAll();
   }
 
+  function createConnector(startObj, endObj, arrowMode = getConnectorArrowMode()) {
+    if (!startObj || !endObj || startObj === endObj) return null;
+
+    ensureCanvasNodeId(startObj);
+    ensureCanvasNodeId(endObj);
+
+    const color = getStrokeColor();
+    const width = getStrokeWidth();
+    const startCenter = getObjectCenter(startObj);
+    const endCenter = getObjectCenter(endObj);
+    const startPoint = getConnectorAnchor(startObj, endCenter);
+    const endPoint = getConnectorAnchor(endObj, startCenter);
+    const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+
+    const line = new fabric.Line([startPoint.x, startPoint.y, endPoint.x, endPoint.y], {
+      stroke: color,
+      strokeWidth: width,
+      selectable: false,
+      evented: false,
+      originX: 'center',
+      originY: 'center'
+    });
+
+    const startHead = buildConnectorHead(startPoint.x, startPoint.y, (angle * 180 / Math.PI) - 90, color, arrowMode === 'start' || arrowMode === 'both');
+    const endHead = buildConnectorHead(endPoint.x, endPoint.y, (angle * 180 / Math.PI) + 90, color, arrowMode === 'end' || arrowMode === 'both');
+
+    const connector = new fabric.Group([line, startHead, endHead], {
+      left: (startPoint.x + endPoint.x) / 2,
+      top: (startPoint.y + endPoint.y) / 2,
+      originX: 'center',
+      originY: 'center',
+      selectable: true,
+      evented: true,
+      hasControls: false,
+      hasBorders: true,
+      lockMovementX: true,
+      lockMovementY: true,
+      _isConnector: true,
+      _connectorStartId: startObj._canvasNodeId,
+      _connectorEndId: endObj._canvasNodeId,
+      _connectorArrowMode: arrowMode
+    });
+
+    canvas.add(connector);
+    updateConnector(connector);
+    connector.sendToBack();
+    canvas.bringToFront(startObj);
+    canvas.bringToFront(endObj);
+    canvas.setActiveObject(connector);
+    canvas.requestRenderAll();
+    return connector;
+  }
+
+  function drawArrowPreview(x1, y1, x2, y2) {
+    clearArrowPreview();
+    const ctx = canvas.contextTop;
+    if (!ctx) return;
+
+    const color = getStrokeColor();
+    const width = getStrokeWidth();
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const headLen = 15;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function clearArrowPreview() {
+    if (canvas?.contextTop) canvas.clearContext(canvas.contextTop);
+  }
+
   function addPostIt(x, y) {
     const colors = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
     const color = colors[Math.floor(Math.random() * colors.length)];
@@ -584,14 +1244,18 @@ const CanvasModule = (() => {
       left: 10,
       top: 10,
       width: 140,
-      editable: true
+      editable: true,
+      objectCaching: false,
+      noScaleCache: false
     });
 
     const group = new fabric.Group([rect, text], {
       left: x - 80,
       top: y - 60,
       selectable: true,
-      subTargetCheck: true
+      subTargetCheck: true,
+      objectCaching: false,
+      noScaleCache: false
     });
 
     // Allow editing text on double click
@@ -609,19 +1273,141 @@ const CanvasModule = (() => {
 
   function addText(x, y) {
     const color = document.getElementById('draw-color').value;
-    const text = new fabric.IText('Texto', {
+    const text = new fabric.Textbox('Texto', {
       left: x,
       top: y,
+      width: 220,
       fontSize: 16,
       fontFamily: 'Inter, sans-serif',
       fill: color,
-      editable: true
+      textAlign: 'left',
+      editable: true,
+      objectCaching: false,
+      noScaleCache: false
     });
+
+    ensureCanvasNodeId(text);
 
     canvas.add(text);
     canvas.setActiveObject(text);
     text.enterEditing();
     canvas.requestRenderAll();
+  }
+
+  function createShapeObject(shapeType) {
+    const stroke = getStrokeColor();
+    const fill = getFillColor();
+    const strokeWidth = getStrokeWidth();
+    const common = {
+      originX: 'center',
+      originY: 'center',
+      fill,
+      stroke,
+      strokeWidth,
+      selectable: false,
+      evented: false,
+      rx: 12,
+      ry: 12,
+      _shapeRole: 'body'
+    };
+
+    if (shapeType === 'shape-circle') {
+      return new fabric.Ellipse({ ...common, rx: 60, ry: 60 });
+    }
+    if (shapeType === 'shape-diamond') {
+      return new fabric.Polygon([
+        { x: 0, y: -60 },
+        { x: 72, y: 0 },
+        { x: 0, y: 60 },
+        { x: -72, y: 0 }
+      ], common);
+    }
+    if (shapeType === 'shape-triangle') {
+      return new fabric.Triangle({ ...common, width: 130, height: 110 });
+    }
+    return new fabric.Rect({ ...common, width: 150, height: 96 });
+  }
+
+  function buildShapeGroup(shapeType, x, y, textValue = '') {
+    const shape = createShapeObject(shapeType);
+    const label = new fabric.Textbox(textValue, {
+      width: shapeType === 'shape-circle' ? 88 : 110,
+      fontSize: 14,
+      fontFamily: 'Inter, sans-serif',
+      fill: '#0F172A',
+      textAlign: 'center',
+      originX: 'center',
+      originY: 'center',
+      left: 0,
+      top: 0,
+      selectable: false,
+      evented: false,
+      splitByGrapheme: false,
+      objectCaching: false,
+      noScaleCache: false,
+      _shapeRole: 'label'
+    });
+
+    const group = new fabric.Group([shape, label], {
+      left: x,
+      top: y,
+      originX: 'center',
+      originY: 'center',
+      selectable: true,
+      subTargetCheck: false,
+      hasControls: true,
+      objectCaching: false,
+      noScaleCache: false,
+      _isShapeGroup: true,
+      _shapeType: shapeType
+    });
+
+    attachShapeHandlers(group);
+    return group;
+  }
+
+  function addShape(shapeType, x, y) {
+    const group = buildShapeGroup(shapeType, x, y);
+    canvas.add(group);
+    canvas.setActiveObject(group);
+    canvas.requestRenderAll();
+  }
+
+  function getShapeParts(group) {
+    if (!group || group.type !== 'group') return {};
+    const objects = group.getObjects();
+    return {
+      shape: objects.find(obj => obj._shapeRole === 'body') || null,
+      label: objects.find(obj => obj._shapeRole === 'label') || null
+    };
+  }
+
+  function applyShapeStyle(group, changes = {}) {
+    const { shape } = getShapeParts(group);
+    if (!shape) return;
+    if (changes.fill) shape.set('fill', changes.fill);
+    if (changes.stroke) shape.set('stroke', changes.stroke);
+    if (changes.strokeWidth !== undefined) shape.set('strokeWidth', changes.strokeWidth);
+    group.dirty = true;
+  }
+
+  function editShapeText(group) {
+    const { label } = getShapeParts(group);
+    if (!label) return;
+    const nextText = prompt('Texto de la forma:', label.text || '');
+    if (nextText === null) return;
+    label.set('text', nextText.trim());
+    group.addWithUpdate();
+    group.setCoords();
+    group.dirty = true;
+    canvas.requestRenderAll();
+    saveHistory();
+  }
+
+  function attachShapeHandlers(group) {
+    if (!group || !group._isShapeGroup) return;
+    group.off('mousedblclick');
+    group.on('mousedblclick', () => editShapeText(group));
   }
 
   // ========================================
@@ -632,10 +1418,9 @@ const CanvasModule = (() => {
   let selectedTableId = null;
 
   function addTable(clientX, clientY) {
-    const container = document.querySelector('.canvas-container');
-    const rect = container.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const point = screenToCanvasPoint(clientX, clientY);
+    const x = point.x;
+    const y = point.y;
 
     const id = 'tbl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     const data = [
@@ -660,8 +1445,7 @@ const CanvasModule = (() => {
     const wrapper = document.createElement('div');
     wrapper.className = 'canvas-table-wrapper';
     wrapper.id = table.id;
-    wrapper.style.left = table.x + 'px';
-    wrapper.style.top = table.y + 'px';
+    applyTableViewport(wrapper, table);
 
     // Ensure colWidths/rowHeights exist (migration from old data)
     if (!table.colWidths) table.colWidths = table.data[0].map(() => 100);
@@ -894,8 +1678,8 @@ const CanvasModule = (() => {
       const p = e.touches ? e.touches[0] : e;
       startX = p.clientX;
       startY = p.clientY;
-      startLeft = parseInt(wrapper.style.left) || 0;
-      startTop = parseInt(wrapper.style.top) || 0;
+      startLeft = table.x;
+      startTop = table.y;
       e.preventDefault();
       e.stopPropagation();
     }
@@ -903,10 +1687,10 @@ const CanvasModule = (() => {
     const onMove = (e) => {
       if (!isDragging) return;
       const p = e.touches ? e.touches[0] : e;
-      wrapper.style.left = (startLeft + p.clientX - startX) + 'px';
-      wrapper.style.top = (startTop + p.clientY - startY) + 'px';
-      table.x = startLeft + p.clientX - startX;
-      table.y = startTop + p.clientY - startY;
+      const zoom = getViewportZoom();
+      table.x = startLeft + (p.clientX - startX) / zoom;
+      table.y = startTop + (p.clientY - startY) / zoom;
+      applyTableViewport(wrapper, table);
       positionTableToolbar();
     };
 
@@ -930,8 +1714,9 @@ const CanvasModule = (() => {
       const p = e.touches ? e.touches[0] : e;
       startX = p.clientX;
       startY = p.clientY;
-      startW = wrapper.offsetWidth;
-      startH = wrapper.offsetHeight;
+      const zoom = getViewportZoom();
+      startW = table.w || wrapper.offsetWidth / zoom;
+      startH = table.h || wrapper.offsetHeight / zoom;
       e.preventDefault();
       e.stopPropagation();
     }
@@ -939,12 +1724,14 @@ const CanvasModule = (() => {
     const onMove = (e) => {
       if (!isResizing) return;
       const p = e.touches ? e.touches[0] : e;
-      const newW = Math.max(100, startW + p.clientX - startX);
-      const newH = Math.max(60, startH + p.clientY - startY);
+      const zoom = getViewportZoom();
+      const newW = Math.max(100, startW + (p.clientX - startX) / zoom);
+      const newH = Math.max(60, startH + (p.clientY - startY) / zoom);
       wrapper.style.width = newW + 'px';
       wrapper.style.height = newH + 'px';
       table.w = newW;
       table.h = newH;
+      applyTableViewport(wrapper, table);
       positionTableToolbar();
     };
 
@@ -1166,6 +1953,7 @@ const CanvasModule = (() => {
   function renderAllTables() {
     clearTableDOM();
     tables.forEach(t => renderHTMLTable(t));
+    syncCanvasOverlays();
   }
 
   // ========================================
@@ -1180,6 +1968,9 @@ const CanvasModule = (() => {
     canvas.on('selection:created', (e) => showTextToolbar(e.selected));
     canvas.on('selection:updated', (e) => showTextToolbar(e.selected));
     canvas.on('selection:cleared', () => hideTextToolbar());
+    canvas.on('selection:created', () => syncStyleControlsFromSelection());
+    canvas.on('selection:updated', () => syncStyleControlsFromSelection());
+    canvas.on('selection:cleared', () => syncStyleControlsFromSelection());
 
     // Update toolbar position when object moves
     canvas.on('object:moving', () => {
@@ -1207,6 +1998,22 @@ const CanvasModule = (() => {
     // Strikethrough
     document.getElementById('txt-strike').addEventListener('click', () => {
       toggleSelectionStyle('linethrough', true, false);
+    });
+
+    document.getElementById('txt-align-left').addEventListener('click', () => {
+      applyTextAlignment('left');
+    });
+
+    document.getElementById('txt-align-center').addEventListener('click', () => {
+      applyTextAlignment('center');
+    });
+
+    document.getElementById('txt-align-right').addEventListener('click', () => {
+      applyTextAlignment('right');
+    });
+
+    document.getElementById('txt-align-justify').addEventListener('click', () => {
+      applyTextAlignment('justify');
     });
 
     // Font size
@@ -1287,6 +2094,21 @@ const CanvasModule = (() => {
     updateTextToolbarState(obj);
   }
 
+  function applyTextAlignment(alignment) {
+    const obj = canvas.getActiveObject();
+    if (!obj || (obj.type !== 'i-text' && obj.type !== 'textbox')) return;
+
+    if (!obj.width || obj.width < 160) {
+      const bounds = obj.getBoundingRect();
+      obj.set('width', Math.max(180, Math.ceil(bounds.width) + 24));
+    }
+
+    obj.set('textAlign', alignment);
+    obj.setCoords();
+    canvas.requestRenderAll();
+    updateTextToolbarState(obj);
+  }
+
   function showTextToolbar(selected) {
     const toolbar = document.getElementById('text-format-toolbar');
     if (!selected || selected.length !== 1) { hideTextToolbar(); return; }
@@ -1325,12 +2147,39 @@ const CanvasModule = (() => {
     const italic = obj.fontStyle === 'italic';
     const underline = obj.underline;
     const strike = obj.linethrough;
+    const align = obj.textAlign || 'left';
 
     document.getElementById('txt-bold').classList.toggle('active', bold);
     document.getElementById('txt-italic').classList.toggle('active', italic);
     document.getElementById('txt-underline').classList.toggle('active', underline);
     document.getElementById('txt-strike').classList.toggle('active', strike);
+    document.getElementById('txt-align-left').classList.toggle('active', align === 'left');
+    document.getElementById('txt-align-center').classList.toggle('active', align === 'center');
+    document.getElementById('txt-align-right').classList.toggle('active', align === 'right');
+    document.getElementById('txt-align-justify').classList.toggle('active', align === 'justify');
     document.getElementById('txt-font-size').value = obj.fontSize || 16;
+  }
+
+  function syncStyleControlsFromSelection() {
+    const active = canvas.getActiveObject();
+    const strokeInput = document.getElementById('draw-color');
+    const fillInput = document.getElementById('fill-color');
+    const widthInput = document.getElementById('draw-width');
+    if (!active || !strokeInput || !fillInput || !widthInput) return;
+
+    if (active._isShapeGroup) {
+      const { shape } = getShapeParts(active);
+      if (!shape) return;
+      if (shape.stroke) strokeInput.value = normalizeColor(shape.stroke, strokeInput.value);
+      if (shape.fill) fillInput.value = normalizeColor(shape.fill, fillInput.value);
+      if (shape.strokeWidth) widthInput.value = String(shape.strokeWidth);
+    }
+  }
+
+  function normalizeColor(value, fallback) {
+    if (typeof value !== 'string') return fallback;
+    if (value.startsWith('#')) return value;
+    return fallback;
   }
 
   function setupFileUpload() {
@@ -1687,18 +2536,26 @@ const CanvasModule = (() => {
   function reattachFileHandlers() {
     canvas.getObjects().forEach(obj => {
       if (obj._isAttachedFile && obj._attachedFileId) {
+        ensureCanvasNodeId(obj);
         if (!obj._isImagePreview) {
           obj.set({ hasControls: false, lockScalingX: true, lockScalingY: true });
         }
         obj.on('mousedblclick', () => downloadAttachedFile(obj._attachedFileId, obj._attachedFileName));
       }
+      if (obj._isShapeGroup) {
+        ensureCanvasNodeId(obj);
+        attachShapeHandlers(obj);
+      }
+      if (isConnectorEligible(obj)) ensureCanvasNodeId(obj);
     });
+    refreshAllConnectors();
   }
 
   async function saveState() {
-    const json = canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview']);
+    const json = canvas.toJSON(CANVAS_SERIALIZATION_KEYS);
     syncAllTableData();
     const payload = {
+      backgroundColor: canvas.backgroundColor || getCanvasBackgroundColor(),
       canvas: json,
       tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data, colWidths: t.colWidths || null, rowHeights: t.rowHeights || null }))
     };
@@ -1709,9 +2566,10 @@ const CanvasModule = (() => {
 
   async function saveCurrentSheetSilent() {
     if (!canvas || !currentSheetId) return;
-    const json = canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview']);
+    const json = canvas.toJSON(CANVAS_SERIALIZATION_KEYS);
     syncAllTableData();
     const payload = {
+      backgroundColor: canvas.backgroundColor || getCanvasBackgroundColor(),
       canvas: json,
       tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data, colWidths: t.colWidths || null, rowHeights: t.rowHeights || null }))
     };
@@ -1721,26 +2579,35 @@ const CanvasModule = (() => {
   async function loadSavedState() {
     const state = await DB.getCanvasState(projectId, currentSheetId);
     if (state && state.data) {
+      const backgroundColor = state.data.backgroundColor || DEFAULT_CANVAS_BACKGROUND;
+      setCanvasBackgroundColor(backgroundColor);
       if (state.data.canvas) {
         canvas.loadFromJSON(state.data.canvas, () => {
+          setCanvasBackgroundColor(backgroundColor);
           reattachFileHandlers();
+          refreshAllConnectors();
           canvas.requestRenderAll();
+          syncCanvasOverlays();
         });
         tables = (state.data.tables || []).map(t => ({ ...t }));
         renderAllTables();
       } else {
         canvas.loadFromJSON(state.data, () => {
+          setCanvasBackgroundColor(backgroundColor);
           reattachFileHandlers();
+          refreshAllConnectors();
           canvas.requestRenderAll();
+          syncCanvasOverlays();
         });
       }
     } else {
       // Empty sheet — just clear
       canvas.clear();
-      canvas.backgroundColor = '#1a1a2e';
+      setCanvasBackgroundColor(getCanvasBackgroundColor());
       drawGrid();
       tables = [];
       clearTableDOM();
+      syncCanvasOverlays();
     }
   }
 
@@ -1886,7 +2753,7 @@ const CanvasModule = (() => {
     currentSheetId = id;
     // Clear canvas for new sheet
     canvas.clear();
-    canvas.backgroundColor = '#1a1a2e';
+    setCanvasBackgroundColor(getCanvasBackgroundColor());
     drawGrid();
     canvas.requestRenderAll();
     renderSheetTabs();
@@ -1924,6 +2791,7 @@ const CanvasModule = (() => {
     canvas.setWidth(rect.width);
     canvas.setHeight(rect.height);
     canvas.requestRenderAll();
+    syncCanvasOverlays();
   }
 
   return { init, resize };

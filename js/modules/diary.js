@@ -1,9 +1,15 @@
 /* ========================================
-   Diary Module - Diario de Incidencias
-   Feed con fotos, estados y filtrado
+   Diary Module - Diario de Obra
+   Incidencias, comentarios y evolución
    ======================================== */
 
 const DiaryModule = (() => {
+  const ENTRY_TYPES = {
+    incident: { label: 'Incidencia', class: 'badge-pending', icon: 'alert-triangle' },
+    comment: { label: 'Comentario', class: 'badge-neutral', icon: 'message-square' },
+    evolution: { label: 'Evolución', class: 'badge-active', icon: 'book-open' }
+  };
+
   const STATUSES = {
     pending: { label: 'Pendiente', class: 'badge-pending' },
     'in-progress': { label: 'En proceso', class: 'badge-active' },
@@ -24,19 +30,33 @@ const DiaryModule = (() => {
   }
 
   function setupButtons() {
-    document.getElementById('btn-add-incident').addEventListener('click', () => openIncidentForm());
-    document.getElementById('btn-add-incident-empty').addEventListener('click', () => openIncidentForm());
+    document.getElementById('btn-add-incident').addEventListener('click', () => openIncidentForm(null, 'incident'));
+    document.getElementById('btn-add-comment').addEventListener('click', () => openIncidentForm(null, 'comment'));
+    document.getElementById('btn-add-evolution').addEventListener('click', () => openIncidentForm(null, 'evolution'));
+    document.getElementById('btn-add-incident-empty').addEventListener('click', () => openIncidentForm(null, 'incident'));
+    document.getElementById('btn-add-comment-empty').addEventListener('click', () => openIncidentForm(null, 'comment'));
+    document.getElementById('btn-add-evolution-empty').addEventListener('click', () => openIncidentForm(null, 'evolution'));
     document.getElementById('diary-filter').addEventListener('change', loadIncidents);
+    document.getElementById('diary-type-filter').addEventListener('change', loadIncidents);
   }
 
   async function loadIncidents() {
     const filter = document.getElementById('diary-filter').value;
+    const typeFilter = document.getElementById('diary-type-filter').value;
     let incidents = await DB.getAllForProject('incidents', projectId);
+
+    incidents = incidents.map(item => ({
+      ...item,
+      entryType: item.entryType || 'incident'
+    }));
 
     // Sort by date descending
     incidents.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // Filter
+    if (typeFilter !== 'all') {
+      incidents = incidents.filter(i => i.entryType === typeFilter);
+    }
+
     if (filter !== 'all') {
       incidents = incidents.filter(i => i.status === filter);
     }
@@ -58,10 +78,13 @@ const DiaryModule = (() => {
     emptyState.style.display = 'none';
 
     // Load photos from IndexedDB
-    const htmlParts = [];
+    const mainParts = [];
+    const evolutionParts = [];
 
     for (const incident of incidents) {
       const status = STATUSES[incident.status] || STATUSES.pending;
+      const entryType = ENTRY_TYPES[incident.entryType] || ENTRY_TYPES.incident;
+      const isIncident = incident.entryType === 'incident';
 
       // Get photo thumbnails
       let photosHTML = '';
@@ -73,7 +96,7 @@ const DiaryModule = (() => {
             const url = URL.createObjectURL(file.blob);
             photoElements.push(`
               <div class="incident-photo" onclick="App.openLightbox('${url}')">
-                <img src="${url}" alt="Foto de incidencia" loading="lazy">
+                <img src="${url}" alt="Imagen adjunta del diario" loading="lazy">
               </div>
             `);
           }
@@ -97,26 +120,38 @@ const DiaryModule = (() => {
         `;
       }
 
-      htmlParts.push(`
+      const statusHTML = isIncident
+        ? `<span class="badge ${status.class} incident-status" 
+                  onclick="DiaryModule.cycleStatus(${incident.id})" 
+                  title="Click para cambiar estado">
+              ${status.label}
+            </span>`
+        : '';
+
+      const categoryHTML = incident.category
+        ? `<div class="incident-category">
+              <i data-lucide="tag" style="width:12px;height:12px"></i>
+              ${App.escapeHTML(incident.category)}
+            </div>`
+        : '';
+
+      const cardHTML = `
         <div class="incident-card" data-id="${incident.id}">
           <div class="incident-card-header">
             <div class="incident-meta">
+              <span class="badge ${entryType.class} incident-type-badge">
+                <i data-lucide="${entryType.icon}" style="width:12px;height:12px"></i>
+                ${entryType.label}
+              </span>
               <span class="incident-date">
                 <i data-lucide="calendar" style="width:14px;height:14px;vertical-align:middle"></i>
                 ${App.formatDateTime(incident.date)}
               </span>
             </div>
-            <span class="badge ${status.class} incident-status" 
-                  onclick="DiaryModule.cycleStatus(${incident.id})" 
-                  title="Click para cambiar estado">
-              ${status.label}
-            </span>
+            ${statusHTML}
           </div>
           <div class="incident-card-body">
-            <div class="incident-category">
-              <i data-lucide="tag" style="width:12px;height:12px"></i>
-              ${App.escapeHTML(incident.category || 'Sin categoría')}
-            </div>
+            ${categoryHTML}
             ${responsibleHTML}
             <p class="incident-description">${App.escapeHTML(incident.description)}</p>
             ${photosHTML}
@@ -130,33 +165,69 @@ const DiaryModule = (() => {
             </button>
           </div>
         </div>
+      `;
+
+      if (incident.entryType === 'evolution') {
+        evolutionParts.push(`
+          <div class="evolution-item" data-id="${incident.id}">
+            <div class="evolution-dot"></div>
+            <div class="evolution-content">${cardHTML}</div>
+          </div>
+        `);
+      } else {
+        mainParts.push(cardHTML);
+      }
+    }
+
+    const sections = [];
+
+    if (mainParts.length > 0) {
+      sections.push(`
+        <div class="diary-group">
+          <div class="diary-group-title">Entradas del diario</div>
+          <div class="diary-group-list">${mainParts.join('')}</div>
+        </div>
       `);
     }
 
-    feed.innerHTML = htmlParts.join('');
+    if (evolutionParts.length > 0) {
+      sections.push(`
+        <div class="diary-group diary-group-evolution">
+          <div class="diary-group-title">Línea temporal de evolución</div>
+          <div class="evolution-timeline">${evolutionParts.join('')}</div>
+        </div>
+      `);
+    }
+
+    feed.innerHTML = sections.join('');
     lucide.createIcons();
   }
 
   // --- Incident Form ---
-  function openIncidentForm(incident = null) {
+  function openIncidentForm(incident = null, presetType = 'incident') {
     const isEdit = !!incident;
-    const title = isEdit ? 'Editar Incidencia' : 'Nueva Incidencia';
+    const effectiveType = isEdit ? (incident.entryType || 'incident') : presetType;
+    const typeTitles = {
+      incident: 'Nueva Incidencia',
+      comment: 'Nuevo Comentario',
+      evolution: 'Nueva Evolución'
+    };
+    const title = isEdit ? 'Editar Entrada' : (typeTitles[effectiveType] || 'Nueva Entrada');
 
     const now = new Date().toISOString().slice(0, 16);
+    const entryType = effectiveType;
 
     const body = `
-      <div class="form-group">
-        <label>Descripción *</label>
-        <textarea id="inc-description" rows="3" placeholder="Describe la incidencia...">${isEdit ? App.escapeHTML(incident.description) : ''}</textarea>
-      </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Categoría</label>
-          <select id="inc-category">
-            ${CATEGORIES.map(c => `<option value="${c}" ${isEdit && incident.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          <label>Tipo de entrada</label>
+          <select id="inc-entry-type">
+            <option value="incident" ${entryType === 'incident' ? 'selected' : ''}>Incidencia</option>
+            <option value="comment" ${entryType === 'comment' ? 'selected' : ''}>Comentario</option>
+            <option value="evolution" ${entryType === 'evolution' ? 'selected' : ''}>Evolución</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group incident-only-field">
           <label>Estado</label>
           <select id="inc-status">
             <option value="pending" ${isEdit && incident.status === 'pending' ? 'selected' : ''}>Pendiente</option>
@@ -165,12 +236,24 @@ const DiaryModule = (() => {
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
+      <div class="form-group">
+        <label>Descripción *</label>
+        <textarea id="inc-description" rows="3" placeholder="Describe la entrada del diario...">${isEdit ? App.escapeHTML(incident.description) : ''}</textarea>
+      </div>
+      <div class="form-row incident-only-row">
+        <div class="form-group incident-only-field">
+          <label>Categoría</label>
+          <select id="inc-category">
+            ${CATEGORIES.map(c => `<option value="${c}" ${isEdit && incident.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row incident-only-row">
+        <div class="form-group incident-only-field">
           <label>Persona responsable</label>
           <input type="text" id="inc-responsible-person" placeholder="Nombre del responsable" value="${isEdit ? App.escapeHTML(incident.responsiblePerson || '') : ''}">
         </div>
-        <div class="form-group">
+        <div class="form-group incident-only-field">
           <label>Empresa</label>
           <input type="text" id="inc-responsible-company" placeholder="Empresa o subcontrata" value="${isEdit ? App.escapeHTML(incident.responsibleCompany || '') : ''}">
         </div>
@@ -206,6 +289,18 @@ const DiaryModule = (() => {
     const uploadZone = document.getElementById('photo-upload-zone');
     const photoInput = document.getElementById('photo-input');
     const preview = document.getElementById('photo-preview');
+    const typeSelect = document.getElementById('inc-entry-type');
+
+    function syncEntryTypeUI() {
+      const isIncidentType = typeSelect.value === 'incident';
+      document.querySelectorAll('.incident-only-field, .incident-only-row').forEach(el => {
+        el.style.display = isIncidentType ? '' : 'none';
+      });
+      document.getElementById('diary-filter').disabled = false;
+    }
+
+    typeSelect.addEventListener('change', syncEntryTypeUI);
+    syncEntryTypeUI();
 
     uploadZone.addEventListener('click', () => photoInput.click());
 
@@ -271,11 +366,12 @@ const DiaryModule = (() => {
       }
 
       const data = {
+        entryType: document.getElementById('inc-entry-type').value,
         description,
-        category: document.getElementById('inc-category').value,
-        status: document.getElementById('inc-status').value,
-        responsiblePerson: document.getElementById('inc-responsible-person').value.trim(),
-        responsibleCompany: document.getElementById('inc-responsible-company').value.trim(),
+        category: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-category').value : '',
+        status: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-status').value : 'resolved',
+        responsiblePerson: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-responsible-person').value.trim() : '',
+        responsibleCompany: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-responsible-company').value.trim() : '',
         date: document.getElementById('inc-date').value + ':00',
         photoIds: [...existingPhotoIds, ...newPhotoIds],
         updatedAt: new Date().toISOString()
@@ -286,12 +382,12 @@ const DiaryModule = (() => {
         data.projectId = incident.projectId;
         data.createdAt = incident.createdAt;
         await DB.put('incidents', data);
-        App.toast('Incidencia actualizada', 'success');
+        App.toast('Entrada actualizada', 'success');
       } else {
         data.createdAt = new Date().toISOString();
         data.projectId = projectId;
         await DB.add('incidents', data);
-        App.toast('Incidencia registrada', 'success');
+        App.toast('Entrada registrada', 'success');
       }
 
       // Cleanup
@@ -307,15 +403,15 @@ const DiaryModule = (() => {
   }
 
   async function deleteIncident(id) {
-    if (!confirm('¿Eliminar esta incidencia?')) return;
+    if (!confirm('¿Eliminar esta entrada del diario?')) return;
     await DB.remove('incidents', id);
-    App.toast('Incidencia eliminada', 'info');
+    App.toast('Entrada eliminada', 'info');
     loadIncidents();
   }
 
   async function cycleStatus(id) {
     const incident = await DB.getById('incidents', id);
-    if (!incident) return;
+    if (!incident || (incident.entryType && incident.entryType !== 'incident')) return;
 
     const cycle = { pending: 'in-progress', 'in-progress': 'resolved', resolved: 'pending' };
     incident.status = cycle[incident.status] || 'pending';
@@ -326,5 +422,18 @@ const DiaryModule = (() => {
     loadIncidents();
   }
 
-  return { init, editIncident, deleteIncident, cycleStatus };
+  async function focusIncident(id) {
+    document.getElementById('diary-filter').value = 'all';
+    document.getElementById('diary-type-filter').value = 'all';
+    await loadIncidents();
+
+    const card = document.querySelector(`.incident-card[data-id="${id}"]`);
+    if (!card) return;
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('incident-card-focus');
+    setTimeout(() => card.classList.remove('incident-card-focus'), 2200);
+  }
+
+  return { init, editIncident, deleteIncident, cycleStatus, focusIncident };
 })();
