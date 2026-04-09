@@ -14,10 +14,16 @@ const CanvasModule = (() => {
   const history = [];
   const MAX_HISTORY = 50;
   let historyLocked = false;
+  let initialized = false;
+
+  // Store references for cleanup
+  let keydownHandler = null;
+  let undoHandler = null;
+  let resizeObserver = null;
 
   function saveHistory() {
     if (historyLocked) return;
-    history.push(JSON.stringify(canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName'])));
+    history.push(JSON.stringify(canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview'])));
     if (history.length > MAX_HISTORY) history.shift();
   }
 
@@ -34,22 +40,46 @@ const CanvasModule = (() => {
 
   function init(pid) {
     projectId = pid;
+    // Clean up previous canvas instance
+    if (canvas) {
+      canvas.dispose();
+      canvas = null;
+    }
+    // Remove old global event listeners
+    if (keydownHandler) document.removeEventListener('keydown', keydownHandler);
+    if (undoHandler) document.removeEventListener('keydown', undoHandler);
+    if (resizeObserver) resizeObserver.disconnect();
+
     // Clean up previous tables
     tables = [];
     clearTableDOM();
     selectedTableId = null;
+    history.length = 0;
+    historyLocked = false;
+
     setupCanvas();
-    setupToolbar();
-    setupTextToolbar();
-    setupTableToolbar();
-    setupFileUpload();
-    setupFileAttach();
+    if (!initialized) {
+      setupToolbar();
+      setupTextToolbar();
+      setupTableToolbar();
+      setupFileUpload();
+      setupFileAttach();
+      initialized = true;
+    }
     loadSavedState();
   }
 
   function setupCanvas() {
     const container = document.querySelector('.canvas-container');
     const rect = container.getBoundingClientRect();
+
+    // Ensure clean canvas element exists (Fabric.js dispose removes it)
+    let canvasEl = document.getElementById('fabric-canvas');
+    if (!canvasEl) {
+      canvasEl = document.createElement('canvas');
+      canvasEl.id = 'fabric-canvas';
+      container.insertBefore(canvasEl, container.firstChild);
+    }
 
     canvas = new fabric.Canvas('fabric-canvas', {
       width: rect.width,
@@ -142,11 +172,12 @@ const CanvasModule = (() => {
     });
 
     // Delete key
-    document.addEventListener('keydown', (e) => {
+    keydownHandler = (e) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (document.activeElement.tagName === 'INPUT' || 
             document.activeElement.tagName === 'TEXTAREA' ||
-            document.activeElement.tagName === 'SELECT') return;
+            document.activeElement.tagName === 'SELECT' ||
+            document.activeElement.isContentEditable) return;
         
         const active = canvas.getActiveObjects();
         if (active.length) {
@@ -155,7 +186,8 @@ const CanvasModule = (() => {
           canvas.requestRenderAll();
         }
       }
-    });
+    };
+    document.addEventListener('keydown', keydownHandler);
 
     // Track history for undo
     canvas.on('object:added', () => saveHistory());
@@ -163,18 +195,45 @@ const CanvasModule = (() => {
     canvas.on('object:removed', () => saveHistory());
 
     // Ctrl+Z undo
-    document.addEventListener('keydown', (e) => {
+    undoHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (document.activeElement.tagName === 'INPUT' ||
             document.activeElement.tagName === 'TEXTAREA') return;
         e.preventDefault();
         undo();
       }
-    });
+    };
+    document.addEventListener('keydown', undoHandler);
 
     // Resize observer
-    const resizeObserver = new ResizeObserver(() => resize());
+    resizeObserver = new ResizeObserver(() => resize());
     resizeObserver.observe(container);
+
+    // Right-click on canvas objects (attached files)
+    canvas.on('mouse:down', (opt) => {
+      if (opt.e.button === 2) {
+        const target = canvas.findTarget(opt.e, false);
+        if (target && target._isAttachedFile) {
+          opt.e.preventDefault();
+          opt.e.stopPropagation();
+          canvas.setActiveObject(target);
+          canvas.requestRenderAll();
+          showCanvasFileMenu(opt.e.clientX, opt.e.clientY, target);
+        }
+      }
+    });
+
+    // Prevent default context menu on the upper canvas
+    const upperCanvas = container.querySelector('.upper-canvas');
+    if (upperCanvas) {
+      upperCanvas.addEventListener('contextmenu', (e) => {
+        const target = canvas.findTarget(e, false);
+        if (target && target._isAttachedFile) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      });
+    }
   }
 
   function drawGrid() {
@@ -472,7 +531,10 @@ const CanvasModule = (() => {
       html += '</tr>';
     }
     html += '</tbody></table>';
+    html += '<div class="canvas-table-resize" title="Redimensionar">⟻</div>';
     wrapper.innerHTML = html;
+    if (table.w) wrapper.style.width = table.w + 'px';
+    if (table.h) wrapper.style.height = table.h + 'px';
     container.appendChild(wrapper);
 
     // Click to select (don't propagate to canvas)
@@ -527,6 +589,7 @@ const CanvasModule = (() => {
     });
 
     setupTableDrag(wrapper, table);
+    setupTableResize(wrapper, table);
   }
 
   function escHTMLTbl(str) {
@@ -568,6 +631,38 @@ const CanvasModule = (() => {
     };
 
     const onUp = () => { isDragging = false; };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function setupTableResize(wrapper, table) {
+    const handle = wrapper.querySelector('.canvas-table-resize');
+    let isResizing = false;
+    let startX, startY, startW, startH;
+
+    handle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = wrapper.offsetWidth;
+      startH = wrapper.offsetHeight;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    const onMove = (e) => {
+      if (!isResizing) return;
+      const newW = Math.max(100, startW + e.clientX - startX);
+      const newH = Math.max(60, startH + e.clientY - startY);
+      wrapper.style.width = newW + 'px';
+      wrapper.style.height = newH + 'px';
+      table.w = newW;
+      table.h = newH;
+      positionTableToolbar();
+    };
+
+    const onUp = () => { isResizing = false; };
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -935,7 +1030,14 @@ const CanvasModule = (() => {
         };
         const fileId = await DB.add('files', record);
 
-        addFileIcon(fileId, file.name, file.type, centerX + i * 30, centerY + i * 30);
+        // For images, generate a preview; for others, show icon
+        if (file.type && file.type.startsWith('image/')) {
+          const blob = new Blob([arrayBuffer], { type: file.type });
+          const dataUrl = URL.createObjectURL(blob);
+          addFilePreview(fileId, file.name, file.type, dataUrl, centerX + i * 160, centerY + i * 30);
+        } else {
+          addFileIcon(fileId, file.name, file.type, centerX + i * 30, centerY + i * 30);
+        }
       }
 
       App.toast(`${files.length} archivo(s) adjuntado(s)`, 'success');
@@ -1022,6 +1124,92 @@ const CanvasModule = (() => {
     canvas.requestRenderAll();
   }
 
+  function addFilePreview(fileId, fileName, mimeType, dataUrl, x, y) {
+    const PREVIEW_MAX_W = 200;
+    const PREVIEW_MAX_H = 160;
+    const LABEL_H = 28;
+
+    fabric.Image.fromURL(dataUrl, (img) => {
+      // Revoke object URL if used
+      if (dataUrl.startsWith('blob:')) URL.revokeObjectURL(dataUrl);
+
+      if (!img || !img.width) {
+        // Fallback to icon if image fails to load
+        addFileIcon(fileId, fileName, mimeType, x, y);
+        return;
+      }
+
+      // Scale to fit preview bounds
+      const scale = Math.min(PREVIEW_MAX_W / img.width, PREVIEW_MAX_H / img.height, 1);
+      const imgW = img.width * scale;
+      const imgH = img.height * scale;
+      const totalH = imgH + LABEL_H;
+      const totalW = Math.max(imgW, 100);
+
+      // Background
+      const bg = new fabric.Rect({
+        width: totalW + 12,
+        height: totalH + 12,
+        fill: 'rgba(30,41,59,0.9)',
+        rx: 8,
+        ry: 8,
+        stroke: '#334155',
+        strokeWidth: 1,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false
+      });
+
+      // Scale image
+      img.set({
+        scaleX: scale,
+        scaleY: scale,
+        originX: 'center',
+        originY: 'center',
+        left: 0,
+        top: -(LABEL_H / 2),
+        selectable: false,
+        evented: false
+      });
+
+      // Filename label
+      const displayName = fileName.length > 28 ? fileName.substring(0, 25) + '...' : fileName;
+      const label = new fabric.Text(displayName, {
+        fontSize: 10,
+        fontFamily: 'Inter, sans-serif',
+        fill: '#94A3B8',
+        textAlign: 'center',
+        originX: 'center',
+        originY: 'center',
+        left: 0,
+        top: imgH / 2 + 6,
+        selectable: false,
+        evented: false
+      });
+
+      const group = new fabric.Group([bg, img, label], {
+        left: x,
+        top: y,
+        originX: 'center',
+        originY: 'center',
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        _isAttachedFile: true,
+        _attachedFileId: fileId,
+        _attachedFileName: fileName,
+        _isImagePreview: true
+      });
+
+      group.on('mousedblclick', () => downloadAttachedFile(fileId, fileName));
+
+      canvas.add(group);
+      canvas.setActiveObject(group);
+      canvas.requestRenderAll();
+    }, { crossOrigin: 'anonymous' });
+  }
+
   async function downloadAttachedFile(fileId, fallbackName) {
     const file = await DB.getById('files', fileId);
     if (!file) {
@@ -1040,18 +1228,20 @@ const CanvasModule = (() => {
   function reattachFileHandlers() {
     canvas.getObjects().forEach(obj => {
       if (obj._isAttachedFile && obj._attachedFileId) {
-        obj.set({ hasControls: false, lockScalingX: true, lockScalingY: true });
+        if (!obj._isImagePreview) {
+          obj.set({ hasControls: false, lockScalingX: true, lockScalingY: true });
+        }
         obj.on('mousedblclick', () => downloadAttachedFile(obj._attachedFileId, obj._attachedFileName));
       }
     });
   }
 
   async function saveState() {
-    const json = canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName']);
+    const json = canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview']);
     syncAllTableData();
     const payload = {
       canvas: json,
-      tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, data: t.data }))
+      tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data }))
     };
     await DB.saveCanvasState(projectId, payload);
     App.toast('Mesa de trabajo guardada', 'success');

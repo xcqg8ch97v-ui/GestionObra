@@ -17,6 +17,8 @@ const DashboardModule = (() => {
     projectId = pid;
     setupSubTabs();
     setupButtons();
+    setupComparatorFilter();
+    setupSupplierFilters();
     loadSuppliers();
     loadBudgets();
   }
@@ -49,9 +51,49 @@ const DashboardModule = (() => {
   // SUPPLIERS
   // ========================================
 
+  let allSuppliers = [];
+  let supplierFilterTrade = '__all__';
+  let supplierSearchQuery = '';
+
+  function setupSupplierFilters() {
+    const searchInput = document.getElementById('supplier-search');
+    const tradeSelect = document.getElementById('supplier-trade-filter');
+    if (!searchInput || !tradeSelect) return;
+
+    // Populate trade filter options
+    tradeSelect.innerHTML = '<option value="__all__">Todos los gremios</option>' +
+      TRADES.map(t => `<option value="${t}">${t}</option>`).join('');
+
+    searchInput.addEventListener('input', (e) => {
+      supplierSearchQuery = e.target.value.trim().toLowerCase();
+      applySupplierFilters();
+    });
+
+    tradeSelect.addEventListener('change', (e) => {
+      supplierFilterTrade = e.target.value;
+      applySupplierFilters();
+    });
+  }
+
+  function applySupplierFilters() {
+    let filtered = allSuppliers;
+    if (supplierFilterTrade !== '__all__') {
+      filtered = filtered.filter(s => s.trade === supplierFilterTrade);
+    }
+    if (supplierSearchQuery) {
+      filtered = filtered.filter(s =>
+        (s.name || '').toLowerCase().includes(supplierSearchQuery) ||
+        (s.contact || '').toLowerCase().includes(supplierSearchQuery) ||
+        (s.phone || '').toLowerCase().includes(supplierSearchQuery) ||
+        (s.trade || '').toLowerCase().includes(supplierSearchQuery)
+      );
+    }
+    renderSuppliers(filtered);
+  }
+
   async function loadSuppliers() {
-    const suppliers = await DB.getAllForProject('suppliers', projectId);
-    renderSuppliers(suppliers);
+    allSuppliers = await DB.getAllForProject('suppliers', projectId);
+    applySupplierFilters();
   }
 
   function renderSuppliers(suppliers) {
@@ -355,79 +397,240 @@ const DashboardModule = (() => {
   // COMPARATOR
   // ========================================
 
+  let comparatorTrade = null;
+
+  function setupComparatorFilter() {
+    // No longer needs a <select>, we use trade cards now
+  }
+
   async function renderComparator() {
-    const budgets = await DB.getAllForProject('budgets', projectId);
-    const container = document.getElementById('budget-chart');
+    const [budgets, suppliers] = await Promise.all([
+      DB.getAllForProject('budgets', projectId),
+      DB.getAllForProject('suppliers', projectId)
+    ]);
+
+    const supplierMap = {};
+    suppliers.forEach(s => { supplierMap[s.id] = s; });
+
+    // Group budgets by category
+    const byCategory = {};
+    budgets.forEach(b => {
+      if (!byCategory[b.category]) byCategory[b.category] = [];
+      byCategory[b.category].push(b);
+    });
+
+    const grid = document.getElementById('comp-trade-grid');
+    const detail = document.getElementById('comp-detail');
 
     if (budgets.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <i data-lucide="bar-chart-horizontal"></i>
-          <p>Añade partidas presupuestarias para ver el comparador</p>
-        </div>
-      `;
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1">
+          <i data-lucide="scale"></i>
+          <p>Añade partidas presupuestarias para comparar proveedores</p>
+        </div>`;
+      detail.style.display = 'none';
       lucide.createIcons();
       return;
     }
 
-    // Aggregate by category
-    const categories = {};
-    let totalEstimated = 0;
-    let totalReal = 0;
-
-    budgets.forEach(b => {
-      if (!categories[b.category]) {
-        categories[b.category] = { estimated: 0, real: 0 };
-      }
-      categories[b.category].estimated += b.estimatedCost;
-      categories[b.category].real += b.realCost;
-      totalEstimated += b.estimatedCost;
-      totalReal += b.realCost;
-    });
-
-    const totalDeviation = totalReal - totalEstimated;
-
-    // Update summary
-    document.getElementById('total-estimated').textContent = App.formatCurrency(totalEstimated);
-    document.getElementById('total-real').textContent = App.formatCurrency(totalReal);
-
-    const devEl = document.getElementById('total-deviation');
-    devEl.textContent = (totalDeviation >= 0 ? '+' : '') + App.formatCurrency(totalDeviation);
-    devEl.style.color = totalDeviation > 0 ? 'var(--red)' : totalDeviation < 0 ? 'var(--green)' : 'var(--text-primary)';
-
-    // Find max for scale
-    const maxValue = Math.max(...Object.values(categories).flatMap(c => [c.estimated, c.real]));
-
-    // Render bars
-    container.innerHTML = Object.entries(categories).map(([cat, data]) => {
-      const deviation = data.real - data.estimated;
-      const devPct = data.estimated > 0 ? ((deviation / data.estimated) * 100).toFixed(1) : 0;
-      const estWidth = maxValue > 0 ? (data.estimated / maxValue * 100) : 0;
-      const realWidth = maxValue > 0 ? (data.real / maxValue * 100) : 0;
-      const realClass = data.real > data.estimated ? 'over' : data.real < data.estimated ? 'under' : 'estimated';
+    // Render trade category cards
+    grid.innerHTML = Object.entries(byCategory).map(([cat, entries]) => {
+      const count = entries.length;
+      const supplierCount = new Set(entries.map(b => b.supplierId).filter(Boolean)).size;
+      const totalEst = entries.reduce((s, b) => s + (b.estimatedCost || 0), 0);
+      const minEst = Math.min(...entries.map(b => b.estimatedCost || Infinity));
+      const maxEst = Math.max(...entries.map(b => b.estimatedCost || 0));
+      const isActive = comparatorTrade === cat;
+      const spread = count > 1 ? maxEst - minEst : 0;
 
       return `
-        <div class="budget-bar-group">
-          <div class="budget-bar-label">
-            <span>${App.escapeHTML(cat)}</span>
-            <span>Desviación: ${deviation >= 0 ? '+' : ''}${App.formatCurrency(deviation)} (${deviation >= 0 ? '+' : ''}${devPct}%)</span>
+        <button class="comp-trade-card ${isActive ? 'active' : ''}" data-trade="${App.escapeHTML(cat)}">
+          <div class="comp-trade-card-title">${App.escapeHTML(cat)}</div>
+          <div class="comp-trade-card-stats">
+            <span>${count} ${count === 1 ? 'partida' : 'partidas'}</span>
+            <span>${supplierCount} ${supplierCount === 1 ? 'proveedor' : 'proveedores'}</span>
           </div>
-          <div class="budget-bars">
-            <div class="bar-track">
-              <div class="bar-fill estimated" style="width:${estWidth}%">
-                Previsto: ${App.formatCurrency(data.estimated)}
-              </div>
-            </div>
-            <div class="bar-track">
-              <div class="bar-fill ${realClass}" style="width:${realWidth}%">
-                Real: ${App.formatCurrency(data.real)}
-              </div>
-            </div>
+          <div class="comp-trade-card-range">
+            ${count > 1 
+              ? `<span class="comp-range-label">Rango:</span> ${App.formatCurrency(minEst)} — ${App.formatCurrency(maxEst)}`
+              : App.formatCurrency(totalEst)}
           </div>
-        </div>
-      `;
+          ${spread > 0 ? `<div class="comp-trade-card-spread">Ahorro potencial: <strong>${App.formatCurrency(spread)}</strong></div>` : ''}
+        </button>`;
     }).join('');
 
+    // Bind trade card clicks
+    grid.querySelectorAll('.comp-trade-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const trade = card.dataset.trade;
+        comparatorTrade = comparatorTrade === trade ? null : trade;
+        renderComparator();
+      });
+    });
+
+    // Show detail if trade selected
+    if (comparatorTrade && byCategory[comparatorTrade]) {
+      detail.style.display = 'block';
+      renderComparatorDetail(byCategory[comparatorTrade], supplierMap);
+    } else {
+      detail.style.display = 'none';
+    }
+
+    lucide.createIcons();
+  }
+
+  function renderComparatorDetail(entries, supplierMap) {
+    const headerEl = document.getElementById('comp-detail-header');
+    const summaryEl = document.getElementById('comp-detail-summary');
+    const bodyEl = document.getElementById('comp-detail-body');
+
+    // Sort by estimated cost ascending
+    const sorted = [...entries].sort((a, b) => (a.estimatedCost || 0) - (b.estimatedCost || 0));
+    const cheapest = sorted[0];
+    const mostExpensive = sorted[sorted.length - 1];
+    const avgEstimated = sorted.reduce((s, b) => s + (b.estimatedCost || 0), 0) / sorted.length;
+    const maxCost = Math.max(...sorted.map(b => Math.max(b.estimatedCost || 0, b.realCost || 0)), 1);
+
+    // Header with back button
+    headerEl.innerHTML = `
+      <button class="comp-back-btn" id="comp-back-btn">
+        <i data-lucide="arrow-left" style="width:16px;height:16px"></i>
+        Volver a gremios
+      </button>
+      <h3>${App.escapeHTML(comparatorTrade)}</h3>
+      <span class="comp-detail-count">${sorted.length} ${sorted.length === 1 ? 'presupuesto' : 'presupuestos'} de ${new Set(sorted.map(b => b.supplierId).filter(Boolean)).size} proveedores</span>
+    `;
+
+    document.getElementById('comp-back-btn').addEventListener('click', () => {
+      comparatorTrade = null;
+      renderComparator();
+    });
+
+    // Summary cards
+    const savings = (mostExpensive.estimatedCost || 0) - (cheapest.estimatedCost || 0);
+    const savingsPct = mostExpensive.estimatedCost > 0 ? ((savings / mostExpensive.estimatedCost) * 100).toFixed(1) : 0;
+
+    summaryEl.innerHTML = `
+      <div class="comp-sum-card">
+        <div class="comp-sum-label">Más económico</div>
+        <div class="comp-sum-value comp-sum-green">${App.formatCurrency(cheapest.estimatedCost || 0)}</div>
+        <div class="comp-sum-sub">${App.escapeHTML((supplierMap[cheapest.supplierId] || {}).name || 'Sin proveedor')}</div>
+      </div>
+      <div class="comp-sum-card">
+        <div class="comp-sum-label">Más caro</div>
+        <div class="comp-sum-value comp-sum-red">${App.formatCurrency(mostExpensive.estimatedCost || 0)}</div>
+        <div class="comp-sum-sub">${App.escapeHTML((supplierMap[mostExpensive.supplierId] || {}).name || 'Sin proveedor')}</div>
+      </div>
+      <div class="comp-sum-card">
+        <div class="comp-sum-label">Media</div>
+        <div class="comp-sum-value">${App.formatCurrency(avgEstimated)}</div>
+        <div class="comp-sum-sub">${sorted.length} presupuestos</div>
+      </div>
+      <div class="comp-sum-card comp-sum-highlight">
+        <div class="comp-sum-label">Ahorro potencial</div>
+        <div class="comp-sum-value comp-sum-green">${App.formatCurrency(savings)}</div>
+        <div class="comp-sum-sub">${savingsPct}% del más caro</div>
+      </div>
+    `;
+
+    // Comparison table
+    let tableHTML = `
+      <div class="comp-table-wrap">
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th class="comp-th-rank">#</th>
+            <th>Proveedor</th>
+            <th class="comp-th-cost">Previsto</th>
+            <th class="comp-th-cost">Real</th>
+            <th class="comp-th-cost">Desviación</th>
+            <th class="comp-th-bar">Visual</th>
+            <th>Contacto</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    sorted.forEach((b, idx) => {
+      const sup = supplierMap[b.supplierId] || {};
+      const supplierName = sup.name || 'Sin proveedor';
+      const deviation = (b.realCost || 0) - (b.estimatedCost || 0);
+      const devPct = b.estimatedCost > 0 ? ((deviation / b.estimatedCost)* 100).toFixed(1) : '0';
+      const diffFromCheapest = (b.estimatedCost || 0) - (cheapest.estimatedCost || 0);
+      const estW = maxCost > 0 ? ((b.estimatedCost || 0) / maxCost * 100) : 0;
+      const realW = maxCost > 0 ? ((b.realCost || 0) / maxCost * 100) : 0;
+      const isBest = idx === 0 && sorted.length > 1;
+      const margin = b.profitMargin || 0;
+
+      const devClass = deviation > 0 ? 'comp-val-red' : deviation < 0 ? 'comp-val-green' : '';
+      const realBarClass = deviation > 0 ? 'over' : deviation < 0 ? 'under' : 'estimated';
+
+      const statusBadge = sup.status
+        ? `<span class="badge ${sup.status === 'Activo' ? 'badge-active' : sup.status === 'Pendiente' ? 'badge-pending' : 'badge-inactive'}">${App.escapeHTML(sup.status)}</span>`
+        : '<span style="color:var(--text-muted)">—</span>';
+
+      const contactInfo = sup.phone || sup.email
+        ? `<div class="comp-contact-info">
+            ${sup.phone ? `<a href="tel:${App.escapeHTML(sup.phone)}" class="comp-contact-link"><i data-lucide="phone" style="width:12px;height:12px"></i> ${App.escapeHTML(sup.phone)}</a>` : ''}
+            ${sup.email ? `<a href="mailto:${App.escapeHTML(sup.email)}" class="comp-contact-link"><i data-lucide="mail" style="width:12px;height:12px"></i> ${App.escapeHTML(sup.email)}</a>` : ''}
+           </div>`
+        : '<span style="color:var(--text-muted)">—</span>';
+
+      tableHTML += `
+        <tr class="${isBest ? 'comp-row-best' : ''}">
+          <td class="comp-cell-rank">
+            ${isBest ? '<span class="comp-rank-badge">✦</span>' : (idx + 1)}
+          </td>
+          <td>
+            <div class="comp-cell-supplier">
+              <strong>${App.escapeHTML(supplierName)}</strong>
+              ${isBest ? '<span class="comp-best-tag">Mejor precio</span>' : ''}
+              ${diffFromCheapest > 0 ? `<span class="comp-diff-tag">+${App.formatCurrency(diffFromCheapest)}</span>` : ''}
+              ${b.description ? `<span class="comp-cell-desc">${App.escapeHTML(b.description)}</span>` : ''}
+            </div>
+          </td>
+          <td class="comp-cell-cost"><strong>${App.formatCurrency(b.estimatedCost || 0)}</strong></td>
+          <td class="comp-cell-cost">${App.formatCurrency(b.realCost || 0)}</td>
+          <td class="comp-cell-cost">
+            <span class="${devClass}">
+              ${deviation >= 0 ? '+' : ''}${App.formatCurrency(deviation)}
+              <small>(${deviation >= 0 ? '+' : ''}${devPct}%)</small>
+            </span>
+          </td>
+          <td class="comp-cell-bars">
+            <div class="comp-mini-bar">
+              <div class="comp-mini-fill estimated" style="width:${estW}%" title="Previsto: ${App.formatCurrency(b.estimatedCost || 0)}"></div>
+            </div>
+            <div class="comp-mini-bar">
+              <div class="comp-mini-fill ${realBarClass}" style="width:${realW}%" title="Real: ${App.formatCurrency(b.realCost || 0)}"></div>
+            </div>
+          </td>
+          <td class="comp-cell-contact">${contactInfo}</td>
+          <td>${statusBadge}</td>
+        </tr>`;
+    });
+
+    tableHTML += '</tbody></table></div>';
+
+    // Notes section if any supplier has notes
+    const notesEntries = sorted
+      .filter(b => supplierMap[b.supplierId]?.notes)
+      .map(b => {
+        const sup = supplierMap[b.supplierId];
+        return `<div class="comp-note-item">
+          <strong>${App.escapeHTML(sup.name)}:</strong> ${App.escapeHTML(sup.notes)}
+        </div>`;
+      });
+
+    if (notesEntries.length) {
+      tableHTML += `
+        <div class="comp-notes-section">
+          <div class="comp-notes-title"><i data-lucide="message-square" style="width:14px;height:14px"></i> Notas de proveedores</div>
+          ${notesEntries.join('')}
+        </div>`;
+    }
+
+    bodyEl.innerHTML = tableHTML;
     lucide.createIcons();
   }
 

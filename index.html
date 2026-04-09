@@ -25,6 +25,9 @@
       <button class="btn btn-primary" id="btn-new-project">
         <i data-lucide="plus"></i> Nueva Obra
       </button>
+      <button class="btn btn-outline" id="btn-import-project">
+        <i data-lucide="upload"></i> Importar Obra
+      </button>
     </div>
     <div class="project-grid" id="project-grid"></div>
     <div class="empty-state" id="projects-empty" style="display:none">
@@ -258,6 +261,15 @@
             <i data-lucide="plus"></i> Nuevo Proveedor
           </button>
         </div>
+        <div class="suppliers-filters">
+          <div class="filter-search">
+            <i data-lucide="search"></i>
+            <input type="text" id="supplier-search" placeholder="Buscar proveedor...">
+          </div>
+          <select id="supplier-trade-filter" class="filter-select">
+            <option value="__all__">Todos los gremios</option>
+          </select>
+        </div>
         <div class="table-container">
           <table class="data-table" id="suppliers-table">
             <thead>
@@ -314,23 +326,18 @@
       <!-- Comparator Panel -->
       <div id="panel-comparator" class="sub-panel">
         <div class="panel-header">
-          <h2>Comparador de Desviaciones</h2>
+          <h2>Comparador de Proveedores</h2>
         </div>
-        <div class="comparator-summary" id="comparator-summary">
-          <div class="summary-card">
-            <span class="summary-label">Presupuesto Total</span>
-            <span class="summary-value" id="total-estimated">€0</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-label">Coste Real</span>
-            <span class="summary-value" id="total-real">€0</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-label">Desviación</span>
-            <span class="summary-value" id="total-deviation">€0</span>
-          </div>
+
+        <!-- Category cards grid -->
+        <div class="comp-trade-grid" id="comp-trade-grid"></div>
+
+        <!-- Comparison detail (hidden until trade selected) -->
+        <div class="comp-detail" id="comp-detail" style="display:none">
+          <div class="comp-detail-header" id="comp-detail-header"></div>
+          <div class="comp-detail-summary" id="comp-detail-summary"></div>
+          <div class="comp-detail-body" id="comp-detail-body"></div>
         </div>
-        <div class="chart-container" id="budget-chart"></div>
       </div>
     </section>
 
@@ -338,6 +345,10 @@
       <div class="panel-header">
         <h2>Cronograma de Obra</h2>
         <div class="timeline-actions">
+          <label class="tl-hide-completed" title="Ocultar tareas completadas">
+            <input type="checkbox" id="tl-hide-done">
+            <span>Ocultar completadas</span>
+          </label>
           <div class="view-toggle">
             <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt">
               <i data-lucide="gantt-chart"></i>
@@ -472,6 +483,9 @@
 
   <!-- Toast Notifications -->
   <div class="toast-container" id="toast-container"></div>
+
+  <!-- Context Menu -->
+  <div class="ctx-menu" id="ctx-menu"></div>
 
   <!-- Scripts -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>

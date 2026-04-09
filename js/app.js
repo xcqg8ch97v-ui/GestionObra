@@ -33,6 +33,7 @@ const App = (() => {
   function setupProjectSelector() {
     document.getElementById('btn-new-project').addEventListener('click', openProjectForm);
     document.getElementById('btn-new-project-empty').addEventListener('click', openProjectForm);
+    document.getElementById('btn-import-project').addEventListener('click', importProject);
     document.getElementById('btn-back-projects').addEventListener('click', showProjectSelector);
   }
 
@@ -71,6 +72,9 @@ const App = (() => {
             <span class="project-card-date">${formatDate(p.createdAt)}</span>
           </div>
           <div class="project-card-actions" onclick="event.stopPropagation();">
+            <button class="action-btn" onclick="App.exportProject(${p.id})" title="Exportar obra">
+              <i data-lucide="download"></i>
+            </button>
             <button class="action-btn" onclick="App.editProject(${p.id})" title="Editar obra">
               <i data-lucide="pencil"></i>
             </button>
@@ -166,6 +170,158 @@ const App = (() => {
     loadProjectCards();
   }
 
+  // ========================================
+  // EXPORT / IMPORT
+  // ========================================
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  async function exportProject(id) {
+    const project = await DB.getById('projects', id);
+    if (!project) { toast('Obra no encontrada', 'error'); return; }
+
+    toast('Exportando obra...', 'info');
+
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files'];
+    const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
+
+    for (const store of STORES) {
+      const records = await DB.getAllForProject(store, id);
+      if (store === 'files') {
+        // Convert ArrayBuffer to base64 for JSON serialization
+        data[store] = records.map(f => ({
+          ...f,
+          data: f.data ? arrayBufferToBase64(f.data) : null,
+          _encoded: true
+        }));
+      } else {
+        data[store] = records;
+      }
+    }
+
+    // Canvas state
+    const canvasState = await DB.getCanvasState(id);
+    data.canvas = canvasState || null;
+
+    const json = JSON.stringify(data);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = project.name.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').trim().replace(/\s+/g, '-');
+    link.download = `obra-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('Obra exportada correctamente', 'success');
+  }
+
+  async function importProject() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (!data.project || !data._exportVersion) {
+          toast('Archivo no válido: no es una exportación de obra', 'error');
+          return;
+        }
+
+        toast('Importando obra...', 'info');
+
+        // Create project with new ID
+        const { id: oldId, ...projData } = data.project;
+        projData.name = projData.name + ' (importada)';
+        projData.importedAt = new Date().toISOString();
+        const newProjectId = await DB.add('projects', projData);
+
+        // Import each store with updated projectId
+        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files'];
+        const idMap = {}; // old ID -> new ID mapping for references
+
+        for (const store of STORES) {
+          const records = data[store] || [];
+          idMap[store] = {};
+          for (const record of records) {
+            const oldRecId = record.id;
+            const { id, ...recData } = record;
+            recData.projectId = newProjectId;
+
+            // Restore file binary data from base64
+            if (store === 'files' && recData._encoded && recData.data) {
+              recData.data = base64ToArrayBuffer(recData.data);
+              delete recData._encoded;
+            }
+
+            const newId = await DB.add(store, recData);
+            idMap[store][oldRecId] = newId;
+          }
+        }
+
+        // Fix task dependencies (old IDs -> new IDs)
+        if (data.tasks) {
+          for (const oldTask of data.tasks) {
+            if (oldTask.dependencies && oldTask.dependencies.length > 0) {
+              const newTaskId = idMap.tasks[oldTask.id];
+              const task = await DB.getById('tasks', newTaskId);
+              if (task) {
+                task.dependencies = oldTask.dependencies.map(depId => idMap.tasks[depId]).filter(Boolean);
+                await DB.put('tasks', task);
+              }
+            }
+          }
+        }
+
+        // Fix budget supplierId references
+        if (data.budgets) {
+          for (const oldBudget of data.budgets) {
+            if (oldBudget.supplierId) {
+              const newBudgetId = idMap.budgets[oldBudget.id];
+              const budget = await DB.getById('budgets', newBudgetId);
+              if (budget) {
+                budget.supplierId = idMap.suppliers[oldBudget.supplierId] || budget.supplierId;
+                await DB.put('budgets', budget);
+              }
+            }
+          }
+        }
+
+        // Import canvas state
+        if (data.canvas && data.canvas.data) {
+          await DB.saveCanvasState(newProjectId, data.canvas.data);
+        }
+
+        toast('Obra importada correctamente', 'success');
+        loadProjectCards();
+      } catch (err) {
+        console.error('Import error:', err);
+        toast('Error al importar: archivo corrupto o no válido', 'error');
+      }
+    });
+    input.click();
+  }
+
   async function enterProject(id) {
     const project = await DB.getById('projects', id);
     if (!project) return;
@@ -193,6 +349,8 @@ const App = (() => {
     DiaryModule.init(currentProjectId);
     OverviewModule.init(currentProjectId);
     FilesModule.init(currentProjectId);
+
+    setupContextMenu();
 
     lucide.createIcons();
 
@@ -409,6 +567,307 @@ const App = (() => {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
+  // ========================================
+  // CONTEXT MENU SYSTEM
+  // ========================================
+
+  let ctxMenuReady = false;
+
+  function setupContextMenu() {
+    if (ctxMenuReady) return;
+    ctxMenuReady = true;
+
+    const menu = document.getElementById('ctx-menu');
+
+    // Close on click elsewhere or Escape
+    document.addEventListener('click', () => hideContextMenu());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
+    window.addEventListener('blur', () => hideContextMenu());
+
+    // Right click handler on main content
+    document.getElementById('main-content').addEventListener('contextmenu', (e) => {
+      // Don't override context menu on inputs/textareas/contenteditable
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY);
+    });
+  }
+
+  function showContextMenu(x, y) {
+    const menu = document.getElementById('ctx-menu');
+    const items = getContextMenuItems();
+    if (!items.length) return;
+
+    // Build HTML
+    menu.innerHTML = items.map(item => {
+      if (item.type === 'sep') return '<div class="ctx-sep"></div>';
+      if (item.type === 'header') return `<div class="ctx-header">${escapeHTML(item.label)}</div>`;
+      const cls = ['ctx-item'];
+      if (item.danger) cls.push('ctx-danger');
+      const shortcut = item.shortcut ? `<span class="ctx-shortcut">${item.shortcut}</span>` : '';
+      return `<button class="${cls.join(' ')}" data-action="${item.action}">
+        <i data-lucide="${item.icon}"></i>
+        <span>${escapeHTML(item.label)}</span>
+        ${shortcut}
+      </button>`;
+    }).join('');
+
+    lucide.createIcons({ attrs: { class: '' } });
+
+    // Bind actions
+    menu.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideContextMenu();
+        const action = btn.dataset.action;
+        executeContextAction(action);
+      });
+    });
+
+    // Position ensuring viewport bounds
+    menu.classList.add('visible');
+    const rect = menu.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width - 8;
+    const maxY = window.innerHeight - rect.height - 8;
+    menu.style.left = Math.min(x, maxX) + 'px';
+    menu.style.top = Math.min(y, maxY) + 'px';
+  }
+
+  function hideContextMenu() {
+    const menu = document.getElementById('ctx-menu');
+    menu.classList.remove('visible');
+  }
+
+  function getContextMenuItems() {
+    const section = currentSection;
+
+    const navItems = [
+      { type: 'sep' },
+      { type: 'header', label: 'Navegar a' },
+      { action: 'nav-overview',  icon: 'layout-dashboard', label: 'Vista General' },
+      { action: 'nav-canvas',    icon: 'pen-tool',         label: 'Mesa de Trabajo' },
+      { action: 'nav-dashboard', icon: 'bar-chart-3',      label: 'Proveedores' },
+      { action: 'nav-timeline',  icon: 'gantt-chart',      label: 'Cronograma' },
+      { action: 'nav-diary',     icon: 'clipboard-list',   label: 'Diario' },
+      { action: 'nav-files',     icon: 'folder-open',      label: 'Documentos' },
+    ].filter(i => i.type || i.action !== `nav-${section}`);
+
+    switch (section) {
+      case 'overview':
+        return [
+          { type: 'header', label: 'Vista General' },
+          { action: 'refresh-overview', icon: 'refresh-cw',  label: 'Actualizar datos' },
+          { action: 'add-task',         icon: 'plus-circle', label: 'Nueva tarea' },
+          { action: 'add-incident',     icon: 'alert-triangle', label: 'Nueva incidencia' },
+          { action: 'add-supplier',     icon: 'users',       label: 'Nuevo proveedor' },
+          ...navItems
+        ];
+
+      case 'canvas':
+        return [
+          { type: 'header', label: 'Mesa de Trabajo' },
+          { action: 'canvas-postit',  icon: 'sticky-note',    label: 'Añadir nota' },
+          { action: 'canvas-text',    icon: 'type',           label: 'Añadir texto' },
+          { action: 'canvas-table',   icon: 'table',          label: 'Añadir tabla' },
+          { action: 'canvas-arrow',   icon: 'move-right',     label: 'Dibujar flecha' },
+          { action: 'canvas-draw',    icon: 'pencil',         label: 'Dibujo libre' },
+          { type: 'sep' },
+          { action: 'canvas-upload',  icon: 'image-plus',     label: 'Subir plano' },
+          { action: 'canvas-attach',  icon: 'paperclip',      label: 'Adjuntar archivo' },
+          { type: 'sep' },
+          { action: 'canvas-undo',    icon: 'undo-2',         label: 'Deshacer',        shortcut: '⌘Z' },
+          { action: 'canvas-save',    icon: 'save',           label: 'Guardar',          shortcut: '' },
+          { action: 'canvas-export',  icon: 'download',       label: 'Exportar imagen' },
+          { type: 'sep' },
+          { action: 'canvas-zoomfit', icon: 'maximize-2',     label: 'Ajustar zoom' },
+          { action: 'canvas-clear',   icon: 'trash-2',        label: 'Limpiar todo', danger: true },
+          ...navItems
+        ];
+
+      case 'dashboard':
+        return [
+          { type: 'header', label: 'Proveedores y Presupuestos' },
+          { action: 'add-supplier',   icon: 'user-plus',    label: 'Nuevo proveedor' },
+          { action: 'add-budget',     icon: 'plus-circle',  label: 'Nueva partida' },
+          { type: 'sep' },
+          { action: 'tab-suppliers',  icon: 'users',        label: 'Ver proveedores' },
+          { action: 'tab-budgets',    icon: 'calculator',   label: 'Ver presupuestos' },
+          { action: 'tab-comparator', icon: 'bar-chart-horizontal', label: 'Ver comparador' },
+          ...navItems
+        ];
+
+      case 'timeline':
+        return [
+          { type: 'header', label: 'Cronograma' },
+          { action: 'add-task',        icon: 'plus-circle',  label: 'Nueva tarea' },
+          { type: 'sep' },
+          { action: 'view-gantt',      icon: 'gantt-chart',  label: 'Vista Gantt' },
+          { action: 'view-list',       icon: 'list',         label: 'Vista lista' },
+          { action: 'zoom-today',      icon: 'calendar',     label: 'Ir a hoy' },
+          ...navItems
+        ];
+
+      case 'diary':
+        return [
+          { type: 'header', label: 'Diario de Incidencias' },
+          { action: 'add-incident',    icon: 'plus-circle',  label: 'Nueva incidencia' },
+          { type: 'sep' },
+          { action: 'filter-all',      icon: 'list',          label: 'Mostrar todas' },
+          { action: 'filter-pending',  icon: 'clock',         label: 'Solo pendientes' },
+          { action: 'filter-progress', icon: 'loader',        label: 'Solo en proceso' },
+          { action: 'filter-resolved', icon: 'check-circle',  label: 'Solo resueltas' },
+          ...navItems
+        ];
+
+      case 'files':
+        return [
+          { type: 'header', label: 'Documentos' },
+          { action: 'upload-file',     icon: 'upload',       label: 'Subir archivo' },
+          { type: 'sep' },
+          { action: 'sort-date-desc',  icon: 'arrow-down-wide-narrow', label: 'Ordenar: Recientes' },
+          { action: 'sort-name-asc',   icon: 'arrow-up-a-z',           label: 'Ordenar: A-Z' },
+          { action: 'sort-size-desc',  icon: 'arrow-down-wide-narrow', label: 'Ordenar: Mayor tamaño' },
+          ...navItems
+        ];
+
+      default:
+        return navItems;
+    }
+  }
+
+  function executeContextAction(action) {
+    // Navigation
+    if (action.startsWith('nav-')) {
+      return navigateTo(action.replace('nav-', ''));
+    }
+
+    switch (action) {
+      // Overview
+      case 'refresh-overview':
+        OverviewModule.refresh();
+        toast('Datos actualizados', 'success');
+        break;
+
+      // Canvas tool activations
+      case 'canvas-postit':
+        document.querySelector('[data-tool="postit"]').click();
+        toast('Haz clic en el canvas para colocar la nota', 'info');
+        break;
+      case 'canvas-text':
+        document.querySelector('[data-tool="text"]').click();
+        toast('Haz clic en el canvas para añadir texto', 'info');
+        break;
+      case 'canvas-table':
+        document.querySelector('[data-tool="table"]').click();
+        toast('Haz clic en el canvas para colocar la tabla', 'info');
+        break;
+      case 'canvas-arrow':
+        document.querySelector('[data-tool="arrow"]').click();
+        toast('Arrastra en el canvas para dibujar la flecha', 'info');
+        break;
+      case 'canvas-draw':
+        document.querySelector('[data-tool="draw"]').click();
+        toast('Dibuja libremente sobre el canvas', 'info');
+        break;
+      case 'canvas-upload':
+        document.getElementById('btn-upload-plan').click();
+        break;
+      case 'canvas-attach':
+        document.getElementById('btn-attach-file').click();
+        break;
+      case 'canvas-undo':
+        document.getElementById('btn-undo').click();
+        break;
+      case 'canvas-save':
+        document.getElementById('btn-save-canvas').click();
+        break;
+      case 'canvas-export':
+        document.getElementById('btn-export-canvas').click();
+        break;
+      case 'canvas-zoomfit':
+        document.getElementById('btn-zoom-fit').click();
+        break;
+      case 'canvas-clear':
+        document.getElementById('btn-clear-canvas').click();
+        break;
+
+      // Dashboard
+      case 'add-supplier':
+        if (currentSection !== 'dashboard') navigateTo('dashboard');
+        document.getElementById('btn-add-supplier').click();
+        break;
+      case 'add-budget':
+        if (currentSection !== 'dashboard') navigateTo('dashboard');
+        setTimeout(() => document.getElementById('btn-add-budget').click(), 50);
+        break;
+      case 'tab-suppliers':
+        document.querySelector('.sub-tab[data-subtab="suppliers"]').click();
+        break;
+      case 'tab-budgets':
+        document.querySelector('.sub-tab[data-subtab="budgets"]').click();
+        break;
+      case 'tab-comparator':
+        document.querySelector('.sub-tab[data-subtab="comparator"]').click();
+        break;
+
+      // Timeline
+      case 'add-task':
+        if (currentSection !== 'timeline') navigateTo('timeline');
+        setTimeout(() => document.getElementById('btn-add-task').click(), 50);
+        break;
+      case 'view-gantt':
+        document.getElementById('btn-view-gantt').click();
+        break;
+      case 'view-list':
+        document.getElementById('btn-view-list').click();
+        break;
+      case 'zoom-today':
+        document.getElementById('btn-zoom-timeline').click();
+        break;
+
+      // Diary
+      case 'add-incident':
+        if (currentSection !== 'diary') navigateTo('diary');
+        setTimeout(() => document.getElementById('btn-add-incident').click(), 50);
+        break;
+      case 'filter-all':
+        document.getElementById('diary-filter').value = 'all';
+        document.getElementById('diary-filter').dispatchEvent(new Event('change'));
+        break;
+      case 'filter-pending':
+        document.getElementById('diary-filter').value = 'pending';
+        document.getElementById('diary-filter').dispatchEvent(new Event('change'));
+        break;
+      case 'filter-progress':
+        document.getElementById('diary-filter').value = 'in-progress';
+        document.getElementById('diary-filter').dispatchEvent(new Event('change'));
+        break;
+      case 'filter-resolved':
+        document.getElementById('diary-filter').value = 'resolved';
+        document.getElementById('diary-filter').dispatchEvent(new Event('change'));
+        break;
+
+      // Files
+      case 'upload-file':
+        document.getElementById('btn-upload-file').click();
+        break;
+      case 'sort-date-desc':
+        document.getElementById('files-sort').value = 'date-desc';
+        document.getElementById('files-sort').dispatchEvent(new Event('change'));
+        break;
+      case 'sort-name-asc':
+        document.getElementById('files-sort').value = 'name-asc';
+        document.getElementById('files-sort').dispatchEvent(new Event('change'));
+        break;
+      case 'sort-size-desc':
+        document.getElementById('files-sort').value = 'size-desc';
+        document.getElementById('files-sort').dispatchEvent(new Event('change'));
+        break;
+    }
+  }
+
   // --- Service Worker ---
   function registerSW() {
     if ('serviceWorker' in navigator) {
@@ -434,6 +893,8 @@ const App = (() => {
     enterProject,
     editProject,
     deleteProject,
+    exportProject,
+    importProject,
     get currentSection() { return currentSection; },
     get projectId() { return currentProjectId; }
   };

@@ -24,6 +24,33 @@ const OverviewModule = (() => {
     renderCards(tasks, budgets, incidents, suppliers);
   }
 
+  // Construction phases (mirrors TimelineModule.PHASES)
+  const PHASES = [
+    { key: 'Demolición',    icon: 'hammer',       color: '#EF4444' },
+    { key: 'Estructura',    icon: 'building-2',   color: '#8B5CF6' },
+    { key: 'Albañilería',   icon: 'brick-wall',   color: '#F97316' },
+    { key: 'Fontanería',    icon: 'droplets',     color: '#3B82F6' },
+    { key: 'Electricidad',  icon: 'zap',          color: '#EAB308' },
+    { key: 'Carpintería',   icon: 'axe',          color: '#A16207' },
+    { key: 'Pintura',       icon: 'paintbrush',   color: '#EC4899' },
+    { key: 'Acabados',      icon: 'sparkles',     color: '#14B8A6' },
+    { key: 'Limpieza',      icon: 'spray-can',    color: '#06B6D4' },
+    { key: 'General',       icon: 'layers',       color: '#64748B' }
+  ];
+
+  function groupTasksByPhase(taskList) {
+    const groups = [];
+    for (const phase of PHASES) {
+      const phaseTasks = taskList.filter(t => (t.category || 'General') === phase.key);
+      if (phaseTasks.length > 0) {
+        const completed = phaseTasks.filter(t => (t.progress || 0) >= 100).length;
+        const avgProgress = Math.round(phaseTasks.reduce((s, t) => s + (t.progress || 0), 0) / phaseTasks.length);
+        groups.push({ ...phase, tasks: phaseTasks, completed, total: phaseTasks.length, avgProgress });
+      }
+    }
+    return groups;
+  }
+
   function renderCards(tasks, budgets, incidents, suppliers) {
     const grid = document.getElementById('overview-grid');
     if (!grid) return;
@@ -63,6 +90,9 @@ const OverviewModule = (() => {
     const recentIncidents = [...incidents]
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 5);
+
+    // --- Phase breakdown ---
+    const phaseGroups = groupTasksByPhase(tasks);
 
     grid.innerHTML = `
       <!-- Progreso General -->
@@ -106,6 +136,29 @@ const OverviewModule = (() => {
           <span style="color:var(--cyan)">${inProgressIncidents} en proceso</span> ·
           <span style="color:var(--green)">${resolvedIncidents} resueltas</span>
         </div>
+      </div>
+
+      <!-- Progreso por Fase -->
+      <div class="overview-card overview-card-wide">
+        <div class="overview-card-header">
+          <i data-lucide="layers"></i>
+          <span>Progreso por Fase</span>
+        </div>
+        ${phaseGroups.length > 0 ? phaseGroups.map(g => `
+          <div class="overview-phase-row">
+            <div class="overview-phase-info">
+              <i data-lucide="${g.icon}" style="width:16px;height:16px;color:${g.color}"></i>
+              <span class="overview-phase-name">${g.key}</span>
+              <span class="overview-phase-count">${g.completed}/${g.total}</span>
+            </div>
+            <div class="overview-phase-bar-wrap">
+              <div class="overview-phase-track">
+                <div class="overview-phase-fill" style="width:${g.avgProgress}%;background:${g.color}"></div>
+              </div>
+              <span class="overview-phase-pct">${g.avgProgress}%</span>
+            </div>
+          </div>
+        `).join('') : '<div class="overview-card-detail">No hay tareas asignadas a fases</div>'}
       </div>
 
       <!-- Próximas entregas -->

@@ -10,6 +10,7 @@ const TimelineModule = (() => {
   let viewDays = 60;
   let projectId = null;
   let currentView = 'gantt'; // 'gantt' | 'list'
+  let hideCompleted = false;
 
   // Construction phases in natural execution order
   const PHASES = [
@@ -57,6 +58,15 @@ const TimelineModule = (() => {
     document.getElementById('btn-view-gantt').addEventListener('click', () => switchView('gantt'));
     document.getElementById('btn-view-list').addEventListener('click', () => switchView('list'));
 
+    // Hide completed toggle
+    const hideDoneCheck = document.getElementById('tl-hide-done');
+    if (hideDoneCheck) {
+      hideDoneCheck.addEventListener('change', (e) => {
+        hideCompleted = e.target.checked;
+        render();
+      });
+    }
+
     // Table header sorting
     document.querySelectorAll('#timeline-table th[data-sort]').forEach(th => {
       th.addEventListener('click', () => sortListBy(th.dataset.sort));
@@ -94,7 +104,10 @@ const TimelineModule = (() => {
     const emptyState = document.getElementById('timeline-empty');
     const zoomBtn = document.getElementById('btn-zoom-timeline');
 
-    if (tasks.length === 0) {
+    // Filter completed if toggle is on
+    const visibleTasks = hideCompleted ? tasks.filter(t => (t.progress || 0) < 100) : tasks;
+
+    if (visibleTasks.length === 0) {
       ganttContainer.classList.remove('visible');
       listContainer.style.display = 'none';
       emptyState.style.display = 'flex';
@@ -109,7 +122,7 @@ const TimelineModule = (() => {
       zoomBtn.style.display = '';
 
       // Calculate date range
-      const allDates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
+      const allDates = visibleTasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
       const minDate = new Date(Math.min(...allDates));
       const maxDate = new Date(Math.max(...allDates));
 
@@ -125,7 +138,7 @@ const TimelineModule = (() => {
       ganttContainer.classList.remove('visible');
       listContainer.style.display = 'block';
       zoomBtn.style.display = 'none';
-      renderListView();
+      renderListView(visibleTasks);
     }
   }
 
@@ -167,69 +180,92 @@ const TimelineModule = (() => {
     // Calculate critical path
     const criticalTasks = calculateCriticalPath();
 
-    // Sort tasks by start date
-    const sorted = [...tasks].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    // Group tasks by phase
+    const groups = groupTasksByPhase(visibleTasks);
 
     let html = '';
 
-    sorted.forEach(task => {
-      const taskStart = new Date(task.startDate);
-      const taskEnd = new Date(task.endDate);
-      const startOffset = App.daysBetween(viewStart, taskStart);
-      const duration = App.daysBetween(taskStart, taskEnd) + 1;
-
-      // Determine bar type
-      const isCompleted = task.progress >= 100;
-      const isDelayed = !isCompleted && taskEnd < today;
-      const isCritical = criticalTasks.has(task.id);
-
-      let barClass = 'normal';
-      if (isCompleted) barClass = 'completed';
-      else if (isDelayed) barClass = 'delayed';
-      else if (isCritical) barClass = 'critical';
-
-      // Cells
-      let cells = '';
-      for (let i = 0; i < viewDays; i++) {
-        const date = new Date(viewStart);
-        date.setDate(date.getDate() + i);
-        const isToday = date.toDateString() === today.toDateString();
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-        cells += `<div class="timeline-cell ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''}"></div>`;
-      }
-
-      // Delay indicator
-      let delayInfo = '';
-      if (isDelayed) {
-        const delayDays = App.daysBetween(taskEnd, today);
-        delayInfo = ` (${delayDays}d retraso)`;
-      }
-
+    groups.forEach(group => {
+      // Phase header row
       html += `
-        <div class="timeline-row" ondblclick="TimelineModule.editTask(${task.id})">
-          <div class="timeline-row-label">
-            <span class="task-name" title="${App.escapeHTML(task.name)}">${App.escapeHTML(task.name)}</span>
-            <div class="task-actions">
-              <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="Editar">
-                <i data-lucide="pencil" style="width:14px;height:14px"></i>
-              </button>
-              <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="Eliminar">
-                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-              </button>
-            </div>
+        <div class="phase-header-row" style="--phase-color:${group.color}">
+          <div class="phase-header-label">
+            <i data-lucide="${group.icon}"></i>
+            <span>${group.key}</span>
+            <span class="phase-count">${group.completed}/${group.total}</span>
           </div>
-          <div class="timeline-row-cells">
-            ${cells}
-            <div class="task-bar ${barClass}" 
-                 style="left:${startOffset * DAY_WIDTH}px; width:${duration * DAY_WIDTH - 4}px;"
-                 title="${App.escapeHTML(task.name)}: ${App.formatDate(task.startDate)} → ${App.formatDate(task.endDate)} (${task.progress || 0}%)${delayInfo}"
-                 onclick="TimelineModule.editTask(${task.id})">
-              ${task.progress > 0 ? `<div class="task-progress" style="width:${task.progress}%"></div>` : ''}
-              <span style="position:relative;z-index:1">${task.progress || 0}%</span>
+          <div class="phase-header-bar">
+            <div class="phase-progress-track">
+              <div class="phase-progress-fill" style="width:${group.avgProgress}%;background:${group.color}"></div>
             </div>
+            <span class="phase-progress-label">${group.avgProgress}%</span>
           </div>
         </div>
       `;
+
+      // Sort phase tasks by start date
+      const sorted = [...group.tasks].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+      sorted.forEach(task => {
+        const taskStart = new Date(task.startDate);
+        const taskEnd = new Date(task.endDate);
+        const startOffset = App.daysBetween(viewStart, taskStart);
+        const duration = App.daysBetween(taskStart, taskEnd) + 1;
+
+        // Determine bar type
+        const isCompleted = task.progress >= 100;
+        const isDelayed = !isCompleted && taskEnd < today;
+        const isCritical = criticalTasks.has(task.id);
+
+        let barClass = 'normal';
+        if (isCompleted) barClass = 'completed';
+        else if (isDelayed) barClass = 'delayed';
+        else if (isCritical) barClass = 'critical';
+
+        // Cells
+        let cells = '';
+        for (let i = 0; i < viewDays; i++) {
+          const date = new Date(viewStart);
+          date.setDate(date.getDate() + i);
+          const isToday = date.toDateString() === today.toDateString();
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          cells += `<div class="timeline-cell ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''}"></div>`;
+        }
+
+        // Delay indicator
+        let delayInfo = '';
+        if (isDelayed) {
+          const delayDays = App.daysBetween(taskEnd, today);
+          delayInfo = ` (${delayDays}d retraso)`;
+        }
+
+        html += `
+          <div class="timeline-row" ondblclick="TimelineModule.editTask(${task.id})">
+            <div class="timeline-row-label">
+              <span class="phase-color-dot" style="background:${group.color}"></span>
+              <span class="task-name" title="${App.escapeHTML(task.name)}">${App.escapeHTML(task.name)}</span>
+              <div class="task-actions">
+                <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="Editar">
+                  <i data-lucide="pencil" style="width:14px;height:14px"></i>
+                </button>
+                <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="Eliminar">
+                  <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+                </button>
+              </div>
+            </div>
+            <div class="timeline-row-cells">
+              ${cells}
+              <div class="task-bar ${barClass}" 
+                   style="left:${startOffset * DAY_WIDTH}px; width:${duration * DAY_WIDTH - 4}px;"
+                   title="${App.escapeHTML(task.name)}: ${App.formatDate(task.startDate)} → ${App.formatDate(task.endDate)} (${task.progress || 0}%)${delayInfo}"
+                   onclick="TimelineModule.editTask(${task.id})">
+                ${task.progress > 0 ? `<div class="task-progress" style="width:${task.progress}%"></div>` : ''}
+                <span style="position:relative;z-index:1">${task.progress || 0}%</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
     });
 
     // Today line
@@ -246,33 +282,35 @@ const TimelineModule = (() => {
   // LIST VIEW
   // ========================================
 
-  function renderListView() {
+  function renderListView(visibleTasks) {
     const tbody = document.getElementById('timeline-table-body');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const criticalTasks = calculateCriticalPath();
 
-    // Sort tasks
-    const sorted = [...tasks].sort((a, b) => {
-      let va, vb;
-      switch (listSortKey) {
-        case 'name': va = a.name.toLowerCase(); vb = b.name.toLowerCase(); break;
-        case 'category': va = (a.category || '').toLowerCase(); vb = (b.category || '').toLowerCase(); break;
-        case 'responsible': va = (a.responsible || '').toLowerCase(); vb = (b.responsible || '').toLowerCase(); break;
-        case 'startDate': va = a.startDate; vb = b.startDate; break;
-        case 'endDate': va = a.endDate; vb = b.endDate; break;
-        case 'duration':
-          va = App.daysBetween(new Date(a.startDate), new Date(a.endDate));
-          vb = App.daysBetween(new Date(b.startDate), new Date(b.endDate));
-          break;
-        case 'progress': va = a.progress || 0; vb = b.progress || 0; break;
-        default: va = a.startDate; vb = b.startDate;
-      }
-      if (va < vb) return listSortAsc ? -1 : 1;
-      if (va > vb) return listSortAsc ? 1 : -1;
-      return 0;
-    });
+    // Sort helper
+    function sortTasks(list) {
+      return [...list].sort((a, b) => {
+        let va, vb;
+        switch (listSortKey) {
+          case 'name': va = a.name.toLowerCase(); vb = b.name.toLowerCase(); break;
+          case 'category': va = (a.category || '').toLowerCase(); vb = (b.category || '').toLowerCase(); break;
+          case 'responsible': va = (a.responsible || '').toLowerCase(); vb = (b.responsible || '').toLowerCase(); break;
+          case 'startDate': va = a.startDate; vb = b.startDate; break;
+          case 'endDate': va = a.endDate; vb = b.endDate; break;
+          case 'duration':
+            va = App.daysBetween(new Date(a.startDate), new Date(a.endDate));
+            vb = App.daysBetween(new Date(b.startDate), new Date(b.endDate));
+            break;
+          case 'progress': va = a.progress || 0; vb = b.progress || 0; break;
+          default: va = a.startDate; vb = b.startDate;
+        }
+        if (va < vb) return listSortAsc ? -1 : 1;
+        if (va > vb) return listSortAsc ? 1 : -1;
+        return 0;
+      });
+    }
 
     // Update header arrows
     document.querySelectorAll('#timeline-table th[data-sort]').forEach(th => {
@@ -282,85 +320,121 @@ const TimelineModule = (() => {
       }
     });
 
-    tbody.innerHTML = sorted.map(task => {
-      const taskEnd = new Date(task.endDate);
-      const taskStart = new Date(task.startDate);
-      const duration = App.daysBetween(taskStart, taskEnd) + 1;
-      const isCompleted = (task.progress || 0) >= 100;
-      const isDelayed = !isCompleted && taskEnd < today;
-      const isCritical = criticalTasks.has(task.id);
+    const groups = groupTasksByPhase(visibleTasks);
 
-      let statusClass = 'normal';
-      let statusLabel = 'En curso';
-      if (isCompleted) { statusClass = 'completed'; statusLabel = 'Completada'; }
-      else if (isDelayed) {
-        statusClass = 'delayed';
-        const delayDays = App.daysBetween(taskEnd, today);
-        statusLabel = `${delayDays}d retraso`;
-      }
-      else if (isCritical) { statusClass = 'critical'; statusLabel = 'Ruta crítica'; }
+    const CATEGORIES = ['General','Demolición','Estructura','Albañilería','Fontanería','Electricidad','Carpintería','Pintura','Acabados','Limpieza'];
 
-      // Dependencies
-      const deps = (task.dependencies || []).map(depId => {
-        const dep = tasks.find(t => t.id === depId);
-        return dep ? App.escapeHTML(dep.name) : '';
-      }).filter(Boolean);
-      const depsHtml = deps.length > 0
-        ? deps.map(d => `<span class="dep-tag">${d}</span>`).join('')
-        : '<span style="color:var(--text-muted)">—</span>';
-
-      const CATEGORIES = ['General','Demolición','Estructura','Albañilería','Fontanería','Electricidad','Carpintería','Pintura','Acabados','Limpieza'];
-      const catOptions = CATEGORIES.map(c =>
-        `<option value="${c}" ${(task.category || 'General') === c ? 'selected' : ''}>${c}</option>`
-      ).join('');
-
-      return `
-        <tr class="tl-row-${statusClass}" ondblclick="if(!event.target.closest('input,select,button'))TimelineModule.editTask(${task.id})">
-          <td class="tl-cell-name">
-            <input class="tl-inline" type="text" value="${App.escapeHTML(task.name)}"
-              onchange="TimelineModule.inlineUpdate(${task.id},'name',this.value)">
-          </td>
-          <td>
-            <select class="tl-inline tl-inline-select" onchange="TimelineModule.inlineUpdate(${task.id},'category',this.value)">
-              ${catOptions}
-            </select>
-          </td>
-          <td>
-            <input class="tl-inline" type="text" value="${App.escapeHTML(task.responsible || '')}" placeholder="—"
-              onchange="TimelineModule.inlineUpdate(${task.id},'responsible',this.value)">
-          </td>
-          <td class="tl-cell-date">
-            <input class="tl-inline tl-inline-date" type="date" value="${task.startDate}"
-              onchange="TimelineModule.inlineUpdate(${task.id},'startDate',this.value)">
-          </td>
-          <td class="tl-cell-date">
-            <input class="tl-inline tl-inline-date" type="date" value="${task.endDate}"
-              onchange="TimelineModule.inlineUpdate(${task.id},'endDate',this.value)">
-          </td>
-          <td class="tl-cell-num">${duration}d</td>
-          <td>
-            <div class="tl-progress-wrap">
-              <input type="range" class="tl-inline-range" min="0" max="100" step="5" value="${task.progress || 0}"
-                onchange="TimelineModule.inlineUpdate(${task.id},'progress',parseInt(this.value))"
-                oninput="this.nextElementSibling.textContent=this.value+'%'"
-                title="${task.progress || 0}%">
-              <span class="tl-progress-label">${task.progress || 0}%</span>
+    let rows = '';
+    groups.forEach(group => {
+      // Phase header row
+      rows += `
+        <tr class="phase-group-header" style="--phase-color:${group.color}">
+          <td colspan="10">
+            <div class="phase-group-label">
+              <i data-lucide="${group.icon}"></i>
+              <span>${group.key}</span>
+              <span class="phase-count">${group.completed}/${group.total}</span>
+              <div class="phase-progress-track phase-progress-sm">
+                <div class="phase-progress-fill" style="width:${group.avgProgress}%;background:${group.color}"></div>
+              </div>
+              <span class="phase-progress-label">${group.avgProgress}%</span>
             </div>
-          </td>
-          <td class="tl-cell-deps">${depsHtml}</td>
-          <td><span class="tl-status-badge tl-badge-${statusClass}">${statusLabel}</span></td>
-          <td class="tl-cell-actions">
-            <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="Editar">
-              <i data-lucide="pencil" style="width:14px;height:14px"></i>
-            </button>
-            <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="Eliminar">
-              <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-            </button>
           </td>
         </tr>
       `;
-    }).join('');
 
+      const sorted = sortTasks(group.tasks);
+
+      sorted.forEach(task => {
+        const taskEnd = new Date(task.endDate);
+        const taskStart = new Date(task.startDate);
+        const duration = App.daysBetween(taskStart, taskEnd) + 1;
+        const isCompleted = (task.progress || 0) >= 100;
+        const isDelayed = !isCompleted && taskEnd < today;
+        const isCritical = criticalTasks.has(task.id);
+
+        let statusClass = 'normal';
+        let statusLabel = 'En curso';
+        if (isCompleted) { statusClass = 'completed'; statusLabel = 'Completada'; }
+        else if (isDelayed) {
+          statusClass = 'delayed';
+          const delayDays = App.daysBetween(taskEnd, today);
+          statusLabel = `${delayDays}d retraso`;
+        }
+        else if (isCritical) { statusClass = 'critical'; statusLabel = 'Ruta crítica'; }
+
+        // Dependencies
+        const deps = (task.dependencies || []).map(depId => {
+          const dep = tasks.find(t => t.id === depId);
+          if (!dep) return '';
+          const depPhase = getPhase(dep.category);
+          const depDone = (dep.progress || 0) >= 100;
+          const depDelayed = !depDone && new Date(dep.endDate) < today;
+          const tagClass = depDone ? 'dep-tag-done' : depDelayed ? 'dep-tag-pending' : '';
+          const icon = depDone
+            ? '<svg class="dep-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+            : depDelayed
+              ? '<svg class="dep-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+              : '';
+          return `<span class="dep-tag ${tagClass}"><span class="dep-dot" style="background:${depPhase.color}"></span>${icon}${App.escapeHTML(dep.name)}</span>`;
+        }).filter(Boolean);
+        const depsHtml = deps.length > 0
+          ? deps.join('')
+          : '<span style="color:var(--text-muted)">—</span>';
+
+        const catOptions = CATEGORIES.map(c =>
+          `<option value="${c}" ${(task.category || 'General') === c ? 'selected' : ''}>${c}</option>`
+        ).join('');
+
+        rows += `
+          <tr class="tl-row-${statusClass}" ondblclick="if(!event.target.closest('input,select,button'))TimelineModule.editTask(${task.id})">
+            <td class="tl-cell-name">
+              <input class="tl-inline" type="text" value="${App.escapeHTML(task.name)}"
+                onchange="TimelineModule.inlineUpdate(${task.id},'name',this.value)">
+            </td>
+            <td>
+              <select class="tl-inline tl-inline-select" onchange="TimelineModule.inlineUpdate(${task.id},'category',this.value)">
+                ${catOptions}
+              </select>
+            </td>
+            <td>
+              <input class="tl-inline" type="text" value="${App.escapeHTML(task.responsible || '')}" placeholder="—"
+                onchange="TimelineModule.inlineUpdate(${task.id},'responsible',this.value)">
+            </td>
+            <td class="tl-cell-date">
+              <input class="tl-inline tl-inline-date" type="date" value="${task.startDate}"
+                onchange="TimelineModule.inlineUpdate(${task.id},'startDate',this.value)">
+            </td>
+            <td class="tl-cell-date">
+              <input class="tl-inline tl-inline-date" type="date" value="${task.endDate}"
+                onchange="TimelineModule.inlineUpdate(${task.id},'endDate',this.value)">
+            </td>
+            <td class="tl-cell-num">${duration}d</td>
+            <td>
+              <div class="tl-progress-wrap">
+                <input type="range" class="tl-inline-range" min="0" max="100" step="5" value="${task.progress || 0}"
+                  onchange="TimelineModule.inlineUpdate(${task.id},'progress',parseInt(this.value))"
+                  oninput="this.nextElementSibling.textContent=this.value+'%'"
+                  title="${task.progress || 0}%">
+                <span class="tl-progress-label">${task.progress || 0}%</span>
+              </div>
+            </td>
+            <td class="tl-cell-deps">${depsHtml}</td>
+            <td><span class="tl-status-badge tl-badge-${statusClass}">${statusLabel}</span></td>
+            <td class="tl-cell-actions">
+              <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="Editar">
+                <i data-lucide="pencil" style="width:14px;height:14px"></i>
+              </button>
+              <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="Eliminar">
+                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    });
+
+    tbody.innerHTML = rows;
     lucide.createIcons();
   }
 
@@ -425,18 +499,9 @@ const TimelineModule = (() => {
         <input type="text" id="task-name" value="${isEdit ? App.escapeHTML(task.name) : ''}" placeholder="Ej: Instalación de fontanería">
       </div>
       <div class="form-group">
-        <label>Categoría</label>
+        <label>Fase de Obra *</label>
         <select id="task-category">
-          <option value="General">General</option>
-          <option value="Demolición" ${isEdit && task.category === 'Demolición' ? 'selected' : ''}>Demolición</option>
-          <option value="Estructura" ${isEdit && task.category === 'Estructura' ? 'selected' : ''}>Estructura</option>
-          <option value="Albañilería" ${isEdit && task.category === 'Albañilería' ? 'selected' : ''}>Albañilería</option>
-          <option value="Fontanería" ${isEdit && task.category === 'Fontanería' ? 'selected' : ''}>Fontanería</option>
-          <option value="Electricidad" ${isEdit && task.category === 'Electricidad' ? 'selected' : ''}>Electricidad</option>
-          <option value="Carpintería" ${isEdit && task.category === 'Carpintería' ? 'selected' : ''}>Carpintería</option>
-          <option value="Pintura" ${isEdit && task.category === 'Pintura' ? 'selected' : ''}>Pintura</option>
-          <option value="Acabados" ${isEdit && task.category === 'Acabados' ? 'selected' : ''}>Acabados</option>
-          <option value="Limpieza" ${isEdit && task.category === 'Limpieza' ? 'selected' : ''}>Limpieza</option>
+          ${PHASES.map(p => `<option value="${p.key}" ${isEdit && (task.category || 'General') === p.key ? 'selected' : ''}>${p.key}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -460,15 +525,23 @@ const TimelineModule = (() => {
                style="width:100%;accent-color:var(--cyan)">
       </div>
       <div class="form-group">
-        <label>Dependencias (tareas previas)</label>
-        <div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--sp-sm);">
-          ${allTasks.filter(t => !isEdit || t.id !== task.id).map(t => `
-            <label style="display:flex;align-items:center;gap:var(--sp-sm);padding:4px 0;font-size:13px;cursor:pointer;">
-              <input type="checkbox" class="dep-check" value="${t.id}" 
-                ${isEdit && task.dependencies && task.dependencies.includes(t.id) ? 'checked' : ''}>
-              ${App.escapeHTML(t.name)}
-            </label>
-          `).join('') || '<span style="color:var(--text-muted);font-size:13px;">No hay otras tareas disponibles</span>'}
+        <label>Dependencias (tareas que deben completarse antes)</label>
+        <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--sp-sm);">
+          ${allTasks.filter(t => !isEdit || t.id !== task.id).length > 0
+            ? allTasks.filter(t => !isEdit || t.id !== task.id).map(t => {
+                const phase = getPhase(t.category);
+                const isChecked = isEdit && task.dependencies && task.dependencies.includes(t.id);
+                return `
+                  <label style="display:flex;align-items:center;gap:var(--sp-sm);padding:6px 4px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);">
+                    <input type="checkbox" class="dep-check" value="${t.id}" ${isChecked ? 'checked' : ''}
+                      style="width:18px;height:18px;accent-color:var(--cyan);flex-shrink:0;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${phase.color};flex-shrink:0;"></span>
+                    <span style="flex:1;">${App.escapeHTML(t.name)}</span>
+                    <span style="font-size:11px;color:var(--text-muted);">${t.progress || 0}%</span>
+                  </label>`;
+              }).join('')
+            : '<span style="color:var(--text-muted);font-size:13px;padding:var(--sp-sm);">Crea más tareas para poder definir dependencias entre ellas</span>'
+          }
         </div>
       </div>
     `;
