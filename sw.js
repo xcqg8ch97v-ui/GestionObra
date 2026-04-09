@@ -3,7 +3,7 @@
    Cache-first strategy for offline support
    ======================================== */
 
-const CACHE_NAME = 'gestion-obra-v1';
+const CACHE_NAME = 'gestion-obra-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,10 @@ const ASSETS = [
   './js/modules/dashboard.js',
   './js/modules/timeline.js',
   './js/modules/diary.js',
+  './js/modules/overview.js',
+  './js/modules/files.js',
+  './js/modules/participants.js',
+  './js/modules/report.js',
   './manifest.json'
 ];
 
@@ -61,14 +65,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For local assets, cache first
+  // For local assets, network first (so updates are always served)
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        return response;
-      });
-    })
+    fetch(event.request).then(response => {
+      const clone = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      return response;
+    }).catch(() => caches.match(event.request))
   );
 });

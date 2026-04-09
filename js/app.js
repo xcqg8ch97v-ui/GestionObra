@@ -10,20 +10,70 @@ const App = (() => {
     dashboard: 'Proveedores y Presupuestos',
     timeline: 'Cronograma de Obra',
     diary: 'Diario de Incidencias',
-    files: 'Documentos de Obra'
+    files: 'Documentos de Obra',
+    participants: 'Participantes de la Obra'
   };
 
   let currentSection = 'overview';
   let currentProjectId = null;
   let currentProjectName = '';
 
+  function safeIcons() {
+    try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch(e) { console.warn('Lucide icons error:', e); }
+  }
+
   async function init() {
-    await DB.open();
-    setupModal();
-    setupProjectSelector();
-    registerSW();
+    try {
+      await DB.open();
+      loadTheme();
+      setupModal();
+      setupProjectSelector();
+      setupThemeToggle();
+      registerSW();
+      safeIcons();
+      showProjectSelector();
+    } catch(e) {
+      console.error('App init error:', e);
+      document.getElementById('project-selector').style.display = 'flex';
+    }
+  }
+
+  // ========================================
+  // THEME
+  // ========================================
+
+  function loadTheme() {
+    const saved = localStorage.getItem('abessis-theme') || 'dark';
+    applyTheme(saved);
+  }
+
+  function applyTheme(theme) {
+    if (theme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    updateThemeLabels(theme);
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('abessis-theme', next);
+    applyTheme(next);
     lucide.createIcons();
-    showProjectSelector();
+  }
+
+  function updateThemeLabels(theme) {
+    const labels = document.querySelectorAll('.theme-label');
+    labels.forEach(l => { l.textContent = theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'; });
+  }
+
+  function setupThemeToggle() {
+    const btn1 = document.getElementById('btn-theme-toggle');
+    const btn2 = document.getElementById('btn-theme-selector');
+    if (btn1) btn1.addEventListener('click', toggleTheme);
+    if (btn2) btn2.addEventListener('click', toggleTheme);
   }
 
   // ========================================
@@ -198,7 +248,7 @@ const App = (() => {
 
     toast('Exportando obra...', 'info');
 
-    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files'];
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants'];
     const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
 
     for (const store of STORES) {
@@ -215,9 +265,20 @@ const App = (() => {
       }
     }
 
-    // Canvas state
-    const canvasState = await DB.getCanvasState(id);
-    data.canvas = canvasState || null;
+    // Canvas state (multi-sheet)
+    const sheetIndex = await DB.getSheetIndex(id);
+    if (sheetIndex && sheetIndex.sheets) {
+      data.canvasSheets = {};
+      data.canvasSheetIndex = sheetIndex.sheets;
+      for (const sheet of sheetIndex.sheets) {
+        const st = await DB.getCanvasState(id, sheet.id);
+        data.canvasSheets[sheet.id] = st ? st.data : null;
+      }
+    } else {
+      // Legacy fallback
+      const canvasState = await DB.getCanvasState(id);
+      data.canvas = canvasState || null;
+    }
 
     const json = JSON.stringify(data);
     const blob = new Blob([json], { type: 'application/json' });
@@ -257,7 +318,7 @@ const App = (() => {
         const newProjectId = await DB.add('projects', projData);
 
         // Import each store with updated projectId
-        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files'];
+        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants'];
         const idMap = {}; // old ID -> new ID mapping for references
 
         for (const store of STORES) {
@@ -307,9 +368,22 @@ const App = (() => {
           }
         }
 
-        // Import canvas state
-        if (data.canvas && data.canvas.data) {
-          await DB.saveCanvasState(newProjectId, data.canvas.data);
+        // Import canvas state (multi-sheet or legacy)
+        if (data.canvasSheetIndex && data.canvasSheets) {
+          const newSheets = data.canvasSheetIndex.map(s => ({ ...s }));
+          await DB.saveSheetIndex(newProjectId, newSheets);
+          for (const sheet of newSheets) {
+            const sheetData = data.canvasSheets[sheet.id];
+            if (sheetData) {
+              await DB.saveCanvasState(newProjectId, sheetData, sheet.id);
+            }
+          }
+        } else if (data.canvas && data.canvas.data) {
+          // Legacy single-sheet import
+          const sheetId = 'sheet_' + Date.now();
+          const newSheets = [{ id: sheetId, name: 'Hoja 1' }];
+          await DB.saveSheetIndex(newProjectId, newSheets);
+          await DB.saveCanvasState(newProjectId, data.canvas.data, sheetId);
         }
 
         toast('Obra importada correctamente', 'success');
@@ -343,16 +417,24 @@ const App = (() => {
     setupMobile();
 
     // Init all modules with project context
-    CanvasModule.init(currentProjectId);
-    DashboardModule.init(currentProjectId);
-    TimelineModule.init(currentProjectId);
-    DiaryModule.init(currentProjectId);
-    OverviewModule.init(currentProjectId);
-    FilesModule.init(currentProjectId);
+    const modules = [
+      ['CanvasModule', CanvasModule],
+      ['DashboardModule', DashboardModule],
+      ['TimelineModule', TimelineModule],
+      ['DiaryModule', DiaryModule],
+      ['OverviewModule', OverviewModule],
+      ['FilesModule', FilesModule],
+      ['ParticipantsModule', typeof ParticipantsModule !== 'undefined' ? ParticipantsModule : null],
+      ['ReportModule', typeof ReportModule !== 'undefined' ? ReportModule : null]
+    ];
+    for (const [name, mod] of modules) {
+      try { if (mod) mod.init(currentProjectId); }
+      catch(e) { console.warn(`Error init ${name}:`, e); }
+    }
 
     setupContextMenu();
 
-    lucide.createIcons();
+    safeIcons();
 
     navigateTo('overview');
   }
@@ -871,8 +953,8 @@ const App = (() => {
   // --- Service Worker ---
   function registerSW() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
-        .then(() => console.log('Service Worker registrado'))
+      navigator.serviceWorker.register('sw.js?v=3')
+        .then(reg => { reg.update(); console.log('Service Worker registrado'); })
         .catch(err => console.warn('SW registro fallido:', err));
     }
   }

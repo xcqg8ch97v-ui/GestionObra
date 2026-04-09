@@ -5,7 +5,7 @@
 
 const DB = (() => {
   const DB_NAME = 'GestionObraDB';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   let db = null;
 
   function open() {
@@ -93,6 +93,13 @@ const DB = (() => {
         // Estado del canvas (por proyecto)
         if (!database.objectStoreNames.contains('canvas')) {
           database.createObjectStore('canvas', { keyPath: 'id' });
+        }
+
+        // Participantes / Contactos
+        if (!database.objectStoreNames.contains('participants')) {
+          const store = database.createObjectStore('participants', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('projectId', 'projectId', { unique: false });
+          store.createIndex('type', 'type', { unique: false });
         }
       };
 
@@ -202,16 +209,41 @@ const DB = (() => {
     return getById('files', id);
   }
 
-  // --- Canvas state (per project) ---
+  // --- Canvas state (per project, multi-sheet) ---
 
-  async function saveCanvasState(projectId, jsonData) {
+  async function saveCanvasState(projectId, jsonData, sheetId) {
+    // New multi-sheet format: key = project_{id}_sheet_{sheetId}
+    if (sheetId) {
+      const key = `project_${projectId}_sheet_${sheetId}`;
+      return put('canvas', { id: key, data: jsonData, savedAt: new Date().toISOString() });
+    }
+    // Legacy single-sheet fallback
     const key = projectId ? 'project_' + projectId : 'current';
     return put('canvas', { id: key, data: jsonData, savedAt: new Date().toISOString() });
   }
 
-  async function getCanvasState(projectId) {
+  async function getCanvasState(projectId, sheetId) {
+    if (sheetId) {
+      const key = `project_${projectId}_sheet_${sheetId}`;
+      return getById('canvas', key);
+    }
     const key = projectId ? 'project_' + projectId : 'current';
     return getById('canvas', key);
+  }
+
+  async function saveSheetIndex(projectId, sheets) {
+    const key = `project_${projectId}_sheets`;
+    return put('canvas', { id: key, sheets, savedAt: new Date().toISOString() });
+  }
+
+  async function getSheetIndex(projectId) {
+    const key = `project_${projectId}_sheets`;
+    return getById('canvas', key);
+  }
+
+  async function deleteCanvasSheet(projectId, sheetId) {
+    const key = `project_${projectId}_sheet_${sheetId}`;
+    return remove('canvas', key);
   }
 
   // --- Project-scoped helpers ---
@@ -234,6 +266,9 @@ const DB = (() => {
     saveFile,
     getFile,
     saveCanvasState,
-    getCanvasState
+    getCanvasState,
+    saveSheetIndex,
+    getSheetIndex,
+    deleteCanvasSheet
   };
 })();

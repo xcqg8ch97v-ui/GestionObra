@@ -10,6 +10,10 @@ const CanvasModule = (() => {
   let arrowStart = null;
   let projectId = null;
 
+  // Multi-sheet support
+  let sheets = []; // [{ id, name }]
+  let currentSheetId = null;
+
   // Undo history
   const history = [];
   const MAX_HISTORY = 50;
@@ -38,7 +42,7 @@ const CanvasModule = (() => {
     });
   }
 
-  function init(pid) {
+  async function init(pid) {
     projectId = pid;
     // Clean up previous canvas instance
     if (canvas) {
@@ -64,9 +68,29 @@ const CanvasModule = (() => {
       setupTableToolbar();
       setupFileUpload();
       setupFileAttach();
+      setupSheetTabs();
       initialized = true;
     }
-    loadSavedState();
+
+    // Load sheet index (or migrate from legacy single-sheet)
+    const idx = await DB.getSheetIndex(projectId);
+    if (idx && idx.sheets && idx.sheets.length > 0) {
+      sheets = idx.sheets;
+    } else {
+      // First time or legacy: create default sheet
+      const defaultId = 'sheet_' + Date.now();
+      sheets = [{ id: defaultId, name: 'Hoja 1' }];
+      // Migrate legacy data if exists
+      const legacy = await DB.getCanvasState(projectId);
+      if (legacy && legacy.data) {
+        await DB.saveCanvasState(projectId, legacy.data, defaultId);
+      }
+      await DB.saveSheetIndex(projectId, sheets);
+    }
+
+    currentSheetId = sheets[0].id;
+    renderSheetTabs();
+    await loadSavedState();
   }
 
   function setupCanvas() {
@@ -86,11 +110,66 @@ const CanvasModule = (() => {
       height: rect.height,
       backgroundColor: '#1a1a2e',
       selection: true,
-      preserveObjectStacking: true
+      preserveObjectStacking: true,
+      allowTouchScrolling: false
     });
 
     // Grid pattern
     drawGrid();
+
+    // --- Pinch-to-zoom & two-finger pan (touch) ---
+    let touchState = { active: false, dist: 0, midX: 0, midY: 0, zoom: 1, vpX: 0, vpY: 0 };
+
+    const upperCanvas = container.querySelector('.upper-canvas') || canvas.upperCanvasEl;
+    if (upperCanvas) {
+      upperCanvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const t = e.touches;
+          touchState.active = true;
+          touchState.dist = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+          const cRect = container.getBoundingClientRect();
+          touchState.midX = (t[0].clientX + t[1].clientX) / 2 - cRect.left;
+          touchState.midY = (t[0].clientY + t[1].clientY) / 2 - cRect.top;
+          touchState.zoom = canvas.getZoom();
+          touchState.vpX = canvas.viewportTransform[4];
+          touchState.vpY = canvas.viewportTransform[5];
+          canvas.selection = false;
+        }
+      }, { passive: false });
+
+      upperCanvas.addEventListener('touchmove', (e) => {
+        if (touchState.active && e.touches.length === 2) {
+          e.preventDefault();
+          const t = e.touches;
+          const newDist = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+          const scale = newDist / touchState.dist;
+          let newZoom = Math.min(Math.max(touchState.zoom * scale, 0.1), 5);
+          canvas.zoomToPoint({ x: touchState.midX, y: touchState.midY }, newZoom);
+
+          // Pan offset
+          const cRect = container.getBoundingClientRect();
+          const curMidX = (t[0].clientX + t[1].clientX) / 2 - cRect.left;
+          const curMidY = (t[0].clientY + t[1].clientY) / 2 - cRect.top;
+          const vpt = canvas.viewportTransform;
+          vpt[4] += curMidX - touchState.midX;
+          vpt[5] += curMidY - touchState.midY;
+          touchState.midX = curMidX;
+          touchState.midY = curMidY;
+
+          canvas.requestRenderAll();
+          updateZoomDisplay();
+        }
+      }, { passive: false });
+
+      upperCanvas.addEventListener('touchend', (e) => {
+        if (touchState.active && e.touches.length < 2) {
+          touchState.active = false;
+          canvas.selection = currentTool === 'select';
+          canvas.setViewportTransform(canvas.viewportTransform);
+        }
+      });
+    }
 
     // Mouse wheel zoom
     canvas.on('mouse:wheel', (opt) => {
@@ -104,15 +183,18 @@ const CanvasModule = (() => {
       opt.e.stopPropagation();
     });
 
-    // Pan with middle mouse or alt+drag
+    // Pan with middle mouse or alt+drag or single-finger on hand tool
     let isPanning = false;
     let lastPosX, lastPosY;
 
     canvas.on('mouse:down', (opt) => {
-      if (opt.e.altKey || opt.e.button === 1 || currentTool === 'hand') {
+      const e = opt.e;
+      const isTouchPan = e.type === 'touchstart' && currentTool === 'hand';
+      if (e.altKey || e.button === 1 || currentTool === 'hand' || isTouchPan) {
         isPanning = true;
-        lastPosX = opt.e.clientX;
-        lastPosY = opt.e.clientY;
+        const p = e.touches ? e.touches[0] : e;
+        lastPosX = p.clientX;
+        lastPosY = p.clientY;
         canvas.selection = false;
         return;
       }
@@ -143,12 +225,14 @@ const CanvasModule = (() => {
 
     canvas.on('mouse:move', (opt) => {
       if (isPanning) {
+        const e = opt.e;
+        const p = e.touches ? e.touches[0] : e;
         const vpt = canvas.viewportTransform;
-        vpt[4] += opt.e.clientX - lastPosX;
-        vpt[5] += opt.e.clientY - lastPosY;
+        vpt[4] += p.clientX - lastPosX;
+        vpt[5] += p.clientY - lastPosY;
         canvas.requestRenderAll();
-        lastPosX = opt.e.clientX;
-        lastPosY = opt.e.clientY;
+        lastPosX = p.clientX;
+        lastPosY = p.clientY;
       }
     });
 
@@ -224,9 +308,9 @@ const CanvasModule = (() => {
     });
 
     // Prevent default context menu on the upper canvas
-    const upperCanvas = container.querySelector('.upper-canvas');
-    if (upperCanvas) {
-      upperCanvas.addEventListener('contextmenu', (e) => {
+    const upperCanvasEl = container.querySelector('.upper-canvas');
+    if (upperCanvasEl) {
+      upperCanvasEl.addEventListener('contextmenu', (e) => {
         const target = canvas.findTarget(e, false);
         if (target && target._isAttachedFile) {
           e.preventDefault();
@@ -499,7 +583,9 @@ const CanvasModule = (() => {
       ['', '', ''],
       ['', '', '']
     ];
-    const table = { id, x, y, data };
+    const colWidths = [100, 100, 100];
+    const rowHeights = [30, 28, 28, 28];
+    const table = { id, x, y, data, colWidths, rowHeights };
     tables.push(table);
     renderHTMLTable(table);
     selectTable(id);
@@ -516,15 +602,24 @@ const CanvasModule = (() => {
     wrapper.style.left = table.x + 'px';
     wrapper.style.top = table.y + 'px';
 
+    // Ensure colWidths/rowHeights exist (migration from old data)
+    if (!table.colWidths) table.colWidths = table.data[0].map(() => 100);
+    if (!table.rowHeights) table.rowHeights = table.data.map((_, i) => i === 0 ? 30 : 28);
+    // Sync lengths if rows/cols were added
+    while (table.colWidths.length < table.data[0].length) table.colWidths.push(100);
+    while (table.rowHeights.length < table.data.length) table.rowHeights.push(28);
+
     const cols = table.data[0].length;
     let html = '<div class="canvas-table-handle" title="Arrastrar">⠿</div>';
-    html += '<table class="canvas-table"><thead><tr>';
+    html += '<table class="canvas-table"><colgroup>';
+    table.colWidths.forEach(w => { html += `<col style="width:${w}px">`; });
+    html += '</colgroup><thead><tr style="height:' + table.rowHeights[0] + 'px">';
     table.data[0].forEach((cell, ci) => {
       html += `<th contenteditable="true" data-row="0" data-col="${ci}">${escHTMLTbl(cell)}</th>`;
     });
     html += '</tr></thead><tbody>';
     for (let ri = 1; ri < table.data.length; ri++) {
-      html += '<tr>';
+      html += `<tr style="height:${table.rowHeights[ri]}px">`;
       table.data[ri].forEach((cell, ci) => {
         html += `<td contenteditable="true" data-row="${ri}" data-col="${ci}">${escHTMLTbl(cell)}</td>`;
       });
@@ -532,15 +627,42 @@ const CanvasModule = (() => {
     }
     html += '</tbody></table>';
     html += '<div class="canvas-table-resize" title="Redimensionar">⟻</div>';
+    html += '<div class="tbl-add-row-edge" title="Añadir fila">+</div>';
+    html += '<div class="tbl-add-col-edge" title="Añadir columna">+</div>';
     wrapper.innerHTML = html;
     if (table.w) wrapper.style.width = table.w + 'px';
     if (table.h) wrapper.style.height = table.h + 'px';
     container.appendChild(wrapper);
 
+    // Edge buttons: add row / add col
+    wrapper.querySelector('.tbl-add-row-edge').addEventListener('click', (e) => {
+      e.stopPropagation();
+      table.data.push(Array(table.data[0].length).fill(''));
+      table.rowHeights.push(28);
+      renderHTMLTable(table); selectTable(table.id);
+    });
+    wrapper.querySelector('.tbl-add-col-edge').addEventListener('click', (e) => {
+      e.stopPropagation();
+      table.data.forEach((row, i) => row.push(i === 0 ? `Col ${row.length + 1}` : ''));
+      table.colWidths.push(100);
+      renderHTMLTable(table); selectTable(table.id);
+    });
+
     // Click to select (don't propagate to canvas)
     wrapper.addEventListener('mousedown', (e) => {
       e.stopPropagation();
       selectTable(table.id);
+    });
+
+    // Right-click context menu on table cells
+    wrapper.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectTable(table.id);
+      const cell = e.target.closest('th, td');
+      const row = cell ? parseInt(cell.dataset.row) : -1;
+      const col = cell ? parseInt(cell.dataset.col) : -1;
+      showTableContextMenu(e.clientX, e.clientY, table, row, col);
     });
 
     // Tab navigation between cells
@@ -590,6 +712,7 @@ const CanvasModule = (() => {
 
     setupTableDrag(wrapper, table);
     setupTableResize(wrapper, table);
+    setupCellResize(wrapper, table);
   }
 
   function escHTMLTbl(str) {
@@ -606,34 +729,134 @@ const CanvasModule = (() => {
     sel.addRange(range);
   }
 
+  function showTableContextMenu(x, y, table, row, col) {
+    // Remove existing menu
+    const existing = document.getElementById('table-ctx-menu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'table-ctx-menu';
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:999;display:block;`;
+
+    const items = [];
+    if (row >= 0) {
+      items.push({ action: 'insert-row-above', label: 'Insertar fila arriba', icon: 'arrow-up' });
+      items.push({ action: 'insert-row-below', label: 'Insertar fila abajo', icon: 'arrow-down' });
+    } else {
+      items.push({ action: 'insert-row-below', label: 'Añadir fila', icon: 'plus' });
+    }
+    if (col >= 0) {
+      items.push({ action: 'insert-col-left', label: 'Insertar columna a la izquierda', icon: 'arrow-left' });
+      items.push({ action: 'insert-col-right', label: 'Insertar columna a la derecha', icon: 'arrow-right' });
+    } else {
+      items.push({ action: 'insert-col-right', label: 'Añadir columna', icon: 'plus' });
+    }
+
+    // Delete options (only if enough rows/cols)
+    if (row >= 0 && table.data.length > 2) {
+      items.push({ action: 'delete-row', label: 'Eliminar fila', icon: 'minus', danger: true });
+    }
+    if (col >= 0 && table.data[0].length > 1) {
+      items.push({ action: 'delete-col', label: 'Eliminar columna', icon: 'minus', danger: true });
+    }
+
+    menu.innerHTML = items.map(it =>
+      `<button class="ctx-item${it.danger ? ' ctx-danger' : ''}" data-action="${it.action}"><i data-lucide="${it.icon}" style="width:14px;height:14px"></i> ${it.label}</button>`
+    ).join('');
+
+    document.body.appendChild(menu);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Keep within viewport
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+    menu.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const numCols = table.data[0].length;
+
+      if (action === 'insert-row-above') {
+        const r = row < 1 ? 1 : row; // can't insert above header
+        table.data.splice(r, 0, Array(numCols).fill(''));
+        table.rowHeights.splice(r, 0, 28);
+      } else if (action === 'insert-row-below') {
+        const r = row < 0 ? table.data.length : row + 1;
+        table.data.splice(r, 0, Array(numCols).fill(''));
+        table.rowHeights.splice(r, 0, 28);
+      } else if (action === 'insert-col-left') {
+        table.data.forEach((rw, i) => rw.splice(col, 0, i === 0 ? `Col ${numCols + 1}` : ''));
+        table.colWidths.splice(col, 0, 100);
+      } else if (action === 'insert-col-right') {
+        const c = col < 0 ? numCols : col + 1;
+        table.data.forEach((rw, i) => rw.splice(c, 0, i === 0 ? `Col ${numCols + 1}` : ''));
+        table.colWidths.splice(c, 0, 100);
+      } else if (action === 'delete-row') {
+        if (row >= 1) { // can't delete header
+          table.data.splice(row, 1);
+          table.rowHeights.splice(row, 1);
+        }
+      } else if (action === 'delete-col') {
+        table.data.forEach(rw => rw.splice(col, 1));
+        table.colWidths.splice(col, 1);
+      }
+
+      renderHTMLTable(table);
+      selectTable(table.id);
+      menu.remove();
+    });
+
+    // Close on click outside
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', closeMenu);
+        document.removeEventListener('touchstart', closeMenu);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeMenu);
+      document.addEventListener('touchstart', closeMenu);
+    }, 10);
+  }
+
   function setupTableDrag(wrapper, table) {
     const handle = wrapper.querySelector('.canvas-table-handle');
     let isDragging = false;
     let startX, startY, startLeft, startTop;
 
-    handle.addEventListener('mousedown', (e) => {
+    function onStart(e) {
       isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
+      const p = e.touches ? e.touches[0] : e;
+      startX = p.clientX;
+      startY = p.clientY;
       startLeft = parseInt(wrapper.style.left) || 0;
       startTop = parseInt(wrapper.style.top) || 0;
       e.preventDefault();
       e.stopPropagation();
-    });
+    }
 
     const onMove = (e) => {
       if (!isDragging) return;
-      wrapper.style.left = (startLeft + e.clientX - startX) + 'px';
-      wrapper.style.top = (startTop + e.clientY - startY) + 'px';
-      table.x = startLeft + e.clientX - startX;
-      table.y = startTop + e.clientY - startY;
+      const p = e.touches ? e.touches[0] : e;
+      wrapper.style.left = (startLeft + p.clientX - startX) + 'px';
+      wrapper.style.top = (startTop + p.clientY - startY) + 'px';
+      table.x = startLeft + p.clientX - startX;
+      table.y = startTop + p.clientY - startY;
       positionTableToolbar();
     };
 
     const onUp = () => { isDragging = false; };
 
+    handle.addEventListener('mousedown', onStart);
+    handle.addEventListener('touchstart', onStart, { passive: false });
     document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
   }
 
   function setupTableResize(wrapper, table) {
@@ -641,20 +864,22 @@ const CanvasModule = (() => {
     let isResizing = false;
     let startX, startY, startW, startH;
 
-    handle.addEventListener('mousedown', (e) => {
+    function onStart(e) {
       isResizing = true;
-      startX = e.clientX;
-      startY = e.clientY;
+      const p = e.touches ? e.touches[0] : e;
+      startX = p.clientX;
+      startY = p.clientY;
       startW = wrapper.offsetWidth;
       startH = wrapper.offsetHeight;
       e.preventDefault();
       e.stopPropagation();
-    });
+    }
 
     const onMove = (e) => {
       if (!isResizing) return;
-      const newW = Math.max(100, startW + e.clientX - startX);
-      const newH = Math.max(60, startH + e.clientY - startY);
+      const p = e.touches ? e.touches[0] : e;
+      const newW = Math.max(100, startW + p.clientX - startX);
+      const newH = Math.max(60, startH + p.clientY - startY);
       wrapper.style.width = newW + 'px';
       wrapper.style.height = newH + 'px';
       table.w = newW;
@@ -664,8 +889,93 @@ const CanvasModule = (() => {
 
     const onUp = () => { isResizing = false; };
 
+    handle.addEventListener('mousedown', onStart);
+    handle.addEventListener('touchstart', onStart, { passive: false });
     document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+  }
+
+  function setupCellResize(wrapper, table) {
+    const tbl = wrapper.querySelector('.canvas-table');
+    const colEls = tbl.querySelectorAll('col');
+    const rows = tbl.querySelectorAll('tr');
+
+    // Column resize handles (inside each header cell)
+    const headerCells = rows[0].querySelectorAll('th');
+    headerCells.forEach((th, ci) => {
+      const handle = document.createElement('div');
+      handle.className = 'cell-col-resize';
+      th.appendChild(handle);
+
+      let startX, startW;
+      function onStart(e) {
+        const p = e.touches ? e.touches[0] : e;
+        startX = p.clientX;
+        startW = table.colWidths[ci];
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.cursor = 'col-resize';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchend', onUp);
+      }
+      function onMove(ev) {
+        const p = ev.touches ? ev.touches[0] : ev;
+        const nw = Math.max(40, startW + p.clientX - startX);
+        table.colWidths[ci] = nw;
+        colEls[ci].style.width = nw + 'px';
+      }
+      function onUp() {
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchend', onUp);
+      }
+      handle.addEventListener('mousedown', onStart);
+      handle.addEventListener('touchstart', onStart, { passive: false });
+    });
+
+    // Row resize handles (inside first cell of each row)
+    rows.forEach((tr, ri) => {
+      const firstCell = tr.querySelector('th, td');
+      if (!firstCell) return;
+      const handle = document.createElement('div');
+      handle.className = 'cell-row-resize';
+      firstCell.appendChild(handle);
+
+      let startY, startH;
+      function onStart(e) {
+        const p = e.touches ? e.touches[0] : e;
+        startY = p.clientY;
+        startH = table.rowHeights[ri];
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.cursor = 'row-resize';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchend', onUp);
+      }
+      function onMove(ev) {
+        const p = ev.touches ? ev.touches[0] : ev;
+        const nh = Math.max(20, startH + p.clientY - startY);
+        table.rowHeights[ri] = nh;
+        tr.style.height = nh + 'px';
+      }
+      function onUp() {
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchend', onUp);
+      }
+      handle.addEventListener('mousedown', onStart);
+      handle.addEventListener('touchstart', onStart, { passive: false });
+    });
   }
 
   function selectTable(id) {
@@ -691,12 +1001,14 @@ const CanvasModule = (() => {
   function tableAddRow() {
     const table = getSelectedTableData(); if (!table) return;
     table.data.push(Array(table.data[0].length).fill(''));
+    table.rowHeights.push(28);
     renderHTMLTable(table); selectTable(table.id);
   }
 
   function tableAddCol() {
     const table = getSelectedTableData(); if (!table) return;
     table.data.forEach((row, i) => row.push(i === 0 ? `Col ${row.length + 1}` : ''));
+    table.colWidths.push(100);
     renderHTMLTable(table); selectTable(table.id);
   }
 
@@ -704,6 +1016,7 @@ const CanvasModule = (() => {
     const table = getSelectedTableData(); if (!table) return;
     if (table.data.length <= 2) { App.toast('Mínimo 2 filas', 'warning'); return; }
     table.data.pop();
+    table.rowHeights.pop();
     renderHTMLTable(table); selectTable(table.id);
   }
 
@@ -711,6 +1024,7 @@ const CanvasModule = (() => {
     const table = getSelectedTableData(); if (!table) return;
     if (table.data[0].length <= 1) { App.toast('Mínimo 1 columna', 'warning'); return; }
     table.data.forEach(row => row.pop());
+    table.colWidths.pop();
     renderHTMLTable(table); selectTable(table.id);
   }
 
@@ -1225,6 +1539,77 @@ const CanvasModule = (() => {
     URL.revokeObjectURL(url);
   }
 
+  function showCanvasFileMenu(x, y, target) {
+    // Remove existing menu if any
+    const existing = document.getElementById('canvas-file-ctx');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'canvas-file-ctx';
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:999;display:block;`;
+
+    const fileName = target._attachedFileName || 'Archivo';
+    menu.innerHTML = `
+      <div class="ctx-header">${fileName}</div>
+      <button class="ctx-item" data-action="download"><i data-lucide="download" style="width:14px;height:14px"></i> Descargar</button>
+      <button class="ctx-item" data-action="rename"><i data-lucide="pencil" style="width:14px;height:14px"></i> Renombrar</button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item ctx-danger" data-action="delete"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Eliminar</button>
+    `;
+
+    document.body.appendChild(menu);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Keep menu within viewport
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+    menu.addEventListener('click', async (e) => {
+      const item = e.target.closest('[data-action]');
+      if (!item) return;
+      const action = item.dataset.action;
+
+      if (action === 'download') {
+        await downloadAttachedFile(target._attachedFileId, target._attachedFileName);
+      } else if (action === 'rename') {
+        const newName = prompt('Nombre del archivo:', target._attachedFileName || '');
+        if (newName && newName.trim()) {
+          target._attachedFileName = newName.trim();
+          // Update label in group
+          if (target.type === 'group') {
+            const objs = target.getObjects();
+            const label = objs.find(o => o.type === 'text' || o.type === 'i-text');
+            if (label) {
+              label.set('text', newName.trim().length > 18 ? newName.trim().slice(0, 16) + '…' : newName.trim());
+              canvas.requestRenderAll();
+            }
+          }
+        }
+      } else if (action === 'delete') {
+        canvas.remove(target);
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+      }
+
+      menu.remove();
+    });
+
+    // Close on click outside
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', closeMenu);
+        document.removeEventListener('touchstart', closeMenu);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeMenu);
+      document.addEventListener('touchstart', closeMenu);
+    }, 10);
+  }
+
   function reattachFileHandlers() {
     canvas.getObjects().forEach(obj => {
       if (obj._isAttachedFile && obj._attachedFileId) {
@@ -1241,16 +1626,27 @@ const CanvasModule = (() => {
     syncAllTableData();
     const payload = {
       canvas: json,
-      tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data }))
+      tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data, colWidths: t.colWidths || null, rowHeights: t.rowHeights || null }))
     };
-    await DB.saveCanvasState(projectId, payload);
+    await DB.saveCanvasState(projectId, payload, currentSheetId);
+    await DB.saveSheetIndex(projectId, sheets);
     App.toast('Mesa de trabajo guardada', 'success');
   }
 
+  async function saveCurrentSheetSilent() {
+    if (!canvas || !currentSheetId) return;
+    const json = canvas.toJSON(['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview']);
+    syncAllTableData();
+    const payload = {
+      canvas: json,
+      tables: tables.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w || null, h: t.h || null, data: t.data, colWidths: t.colWidths || null, rowHeights: t.rowHeights || null }))
+    };
+    await DB.saveCanvasState(projectId, payload, currentSheetId);
+  }
+
   async function loadSavedState() {
-    const state = await DB.getCanvasState(projectId);
+    const state = await DB.getCanvasState(projectId, currentSheetId);
     if (state && state.data) {
-      // Support both old format (plain canvas JSON) and new format ({ canvas, tables })
       if (state.data.canvas) {
         canvas.loadFromJSON(state.data.canvas, () => {
           reattachFileHandlers();
@@ -1264,6 +1660,13 @@ const CanvasModule = (() => {
           canvas.requestRenderAll();
         });
       }
+    } else {
+      // Empty sheet — just clear
+      canvas.clear();
+      canvas.backgroundColor = '#1a1a2e';
+      drawGrid();
+      tables = [];
+      clearTableDOM();
     }
   }
 
@@ -1282,6 +1685,162 @@ const CanvasModule = (() => {
 
   function updateZoomDisplay() {
     document.getElementById('zoom-level').textContent = Math.round(canvas.getZoom() * 100) + '%';
+  }
+
+  // ========================================
+  // MULTI-SHEET TABS
+  // ========================================
+
+  function setupSheetTabs() {
+    document.getElementById('sheet-tab-add').addEventListener('click', addSheet);
+  }
+
+  function renderSheetTabs() {
+    const list = document.getElementById('sheet-tabs-list');
+    if (!list) return;
+    list.innerHTML = '';
+    sheets.forEach(sheet => {
+      const tab = document.createElement('div');
+      tab.className = 'sheet-tab' + (sheet.id === currentSheetId ? ' active' : '');
+      tab.dataset.sheetId = sheet.id;
+
+      const name = document.createElement('span');
+      name.className = 'sheet-tab-name';
+      name.textContent = sheet.name;
+      tab.appendChild(name);
+
+      const close = document.createElement('button');
+      close.className = 'sheet-tab-close';
+      close.innerHTML = '×';
+      close.title = 'Eliminar hoja';
+      tab.appendChild(close);
+
+      // Click to switch
+      tab.addEventListener('click', (e) => {
+        if (e.target === close) return;
+        if (sheet.id !== currentSheetId) switchSheet(sheet.id);
+      });
+
+      // Double-click to rename
+      tab.addEventListener('dblclick', (e) => {
+        if (e.target === close) return;
+        startRenameSheet(name, sheet);
+      });
+
+      // Long-press for rename on touch
+      let longPressTimer = null;
+      tab.addEventListener('touchstart', () => {
+        longPressTimer = setTimeout(() => startRenameSheet(name, sheet), 600);
+      }, { passive: true });
+      tab.addEventListener('touchend', () => clearTimeout(longPressTimer));
+      tab.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+
+      // Close button
+      close.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSheet(sheet.id);
+      });
+
+      list.appendChild(tab);
+    });
+
+    // Re-render Lucide icons if needed
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function startRenameSheet(nameEl, sheet) {
+    nameEl.contentEditable = 'true';
+    nameEl.focus();
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(nameEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const finish = () => {
+      nameEl.contentEditable = 'false';
+      const newName = nameEl.textContent.trim();
+      if (newName && newName !== sheet.name) {
+        sheet.name = newName;
+        DB.saveSheetIndex(projectId, sheets);
+      } else {
+        nameEl.textContent = sheet.name;
+      }
+      nameEl.removeEventListener('blur', finish);
+      nameEl.removeEventListener('keydown', onKey);
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+      if (e.key === 'Escape') { nameEl.textContent = sheet.name; nameEl.blur(); }
+    };
+
+    nameEl.addEventListener('blur', finish);
+    nameEl.addEventListener('keydown', onKey);
+  }
+
+  async function switchSheet(sheetId) {
+    if (sheetId === currentSheetId) return;
+    // Save current sheet silently
+    await saveCurrentSheetSilent();
+    // Clear canvas state
+    history.length = 0;
+    historyLocked = false;
+    tables = [];
+    clearTableDOM();
+    selectedTableId = null;
+    deselectTable();
+    // Switch
+    currentSheetId = sheetId;
+    renderSheetTabs();
+    await loadSavedState();
+  }
+
+  async function addSheet() {
+    // Save current sheet before adding
+    await saveCurrentSheetSilent();
+    const id = 'sheet_' + Date.now();
+    const name = 'Hoja ' + (sheets.length + 1);
+    sheets.push({ id, name });
+    await DB.saveSheetIndex(projectId, sheets);
+    // Switch to the new sheet
+    history.length = 0;
+    tables = [];
+    clearTableDOM();
+    selectedTableId = null;
+    currentSheetId = id;
+    // Clear canvas for new sheet
+    canvas.clear();
+    canvas.backgroundColor = '#1a1a2e';
+    drawGrid();
+    canvas.requestRenderAll();
+    renderSheetTabs();
+    App.toast('Nueva hoja creada', 'success');
+  }
+
+  async function deleteSheet(sheetId) {
+    if (sheets.length <= 1) {
+      App.toast('Debe haber al menos una hoja', 'warning');
+      return;
+    }
+    if (!confirm('¿Eliminar esta hoja? Se perderá todo su contenido.')) return;
+    // Remove from index
+    const idx = sheets.findIndex(s => s.id === sheetId);
+    sheets.splice(idx, 1);
+    await DB.deleteCanvasSheet(projectId, sheetId);
+    await DB.saveSheetIndex(projectId, sheets);
+    // If we deleted the current sheet, switch to another
+    if (sheetId === currentSheetId) {
+      currentSheetId = sheets[Math.min(idx, sheets.length - 1)].id;
+      history.length = 0;
+      tables = [];
+      clearTableDOM();
+      selectedTableId = null;
+      await loadSavedState();
+    }
+    renderSheetTabs();
+    App.toast('Hoja eliminada', 'info');
   }
 
   function resize() {

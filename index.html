@@ -28,6 +28,10 @@
       <button class="btn btn-outline" id="btn-import-project">
         <i data-lucide="upload"></i> Importar Obra
       </button>
+      <button class="btn btn-outline" id="btn-theme-selector" title="Cambiar tema">
+        <i data-lucide="sun" class="theme-icon-light"></i>
+        <i data-lucide="moon" class="theme-icon-dark"></i>
+      </button>
     </div>
     <div class="project-grid" id="project-grid"></div>
     <div class="empty-state" id="projects-empty" style="display:none">
@@ -86,10 +90,21 @@
             <span class="nav-text">Documentos</span>
           </a>
         </li>
+        <li>
+          <a href="#participants" class="nav-link" data-section="participants">
+            <i data-lucide="contact"></i>
+            <span class="nav-text">Participantes</span>
+          </a>
+        </li>
       </ul>
     </nav>
 
     <div class="sidebar-footer">
+      <button class="sidebar-theme-btn" id="btn-theme-toggle" title="Cambiar tema">
+        <i data-lucide="sun" class="theme-icon-light"></i>
+        <i data-lucide="moon" class="theme-icon-dark"></i>
+        <span class="nav-text theme-label">Modo Claro</span>
+      </button>
       <button class="sidebar-back-btn" id="btn-back-projects" title="Volver a obras">
         <i data-lucide="arrow-left"></i>
         <span class="nav-text">Cambiar obra</span>
@@ -118,6 +133,12 @@
 
     <!-- Sections -->
     <section id="section-overview" class="content-section active">
+      <div class="panel-header">
+        <h2>Resumen del Proyecto</h2>
+        <button class="overview-report-btn" id="btn-generate-report" title="Generar informe PDF">
+          <i data-lucide="file-text"></i> Generar Informe PDF
+        </button>
+      </div>
       <div class="overview-grid" id="overview-grid"></div>
     </section>
     <section id="section-canvas" class="content-section">
@@ -234,6 +255,13 @@
             <i data-lucide="trash-2"></i>
           </button>
         </div>
+      </div>
+      <!-- Sheet tabs -->
+      <div class="sheet-tabs" id="sheet-tabs">
+        <div class="sheet-tabs-list" id="sheet-tabs-list"></div>
+        <button class="sheet-tab-add" id="sheet-tab-add" title="Añadir hoja">
+          <i data-lucide="plus"></i>
+        </button>
       </div>
       <input type="file" id="plan-upload" accept="image/*,.pdf" hidden>
       <input type="file" id="canvas-file-attach" multiple hidden>
@@ -465,6 +493,32 @@
       </div>
       <input type="file" id="file-upload-input" multiple hidden>
     </section>
+
+    <section id="section-participants" class="content-section">
+      <div class="panel-header">
+        <h2>Participantes de la Obra</h2>
+        <div class="participants-actions">
+          <div class="filter-search">
+            <i data-lucide="search"></i>
+            <input type="text" id="participants-search" placeholder="Buscar participante...">
+          </div>
+          <select id="participants-type-filter" class="filter-select">
+            <option value="all">Todos</option>
+            <option value="internal">Internos</option>
+            <option value="external">Externos</option>
+          </select>
+          <button class="btn btn-primary" id="btn-add-participant">
+            <i data-lucide="user-plus"></i> Nuevo Participante
+          </button>
+        </div>
+      </div>
+      <div class="participants-grid" id="participants-grid"></div>
+      <div class="empty-state" id="participants-empty">
+        <i data-lucide="contact"></i>
+        <p>No hay participantes registrados</p>
+        <button class="btn btn-outline" id="btn-add-participant-empty">Añadir primer participante</button>
+      </div>
+    </section>
   </main>
 
   <!-- Modal Template -->
@@ -487,9 +541,33 @@
   <!-- Context Menu -->
   <div class="ctx-menu" id="ctx-menu"></div>
 
+  <!-- Force-clear stale service workers and caches -->
+  <script>
+    (function() {
+      var SW_VERSION = 'v3';
+      var key = 'abessis-sw-version';
+      var stored = localStorage.getItem(key);
+      if (stored !== SW_VERSION && 'serviceWorker' in navigator) {
+        localStorage.setItem(key, SW_VERSION);
+        caches.keys().then(function(names) {
+          return Promise.all(names.map(function(n) { return caches.delete(n); }));
+        }).then(function() {
+          return navigator.serviceWorker.getRegistrations();
+        }).then(function(regs) {
+          return Promise.all(regs.map(function(r) { return r.unregister(); }));
+        }).then(function() {
+          location.reload();
+        });
+        return;              // stop loading scripts until reload
+      }
+    })();
+  </script>
+
   <!-- Scripts -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
   <script src="js/db.js"></script>
   <script src="js/app.js"></script>
   <script src="js/modules/canvas.js"></script>
@@ -498,6 +576,8 @@
   <script src="js/modules/diary.js"></script>
   <script src="js/modules/overview.js"></script>
   <script src="js/modules/files.js"></script>
+  <script src="js/modules/participants.js"></script>
+  <script src="js/modules/report.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       App.init();
