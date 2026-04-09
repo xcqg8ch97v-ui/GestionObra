@@ -4294,3 +4294,95 @@ body.is-resizing-timeline-label {
   .plan-anno-btn { padding: 5px 7px; font-size: 0.75rem; }
   .plan-anno-btn svg { width: 14px; height: 14px; }
 }
+
+/* ========================================
+   PDF Import Results
+   ======================================== */
+
+.pdf-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pdf-results-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  align-self: flex-start;
+}
+.pdf-results-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.pdf-results-file svg { width: 14px; height: 14px; }
+.pdf-results-section {
+  background: var(--bg-hover);
+  border-radius: 10px;
+  padding: 16px;
+}
+.pdf-results-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.pdf-results-section h4 svg { width: 16px; height: 16px; }
+.pdf-results-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pdf-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pdf-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pdf-total {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.pdf-items-table-wrap {
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+.pdf-items-table {
+  font-size: 0.85rem;
+}
+.pdf-items-table td,
+.pdf-items-table th {
+  padding: 6px 10px;
+}
+.pdf-actions-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pdf-action-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.pdf-action-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}

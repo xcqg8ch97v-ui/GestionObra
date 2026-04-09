@@ -18,6 +18,7 @@ const DashboardModule = (() => {
     setupSubTabs();
     setupButtons();
     setupBC3Import();
+    setupPdfImport();
     setupComparatorFilter();
     setupSupplierFilters();
     loadSuppliers();
@@ -633,6 +634,255 @@ const DashboardModule = (() => {
 
     bodyEl.innerHTML = tableHTML;
     lucide.createIcons();
+  }
+
+  // ========================================
+  // PDF IMPORT (Presupuestos, Facturas, Albaranes)
+  // ========================================
+
+  function setupPdfImport() {
+    const btn = document.getElementById('btn-import-pdf');
+    const input = document.getElementById('pdf-import-input');
+    if (!btn || !input) return;
+
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      input.value = '';
+
+      App.toast('Analizando PDF…', 'info');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const parsed = await PdfParserModule.parse(arrayBuffer);
+        showPdfResultsModal(parsed, file.name);
+      } catch (err) {
+        console.error('Error parsing PDF:', err);
+        App.toast('No se pudo analizar el PDF', 'error');
+      }
+    });
+  }
+
+  async function showPdfResultsModal(parsed, fileName) {
+    const typeLabels = { presupuesto: 'Presupuesto / Oferta', factura: 'Factura', albaran: 'Albarán' };
+    const typeLabel = typeLabels[parsed.type] || parsed.type;
+
+    const existingSuppliers = await DB.getAllForProject('suppliers', projectId);
+
+    // Build items table
+    let itemsHTML = '';
+    if (parsed.items && parsed.items.length > 0) {
+      const rows = parsed.items.map((it, i) => {
+        const amt = it.amount != null ? App.formatCurrency(it.amount) : (it.quantity != null ? `${it.quantity} ${it.unit || ''}` : '-');
+        return `<tr>
+          <td><input type="checkbox" class="pdf-item-check" data-idx="${i}" checked></td>
+          <td>${App.escapeHTML(it.description)}</td>
+          <td style="text-align:right">${amt}</td>
+        </tr>`;
+      }).join('');
+      itemsHTML = `
+        <div class="pdf-results-section">
+          <h4><i data-lucide="list"></i> Líneas detectadas (${parsed.items.length})</h4>
+          <div class="pdf-items-table-wrap">
+            <table class="data-table pdf-items-table">
+              <thead><tr><th style="width:30px"><input type="checkbox" id="pdf-check-all" checked></th><th>Descripción</th><th style="text-align:right">Importe</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    // Totals section
+    let totalsHTML = '';
+    if (parsed.type === 'factura') {
+      totalsHTML = `<div class="pdf-results-row">
+        ${parsed.baseImponible ? `<div class="pdf-kv"><span class="pdf-label">Base Imponible</span><span>${App.formatCurrency(parsed.baseImponible)}</span></div>` : ''}
+        ${parsed.iva ? `<div class="pdf-kv"><span class="pdf-label">IVA ${parsed.ivaPercent || ''}%</span><span>${App.formatCurrency(parsed.iva)}</span></div>` : ''}
+        ${parsed.total ? `<div class="pdf-kv"><span class="pdf-label">Total</span><span class="pdf-total">${App.formatCurrency(parsed.total)}</span></div>` : ''}
+      </div>`;
+    } else if (parsed.total) {
+      totalsHTML = `<div class="pdf-results-row">
+        <div class="pdf-kv"><span class="pdf-label">Total</span><span class="pdf-total">${App.formatCurrency(parsed.total)}</span></div>
+      </div>`;
+    }
+
+    // Reference line
+    const ref = parsed.reference || parsed.invoiceNumber || parsed.deliveryNumber || '';
+
+    // Supplier match dropdown
+    const supplierOptions = existingSuppliers.map(s =>
+      `<option value="${s.id}">${App.escapeHTML(s.name)} (${App.escapeHTML(s.trade)})</option>`
+    ).join('');
+
+    const body = `
+      <div class="pdf-results">
+        <div class="pdf-results-badge">${App.escapeHTML(typeLabel)}</div>
+        <div class="pdf-results-file"><i data-lucide="file"></i> ${App.escapeHTML(fileName)}</div>
+
+        <div class="pdf-results-section">
+          <h4><i data-lucide="building-2"></i> Datos del proveedor</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Empresa</label>
+              <input type="text" id="pdf-sup-name" value="${App.escapeHTML(parsed.supplierName)}">
+            </div>
+            <div class="form-group">
+              <label>NIF/CIF</label>
+              <input type="text" id="pdf-sup-nif" value="${App.escapeHTML(parsed.nif)}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Teléfono</label>
+              <input type="tel" id="pdf-sup-phone" value="${App.escapeHTML(parsed.phone)}">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="pdf-sup-email" value="${App.escapeHTML(parsed.email)}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Fecha</label>
+              <input type="text" id="pdf-date" value="${App.escapeHTML(parsed.date)}">
+            </div>
+            <div class="form-group">
+              <label>Referencia</label>
+              <input type="text" id="pdf-ref" value="${App.escapeHTML(ref)}">
+            </div>
+          </div>
+        </div>
+
+        ${totalsHTML}
+        ${itemsHTML}
+
+        <div class="pdf-results-section">
+          <h4><i data-lucide="settings"></i> Acciones</h4>
+          <div class="pdf-actions-checks">
+            <label class="pdf-action-label">
+              <input type="checkbox" id="pdf-act-create-supplier" checked>
+              Crear nuevo proveedor
+            </label>
+            <label class="pdf-action-label">
+              <input type="checkbox" id="pdf-act-create-budgets" ${parsed.items.length ? 'checked' : ''}>
+              Crear partidas presupuestarias con las líneas
+            </label>
+            <label class="pdf-action-label">
+              <input type="checkbox" id="pdf-act-associate">
+              Asociar a proveedor existente
+            </label>
+            <select id="pdf-existing-supplier" class="filter-select" style="margin-left:24px;display:none">
+              <option value="">— Seleccionar proveedor —</option>
+              ${supplierOptions}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-pdf-apply">
+        <i data-lucide="check"></i> Aplicar
+      </button>
+    `;
+
+    App.openModal('Importar PDF — ' + typeLabel, body, footer);
+
+    // Toggle supplier creation vs association
+    const createCheck = document.getElementById('pdf-act-create-supplier');
+    const assocCheck = document.getElementById('pdf-act-associate');
+    const existingSelect = document.getElementById('pdf-existing-supplier');
+
+    createCheck.addEventListener('change', () => {
+      if (createCheck.checked) { assocCheck.checked = false; existingSelect.style.display = 'none'; }
+    });
+    assocCheck.addEventListener('change', () => {
+      if (assocCheck.checked) { createCheck.checked = false; existingSelect.style.display = 'block'; }
+      else { existingSelect.style.display = 'none'; }
+    });
+
+    // Check-all toggle
+    const checkAll = document.getElementById('pdf-check-all');
+    if (checkAll) {
+      checkAll.addEventListener('change', () => {
+        document.querySelectorAll('.pdf-item-check').forEach(cb => cb.checked = checkAll.checked);
+      });
+    }
+
+    // Apply button
+    document.getElementById('btn-pdf-apply').addEventListener('click', async () => {
+      await applyPdfImport(parsed);
+    });
+  }
+
+  async function applyPdfImport(parsed) {
+    const createSupplier = document.getElementById('pdf-act-create-supplier').checked;
+    const createBudgets = document.getElementById('pdf-act-create-budgets').checked;
+    const associate = document.getElementById('pdf-act-associate').checked;
+    const existingSupplierId = parseInt(document.getElementById('pdf-existing-supplier').value) || null;
+
+    let supplierId = null;
+
+    // Create or find supplier
+    if (createSupplier) {
+      const name = document.getElementById('pdf-sup-name').value.trim();
+      if (!name) { App.toast('El nombre del proveedor es obligatorio', 'warning'); return; }
+
+      // Auto-detect trade from items
+      const allText = (parsed.items || []).map(it => it.description).join(' ');
+      const trade = matchTrade(allText);
+
+      const supplierData = {
+        name,
+        trade,
+        status: 'Activo',
+        contact: '',
+        phone: document.getElementById('pdf-sup-phone').value.trim(),
+        email: document.getElementById('pdf-sup-email').value.trim(),
+        notes: `NIF: ${document.getElementById('pdf-sup-nif').value.trim()}\nRef: ${document.getElementById('pdf-ref').value.trim()}\nFecha: ${document.getElementById('pdf-date').value.trim()}`,
+        projectId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      supplierId = await DB.add('suppliers', supplierData);
+      App.toast('Proveedor creado: ' + name, 'success');
+    } else if (associate && existingSupplierId) {
+      supplierId = existingSupplierId;
+    }
+
+    // Create budget items
+    if (createBudgets && parsed.items && parsed.items.length > 0) {
+      const checkedIdxs = new Set();
+      document.querySelectorAll('.pdf-item-check:checked').forEach(cb => {
+        checkedIdxs.add(parseInt(cb.dataset.idx));
+      });
+
+      let count = 0;
+      for (const [i, item] of parsed.items.entries()) {
+        if (!checkedIdxs.has(i)) continue;
+        const amount = item.amount || 0;
+        const trade = matchTrade(item.description);
+
+        await DB.add('budgets', {
+          category: trade,
+          description: item.description,
+          supplierId: supplierId,
+          estimatedCost: amount,
+          realCost: 0,
+          profitMargin: 0,
+          projectId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        count++;
+      }
+      if (count) App.toast(`${count} partida(s) creada(s)`, 'success');
+    }
+
+    App.closeModal();
+    loadSuppliers();
+    loadBudgets();
   }
 
   // ========================================
