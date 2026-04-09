@@ -283,3 +283,8 @@ const PdfParserModule = (() => {
 
   return { parse, extractText, detectType };
 })();
+
+// Expose to global scope for dashboard.js
+if (typeof window !== 'undefined') {
+  window.PdfParserModule = PdfParserModule;
+}
