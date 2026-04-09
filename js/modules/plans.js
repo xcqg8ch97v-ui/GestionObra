@@ -48,20 +48,13 @@ const PlansModule = (() => {
   }
 
   function setupButtons() {
-    const fileInput = document.getElementById('plan-file-input');
-    const newInput = fileInput.cloneNode(true);
-    fileInput.parentNode.replaceChild(newInput, fileInput);
-    newInput.addEventListener('change', handleUpload);
+    document.getElementById('plan-file-input').onchange = handleUpload;
 
-    const bindClick = (id) => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      const nb = btn.cloneNode(true);
-      btn.parentNode.replaceChild(nb, btn);
-      nb.addEventListener('click', () => document.getElementById('plan-file-input').click());
-    };
-    bindClick('btn-upload-plan');
-    bindClick('btn-upload-plan-empty');
+    const triggerUpload = () => document.getElementById('plan-file-input').click();
+    const btnUpload = document.getElementById('btn-upload-plan');
+    if (btnUpload) btnUpload.onclick = triggerUpload;
+    const btnEmpty = document.getElementById('btn-upload-plan-empty');
+    if (btnEmpty) btnEmpty.onclick = triggerUpload;
 
     setupViewer();
   }
