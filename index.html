@@ -353,9 +353,15 @@
       <div id="panel-budgets" class="sub-panel">
         <div class="panel-header">
           <h2>Partidas Presupuestarias</h2>
-          <button class="btn btn-primary" id="btn-add-budget">
-            <i data-lucide="plus"></i> Nueva Partida
-          </button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-outline" id="btn-import-bc3" title="Importar archivo BC3 / FIEBDC (Presto)">
+              <i data-lucide="file-up"></i> Importar BC3
+            </button>
+            <button class="btn btn-primary" id="btn-add-budget">
+              <i data-lucide="plus"></i> Nueva Partida
+            </button>
+          </div>
+          <input type="file" id="bc3-file-input" accept=".bc3,.BC3,.fiebdc,.FIEBDC" style="display:none">
         </div>
         <div class="table-container">
           <table class="data-table" id="budgets-table">

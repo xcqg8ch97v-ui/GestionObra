@@ -17,6 +17,7 @@ const DashboardModule = (() => {
     projectId = pid;
     setupSubTabs();
     setupButtons();
+    setupBC3Import();
     setupComparatorFilter();
     setupSupplierFilters();
     loadSuppliers();
@@ -632,6 +633,259 @@ const DashboardModule = (() => {
 
     bodyEl.innerHTML = tableHTML;
     lucide.createIcons();
+  }
+
+  // ========================================
+  // BC3 / FIEBDC IMPORT (Presto standard)
+  // ========================================
+
+  const TRADE_KEYWORDS = {
+    'Albañilería': ['albañil', 'cerramient', 'tabique', 'fachada', 'revestimiento', 'fábrica', 'ladrillo', 'enfoscado', 'enlucido', 'solado', 'alicatado', 'pavimento', 'yeso'],
+    'Fontanería': ['fontaner', 'saneamiento', 'agua', 'desagüe', 'tubería', 'sanitario', 'aparatos sanitarios', 'acs'],
+    'Electricidad': ['eléctric', 'electric', 'iluminación', 'alumbrado', 'baja tensión', 'alta tensión', 'cableado'],
+    'Carpintería': ['carpinter', 'madera', 'puerta', 'ventana', 'persiana', 'cerrajería'],
+    'Pintura': ['pintura', 'pintor', 'acabado'],
+    'Cristalería': ['cristal', 'vidrio', 'acristalamiento', 'luna'],
+    'Climatización': ['climatiz', 'calefacc', 'aire acondicionado', 'ventilación', 'refrigeración', 'aerotermia'],
+    'Impermeabilización': ['impermeabiliz', 'aislamiento', 'cubierta', 'tejado', 'barrera de vapor'],
+    'Estructura': ['estructura', 'hormigón', 'acero', 'forjado', 'pilar', 'viga', 'losa', 'encofrado', 'ferralla'],
+    'Cimentación': ['cimentación', 'cimiento', 'excavación', 'movimiento de tierra', 'zanja', 'zapata', 'pilote', 'demolición', 'derrib'],
+    'Paisajismo': ['paisaj', 'jardiner', 'urbanización', 'acera', 'bordillo'],
+    'Seguridad': ['seguridad', 'protección', 'salud', 'andamio', 'señalización'],
+  };
+
+  function matchTrade(text) {
+    const lower = text.toLowerCase();
+    let best = 'Otros';
+    let bestLen = 0;
+    for (const [trade, keywords] of Object.entries(TRADE_KEYWORDS)) {
+      for (const kw of keywords) {
+        if (lower.includes(kw) && kw.length > bestLen) {
+          bestLen = kw.length;
+          best = trade;
+        }
+      }
+    }
+    return best;
+  }
+
+  function parseBC3(text) {
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // Split into records: each starts with ~LETTER|
+    const rawRecords = normalized.split(/(?=~[A-Za-z]\|)/).filter(r => r.trim());
+
+    const concepts = {};
+    const decompositions = {};
+    const texts = {};
+
+    for (let raw of rawRecords) {
+      raw = raw.replace(/\n/g, ''); // join multi-line records
+      if (raw.length < 3) continue;
+      const typeChar = raw.charAt(1).toUpperCase();
+      const content = raw.substring(3);
+      const fields = content.split('|');
+
+      switch (typeChar) {
+        case 'C': {
+          const codes = (fields[0] || '').split('\\');
+          const code = codes[0].trim();
+          if (!code) break;
+          const unit = (fields[1] || '').trim();
+          const summary = (fields[2] || '').trim();
+          const priceField = (fields[3] || '').trim();
+          const prices = priceField ? priceField.split('\\').map(p => parseFloat(p) || 0) : [0];
+          concepts[code] = { code, unit, summary, price: prices[0] || 0 };
+          break;
+        }
+        case 'D': {
+          const parentCode = (fields[0] || '').trim();
+          if (!parentCode) break;
+          const childrenStr = (fields[1] || '').trim();
+          if (!childrenStr) break;
+          const parts = childrenStr.split('\\');
+          const children = [];
+          for (let i = 0; i < parts.length; i += 3) {
+            const childCode = (parts[i] || '').trim();
+            if (!childCode) continue;
+            const factor = parseFloat(parts[i + 1]) || 1;
+            const yield_ = parseFloat(parts[i + 2]) || 0;
+            children.push({ code: childCode, factor, yield: yield_ });
+          }
+          if (children.length) decompositions[parentCode] = children;
+          break;
+        }
+        case 'T': {
+          const code = (fields[0] || '').trim();
+          const longText = (fields[1] || '').trim();
+          if (code) texts[code] = longText;
+          break;
+        }
+      }
+    }
+    return { concepts, decompositions, texts };
+  }
+
+  function collectLeafPartidas(code, decompositions, concepts, parentYield) {
+    const children = decompositions[code];
+    if (!children || children.length === 0) return [];
+    const result = [];
+    for (const child of children) {
+      const concept = concepts[child.code];
+      if (!concept) continue;
+      if (decompositions[child.code]) {
+        // Sub-chapter: recurse
+        result.push(...collectLeafPartidas(child.code, decompositions, concepts, child.yield || 1));
+      } else {
+        // Leaf partida
+        const qty = child.yield || 0;
+        const total = Math.round(concept.price * qty * (child.factor || 1) * 100) / 100;
+        result.push({
+          code: child.code,
+          summary: concept.summary || child.code,
+          unit: concept.unit || '',
+          unitPrice: concept.price,
+          quantity: qty,
+          totalCost: total
+        });
+      }
+    }
+    return result;
+  }
+
+  function buildBC3Tree(parsed) {
+    const { concepts, decompositions, texts } = parsed;
+    // Find root: code ending with ##
+    let rootCode = null;
+    for (const code of Object.keys(concepts)) {
+      if (code.endsWith('##')) { rootCode = code; break; }
+    }
+    // Fallback: parent not child of anything
+    if (!rootCode) {
+      const allChildren = new Set();
+      for (const children of Object.values(decompositions)) {
+        children.forEach(c => allChildren.add(c.code));
+      }
+      for (const code of Object.keys(decompositions)) {
+        if (!allChildren.has(code)) { rootCode = code; break; }
+      }
+    }
+    const chapters = [];
+    const rootChildren = decompositions[rootCode] || [];
+    for (const rc of rootChildren) {
+      const ch = concepts[rc.code];
+      if (!ch) continue;
+      const partidas = collectLeafPartidas(rc.code, decompositions, concepts, 1);
+      const trade = matchTrade(ch.summary || '');
+      chapters.push({
+        code: rc.code,
+        name: ch.summary || rc.code,
+        trade,
+        partidas,
+        totalCost: partidas.reduce((s, p) => s + p.totalCost, 0)
+      });
+    }
+    return { rootCode, rootName: concepts[rootCode]?.summary || '', chapters };
+  }
+
+  function setupBC3Import() {
+    const fileInput = document.getElementById('bc3-file-input');
+    if (!fileInput) return;
+    document.getElementById('btn-import-bc3').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = '';
+      try {
+        const text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsText(file, 'windows-1252');
+        });
+        const parsed = parseBC3(text);
+        const tree = buildBC3Tree(parsed);
+        if (tree.chapters.length === 0) {
+          App.toast('No se encontraron capítulos ni partidas en el archivo BC3', 'warning');
+          return;
+        }
+        showBC3Preview(tree);
+      } catch (err) {
+        console.error('Error parsing BC3:', err);
+        App.toast('Error al leer el archivo BC3', 'error');
+      }
+    });
+  }
+
+  function showBC3Preview(tree) {
+    const totalPartidas = tree.chapters.reduce((s, ch) => s + ch.partidas.length, 0);
+    const totalCost = tree.chapters.reduce((s, ch) => s + ch.totalCost, 0);
+
+    let body = `
+      <div style="margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:8px">
+        <strong>${App.escapeHTML(tree.rootName || 'Presupuesto BC3')}</strong><br>
+        <small>${tree.chapters.length} capítulos &middot; ${totalPartidas} partidas &middot; ${App.formatCurrency(totalCost)}</small>
+      </div>
+      <div style="max-height:400px;overflow-y:auto">`;
+
+    for (const ch of tree.chapters) {
+      body += `
+        <div style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
+            <input type="checkbox" class="bc3-ch-check" data-chapter="${App.escapeHTML(ch.code)}" checked>
+            <strong>${App.escapeHTML(ch.name)}</strong>
+            <span class="badge badge-neutral" style="margin-left:auto">${App.escapeHTML(ch.trade)}</span>
+            <small>${ch.partidas.length} uds &middot; ${App.formatCurrency(ch.totalCost)}</small>
+          </div>
+          <div style="padding-left:24px;font-size:0.85em">
+            ${ch.partidas.slice(0, 8).map(p => `
+              <div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-muted)">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px">${App.escapeHTML(p.summary)}</span>
+                <span style="white-space:nowrap">${p.quantity} ${App.escapeHTML(p.unit)} &times; ${p.unitPrice.toFixed(2)}\u20AC = <strong>${App.formatCurrency(p.totalCost)}</strong></span>
+              </div>`).join('')}
+            ${ch.partidas.length > 8 ? `<div style="color:var(--text-muted);font-style:italic">...y ${ch.partidas.length - 8} más</div>` : ''}
+          </div>
+        </div>`;
+    }
+    body += '</div>';
+
+    const footer = `
+      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-exec-bc3-import">
+        <i data-lucide="download"></i> Importar seleccionados
+      </button>`;
+
+    App.openModal('Importar Presupuesto BC3 (Presto)', body, footer);
+
+    document.getElementById('btn-exec-bc3-import').addEventListener('click', () => {
+      const selected = new Set();
+      document.querySelectorAll('.bc3-ch-check').forEach(cb => {
+        if (cb.checked) selected.add(cb.dataset.chapter);
+      });
+      executeBC3Import(tree.chapters.filter(ch => selected.has(ch.code)));
+    });
+  }
+
+  async function executeBC3Import(chapters) {
+    let count = 0;
+    for (const ch of chapters) {
+      for (const p of ch.partidas) {
+        await DB.add('budgets', {
+          category: ch.trade,
+          description: `${ch.name} \u2014 ${p.summary}${p.unit ? ' (' + p.quantity + ' ' + p.unit + ')' : ''}`,
+          supplierId: null,
+          estimatedCost: p.totalCost,
+          realCost: 0,
+          profitMargin: 0,
+          projectId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        count++;
+      }
+    }
+    App.closeModal();
+    App.toast(`Importadas ${count} partidas de ${chapters.length} capítulos`, 'success');
+    loadBudgets();
   }
 
   return {
