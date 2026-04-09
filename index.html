@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#FFD500">
+  <meta name="description" content="Abessis - Gestión de Obra">
+  <title>Abessis · Gestión de Obra</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Project Selector Screen -->
+  <div id="project-selector" class="project-selector">
+    <div class="project-selector-header">
+      <div class="logo" style="justify-content:center;">
+        <img src="img/logo-abessis-white.png" alt="Abessis" class="logo-img" style="height:40px">
+      </div>
+      <p class="project-selector-subtitle">Selecciona una obra o crea una nueva</p>
+    </div>
+    <div class="project-selector-actions">
+      <button class="btn btn-primary" id="btn-new-project">
+        <i data-lucide="plus"></i> Nueva Obra
+      </button>
+    </div>
+    <div class="project-grid" id="project-grid"></div>
+    <div class="empty-state" id="projects-empty" style="display:none">
+      <i data-lucide="building-2"></i>
+      <p>No hay obras creadas</p>
+      <button class="btn btn-outline" id="btn-new-project-empty">Crear primera obra</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar" style="display:none">
+    <div class="sidebar-header">
+      <div class="logo">
+        <img src="img/logo-abessis-white.png" alt="Abessis" class="logo-img">
+      </div>
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Colapsar menú">
+        <i data-lucide="panel-left-close"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <ul>
+        <li>
+          <a href="#overview" class="nav-link" data-section="overview">
+            <i data-lucide="layout-dashboard"></i>
+            <span class="nav-text">Vista General</span>
+          </a>
+        </li>
+        <li>
+          <a href="#canvas" class="nav-link active" data-section="canvas">
+            <i data-lucide="pen-tool"></i>
+            <span class="nav-text">Mesa de Trabajo</span>
+          </a>
+        </li>
+        <li>
+          <a href="#dashboard" class="nav-link" data-section="dashboard">
+            <i data-lucide="bar-chart-3"></i>
+            <span class="nav-text">Proveedores</span>
+          </a>
+        </li>
+        <li>
+          <a href="#timeline" class="nav-link" data-section="timeline">
+            <i data-lucide="gantt-chart"></i>
+            <span class="nav-text">Cronograma</span>
+          </a>
+        </li>
+        <li>
+          <a href="#diary" class="nav-link" data-section="diary">
+            <i data-lucide="clipboard-list"></i>
+            <span class="nav-text">Diario</span>
+          </a>
+        </li>
+        <li>
+          <a href="#files" class="nav-link" data-section="files">
+            <i data-lucide="folder-open"></i>
+            <span class="nav-text">Documentos</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-back-btn" id="btn-back-projects" title="Volver a obras">
+        <i data-lucide="arrow-left"></i>
+        <span class="nav-text">Cambiar obra</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main id="main-content" class="main-content" style="display:none">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Abrir menú">
+        <i data-lucide="menu"></i>
+      </button>
+      <div class="topbar-title">
+        <h1 id="section-title">Vista General</h1>
+        <span class="topbar-project-name" id="topbar-project-name"></span>
+      </div>
+      <div class="topbar-actions">
+        <span class="connection-status" id="connection-status">
+          <i data-lucide="wifi-off" class="status-icon offline"></i>
+          <span class="nav-text">Offline Ready</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- Sections -->
+    <section id="section-overview" class="content-section active">
+      <div class="overview-grid" id="overview-grid"></div>
+    </section>
+    <section id="section-canvas" class="content-section">
+      <div class="canvas-toolbar">
+        <div class="tool-group">
+          <button class="tool-btn active" data-tool="select" title="Seleccionar">
+            <i data-lucide="mouse-pointer-2"></i>
+          </button>
+          <button class="tool-btn" data-tool="hand" title="Mano (Desplazar)">
+            <i data-lucide="hand"></i>
+          </button>
+          <button class="tool-btn" data-tool="draw" title="Redline (Dibujo libre)">
+            <i data-lucide="pencil"></i>
+          </button>
+          <button class="tool-btn" data-tool="arrow" title="Flecha">
+            <i data-lucide="move-right"></i>
+          </button>
+          <button class="tool-btn" data-tool="postit" title="Post-it">
+            <i data-lucide="sticky-note"></i>
+          </button>
+          <button class="tool-btn" data-tool="text" title="Texto">
+            <i data-lucide="type"></i>
+          </button>
+          <button class="tool-btn" data-tool="table" title="Tabla">
+            <i data-lucide="table"></i>
+          </button>
+        </div>
+        <div class="tool-group">
+          <input type="color" id="draw-color" class="color-picker" value="#EF4444" title="Color">
+          <select id="draw-width" class="draw-width" title="Grosor">
+            <option value="2">Fino</option>
+            <option value="4" selected>Normal</option>
+            <option value="8">Grueso</option>
+          </select>
+        </div>
+        <div class="tool-group">
+          <button class="tool-btn" id="btn-undo" title="Deshacer (Ctrl+Z)">
+            <i data-lucide="undo-2"></i>
+          </button>
+          <button class="tool-btn" id="btn-upload-plan" title="Subir plano">
+            <i data-lucide="image-plus"></i>
+          </button>
+          <button class="tool-btn" id="btn-attach-file" title="Adjuntar archivo">
+            <i data-lucide="paperclip"></i>
+          </button>
+          <button class="tool-btn" id="btn-clear-canvas" title="Limpiar canvas">
+            <i data-lucide="trash-2"></i>
+          </button>
+          <button class="tool-btn" id="btn-save-canvas" title="Guardar estado">
+            <i data-lucide="save"></i>
+          </button>
+          <button class="tool-btn" id="btn-export-canvas" title="Exportar imagen">
+            <i data-lucide="download"></i>
+          </button>
+        </div>
+        <div class="tool-group zoom-controls">
+          <button class="tool-btn" id="btn-zoom-out" title="Alejar">
+            <i data-lucide="zoom-out"></i>
+          </button>
+          <span id="zoom-level" class="zoom-level">100%</span>
+          <button class="tool-btn" id="btn-zoom-in" title="Acercar">
+            <i data-lucide="zoom-in"></i>
+          </button>
+          <button class="tool-btn" id="btn-zoom-fit" title="Ajustar">
+            <i data-lucide="maximize-2"></i>
+          </button>
+        </div>
+      </div>
+      <div class="canvas-container">
+        <canvas id="fabric-canvas"></canvas>
+        <!-- Text format toolbar -->
+        <div id="text-format-toolbar" class="text-format-toolbar">
+          <button class="tfmt-btn" id="txt-bold" title="Negrita"><b>B</b></button>
+          <button class="tfmt-btn" id="txt-italic" title="Cursiva"><i>I</i></button>
+          <button class="tfmt-btn" id="txt-underline" title="Subrayado"><u>U</u></button>
+          <button class="tfmt-btn" id="txt-strike" title="Tachado"><s>S</s></button>
+          <span class="tfmt-sep"></span>
+          <button class="tfmt-btn" id="txt-bullet" title="Viñetas">•</button>
+          <button class="tfmt-btn" id="txt-numbered" title="Lista numerada">1.</button>
+          <span class="tfmt-sep"></span>
+          <select id="txt-font-size" class="tfmt-size" title="Tamaño">
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16" selected>16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="28">28</option>
+            <option value="32">32</option>
+            <option value="40">40</option>
+            <option value="48">48</option>
+          </select>
+        </div>
+        <!-- Table edit toolbar -->
+        <div id="table-edit-toolbar" class="table-edit-toolbar">
+          <span class="tbl-info">4×3</span>
+          <span class="tfmt-sep"></span>
+          <button class="tfmt-btn" id="tbl-add-row" title="Añadir fila">
+            <i data-lucide="plus"></i> Fila
+          </button>
+          <button class="tfmt-btn" id="tbl-add-col" title="Añadir columna">
+            <i data-lucide="plus"></i> Col
+          </button>
+          <span class="tfmt-sep"></span>
+          <button class="tfmt-btn" id="tbl-del-row" title="Eliminar última fila">
+            <i data-lucide="minus"></i> Fila
+          </button>
+          <button class="tfmt-btn" id="tbl-del-col" title="Eliminar última columna">
+            <i data-lucide="minus"></i> Col
+          </button>
+          <span class="tfmt-sep"></span>
+          <button class="tfmt-btn tbl-delete-btn" id="tbl-delete" title="Eliminar tabla">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+      <input type="file" id="plan-upload" accept="image/*,.pdf" hidden>
+      <input type="file" id="canvas-file-attach" multiple hidden>
+    </section>
+
+    <section id="section-dashboard" class="content-section">
+      <!-- Dashboard Sub-tabs -->
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-subtab="suppliers">
+          <i data-lucide="users"></i> Proveedores
+        </button>
+        <button class="sub-tab" data-subtab="budgets">
+          <i data-lucide="calculator"></i> Presupuestos
+        </button>
+        <button class="sub-tab" data-subtab="comparator">
+          <i data-lucide="bar-chart-horizontal"></i> Comparador
+        </button>
+      </div>
+
+      <!-- Suppliers Panel -->
+      <div id="panel-suppliers" class="sub-panel active">
+        <div class="panel-header">
+          <h2>Subcontratas y Proveedores</h2>
+          <button class="btn btn-primary" id="btn-add-supplier">
+            <i data-lucide="plus"></i> Nuevo Proveedor
+          </button>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="suppliers-table">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Gremio</th>
+                <th>Contacto</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="suppliers-tbody"></tbody>
+          </table>
+          <div class="empty-state" id="suppliers-empty">
+            <i data-lucide="users"></i>
+            <p>No hay proveedores registrados</p>
+            <button class="btn btn-outline" id="btn-add-supplier-empty">Añadir proveedor</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Budgets Panel -->
+      <div id="panel-budgets" class="sub-panel">
+        <div class="panel-header">
+          <h2>Partidas Presupuestarias</h2>
+          <button class="btn btn-primary" id="btn-add-budget">
+            <i data-lucide="plus"></i> Nueva Partida
+          </button>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="budgets-table">
+            <thead>
+              <tr>
+                <th>Partida</th>
+                <th>Proveedor</th>
+                <th>Previsto</th>
+                <th>Real</th>
+                <th>Beneficio</th>
+                <th>Desviación</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="budgets-tbody"></tbody>
+          </table>
+          <div class="empty-state" id="budgets-empty">
+            <i data-lucide="calculator"></i>
+            <p>No hay partidas presupuestarias</p>
+            <button class="btn btn-outline" id="btn-add-budget-empty">Añadir partida</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparator Panel -->
+      <div id="panel-comparator" class="sub-panel">
+        <div class="panel-header">
+          <h2>Comparador de Desviaciones</h2>
+        </div>
+        <div class="comparator-summary" id="comparator-summary">
+          <div class="summary-card">
+            <span class="summary-label">Presupuesto Total</span>
+            <span class="summary-value" id="total-estimated">€0</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Coste Real</span>
+            <span class="summary-value" id="total-real">€0</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Desviación</span>
+            <span class="summary-value" id="total-deviation">€0</span>
+          </div>
+        </div>
+        <div class="chart-container" id="budget-chart"></div>
+      </div>
+    </section>
+
+    <section id="section-timeline" class="content-section">
+      <div class="panel-header">
+        <h2>Cronograma de Obra</h2>
+        <div class="timeline-actions">
+          <div class="view-toggle">
+            <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt">
+              <i data-lucide="gantt-chart"></i>
+            </button>
+            <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista">
+              <i data-lucide="list"></i>
+            </button>
+          </div>
+          <button class="btn btn-primary" id="btn-add-task">
+            <i data-lucide="plus"></i> Nueva Tarea
+          </button>
+          <button class="btn btn-outline" id="btn-zoom-timeline" title="Ajustar vista">
+            <i data-lucide="calendar"></i> Hoy
+          </button>
+        </div>
+      </div>
+      <div class="timeline-legend">
+        <span class="legend-item"><span class="legend-color" style="background:var(--cyan)"></span> Normal</span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--red)"></span> Ruta Crítica</span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--amber)"></span> Retrasada</span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> Completada</span>
+      </div>
+      <div class="timeline-container" id="timeline-container">
+        <div class="timeline-header" id="timeline-header"></div>
+        <div class="timeline-body" id="timeline-body"></div>
+      </div>
+      <div class="timeline-list-container" id="timeline-list-container">
+        <table class="timeline-table" id="timeline-table">
+          <thead>
+            <tr>
+              <th data-sort="name">Tarea</th>
+              <th data-sort="category">Categoría</th>
+              <th data-sort="responsible">Responsable</th>
+              <th data-sort="startDate">Inicio</th>
+              <th data-sort="endDate">Fin</th>
+              <th data-sort="duration">Duración</th>
+              <th data-sort="progress">Progreso</th>
+              <th>Dependencias</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="timeline-table-body"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="timeline-empty">
+        <i data-lucide="gantt-chart"></i>
+        <p>No hay tareas en el cronograma</p>
+        <button class="btn btn-outline" id="btn-add-task-empty">Crear primera tarea</button>
+      </div>
+    </section>
+
+    <section id="section-diary" class="content-section">
+      <div class="panel-header">
+        <h2>Diario de Incidencias</h2>
+        <div class="diary-actions">
+          <button class="btn btn-primary" id="btn-add-incident">
+            <i data-lucide="plus"></i> Nueva Incidencia
+          </button>
+          <div class="filter-group">
+            <select id="diary-filter" class="filter-select">
+              <option value="all">Todas</option>
+              <option value="pending">Pendientes</option>
+              <option value="in-progress">En proceso</option>
+              <option value="resolved">Resueltas</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="diary-feed" id="diary-feed"></div>
+      <div class="empty-state" id="diary-empty">
+        <i data-lucide="clipboard-list"></i>
+        <p>No hay incidencias registradas</p>
+        <button class="btn btn-outline" id="btn-add-incident-empty">Registrar incidencia</button>
+      </div>
+    </section>
+
+    <section id="section-files" class="content-section">
+      <div class="panel-header">
+        <h2>Documentos de Obra</h2>
+        <div class="files-actions">
+          <button class="btn btn-primary" id="btn-upload-file">
+            <i data-lucide="upload"></i> Subir Documento
+          </button>
+        </div>
+      </div>
+      <div class="files-filter-bar">
+        <select id="files-filter-type" class="filter-select">
+          <option value="all">Todos los tipos</option>
+          <option value="pdf">PDF</option>
+          <option value="image">Imágenes</option>
+          <option value="doc">Documentos</option>
+          <option value="spreadsheet">Hojas de cálculo</option>
+          <option value="other">Otros</option>
+        </select>
+        <select id="files-sort" class="filter-select">
+          <option value="date-desc">Más recientes</option>
+          <option value="date-asc">Más antiguos</option>
+          <option value="name-asc">Nombre A-Z</option>
+          <option value="name-desc">Nombre Z-A</option>
+          <option value="size-desc">Mayor tamaño</option>
+          <option value="size-asc">Menor tamaño</option>
+        </select>
+        <label class="files-group-toggle">
+          <input type="checkbox" id="files-group-by-type" checked>
+          <span>Agrupar por tipo</span>
+        </label>
+      </div>
+      <div class="files-list" id="files-list"></div>
+      <div class="empty-state" id="files-empty">
+        <i data-lucide="folder-open"></i>
+        <p>No hay documentos subidos</p>
+        <button class="btn btn-outline" id="btn-upload-file-empty">Subir primer documento</button>
+      </div>
+      <input type="file" id="file-upload-input" multiple hidden>
+    </section>
+  </main>
+
+  <!-- Modal Template -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal</h3>
+        <button class="modal-close" id="modal-close" aria-label="Cerrar">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/modules/canvas.js"></script>
+  <script src="js/modules/dashboard.js"></script>
+  <script src="js/modules/timeline.js"></script>
+  <script src="js/modules/diary.js"></script>
+  <script src="js/modules/overview.js"></script>
+  <script src="js/modules/files.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      App.init();
+    });
+  </script>
+</body>
+</html>

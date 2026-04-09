@@ -1,0 +1,248 @@
+/* ========================================
+   Files Module - Documentos de Obra
+   Gestión de archivos (PDF, imágenes, docs, etc.)
+   ======================================== */
+
+const FilesModule = (() => {
+  let projectId = null;
+
+  const FILE_TYPES = {
+    'application/pdf': { icon: 'file-text', class: 'pdf', label: 'PDF' },
+    'image/jpeg': { icon: 'image', class: 'image', label: 'Imagen' },
+    'image/png': { icon: 'image', class: 'image', label: 'Imagen' },
+    'image/webp': { icon: 'image', class: 'image', label: 'Imagen' },
+    'image/gif': { icon: 'image', class: 'image', label: 'Imagen' },
+    'application/msword': { icon: 'file-text', class: 'doc', label: 'Doc' },
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { icon: 'file-text', class: 'doc', label: 'Doc' },
+    'application/vnd.ms-excel': { icon: 'table', class: 'spreadsheet', label: 'Excel' },
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'table', class: 'spreadsheet', label: 'Excel' },
+    'text/plain': { icon: 'file-text', class: 'doc', label: 'Texto' },
+    'application/zip': { icon: 'archive', class: 'other', label: 'ZIP' }
+  };
+
+  const CATEGORIES = {
+    pdf:         { label: 'PDF',              icon: 'file-text',  match: f => f.type === 'application/pdf' },
+    image:       { label: 'Imágenes',         icon: 'image',      match: f => f.type.startsWith('image/') },
+    doc:         { label: 'Documentos',       icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
+    spreadsheet: { label: 'Hojas de cálculo', icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
+    other:       { label: 'Otros',            icon: 'file',       match: () => true }
+  };
+
+  function getCategory(f) {
+    for (const [key, cat] of Object.entries(CATEGORIES)) {
+      if (key !== 'other' && cat.match(f)) return key;
+    }
+    return 'other';
+  }
+
+  function getFileInfo(mimeType) {
+    return FILE_TYPES[mimeType] || { icon: 'file', class: 'other', label: 'Archivo' };
+  }
+
+  function init(pid) {
+    projectId = pid;
+    setupButtons();
+    loadFiles();
+  }
+
+  function setupButtons() {
+    const uploadBtn = document.getElementById('btn-upload-file');
+    const fileInput = document.getElementById('file-upload-input');
+    const filterSel = document.getElementById('files-filter-type');
+    const sortSel = document.getElementById('files-sort');
+    const groupChk = document.getElementById('files-group-by-type');
+
+    // Clone file input first so button handlers reference the new element
+    const newInput = fileInput.cloneNode(true);
+    fileInput.parentNode.replaceChild(newInput, fileInput);
+    newInput.addEventListener('change', handleFileUpload);
+
+    // Clone to remove old listeners
+    const newUpload = uploadBtn.cloneNode(true);
+    uploadBtn.parentNode.replaceChild(newUpload, uploadBtn);
+    newUpload.addEventListener('click', () => newInput.click());
+
+    const emptyBtn = document.getElementById('btn-upload-file-empty');
+    if (emptyBtn) {
+      const newEmpty = emptyBtn.cloneNode(true);
+      emptyBtn.parentNode.replaceChild(newEmpty, emptyBtn);
+      newEmpty.addEventListener('click', () => newInput.click());
+    }
+
+    // Filter
+    const newFilter = filterSel.cloneNode(true);
+    filterSel.parentNode.replaceChild(newFilter, filterSel);
+    newFilter.addEventListener('change', loadFiles);
+
+    // Sort
+    const newSort = sortSel.cloneNode(true);
+    sortSel.parentNode.replaceChild(newSort, sortSel);
+    newSort.addEventListener('change', loadFiles);
+
+    // Group toggle
+    const newGroup = groupChk.cloneNode(true);
+    groupChk.parentNode.replaceChild(newGroup, groupChk);
+    newGroup.addEventListener('change', loadFiles);
+  }
+
+  async function handleFileUpload(e) {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      // Max 50 MB per file
+      if (file.size > 50 * 1024 * 1024) {
+        App.toast(`${file.name} excede 50MB`, 'warning');
+        continue;
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+
+      const record = {
+        projectId,
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        data: arrayBuffer,
+        uploadedAt: new Date().toISOString()
+      };
+
+      await DB.add('files', record);
+    }
+
+    App.toast(`${files.length} archivo(s) subido(s)`, 'success');
+    e.target.value = '';
+    loadFiles();
+  }
+
+  async function loadFiles() {
+    const filter = document.getElementById('files-filter-type').value;
+    const sort = document.getElementById('files-sort').value;
+    const grouped = document.getElementById('files-group-by-type').checked;
+    let files = await DB.getAllForProject('files', projectId);
+
+    // Filter
+    if (filter === 'pdf') {
+      files = files.filter(f => f.type === 'application/pdf');
+    } else if (filter === 'image') {
+      files = files.filter(f => f.type.startsWith('image/'));
+    } else if (filter === 'doc') {
+      files = files.filter(f => f.type.includes('word') || f.type === 'text/plain');
+    } else if (filter === 'spreadsheet') {
+      files = files.filter(f => f.type.includes('excel') || f.type.includes('spreadsheet'));
+    } else if (filter === 'other') {
+      files = files.filter(f => getCategory(f) === 'other');
+    }
+
+    // Sort
+    switch (sort) {
+      case 'date-desc': files.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)); break;
+      case 'date-asc':  files.sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt)); break;
+      case 'name-asc':  files.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'name-desc': files.sort((a, b) => b.name.localeCompare(a.name)); break;
+      case 'size-desc': files.sort((a, b) => b.size - a.size); break;
+      case 'size-asc':  files.sort((a, b) => a.size - b.size); break;
+    }
+
+    renderFileList(files, grouped);
+  }
+
+  function renderFileList(files, grouped) {
+    const list = document.getElementById('files-list');
+    const empty = document.getElementById('files-empty');
+
+    if (files.length === 0) {
+      list.style.display = 'none';
+      empty.style.display = 'flex';
+      return;
+    }
+
+    list.style.display = 'flex';
+    empty.style.display = 'none';
+
+    if (grouped) {
+      // Group files by category, maintaining order of CATEGORIES
+      const groups = {};
+      for (const f of files) {
+        const cat = getCategory(f);
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(f);
+      }
+
+      let html = '';
+      for (const [key, cat] of Object.entries(CATEGORIES)) {
+        const items = groups[key];
+        if (!items || items.length === 0) continue;
+        html += `
+          <div class="files-category">
+            <div class="files-category-header">
+              <i data-lucide="${cat.icon}"></i>
+              <span>${cat.label}</span>
+              <span class="files-category-count">${items.length}</span>
+            </div>
+            <div class="files-category-items">
+              ${items.map(f => renderFileItem(f)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      list.innerHTML = html;
+    } else {
+      list.innerHTML = files.map(f => renderFileItem(f)).join('');
+    }
+
+    lucide.createIcons();
+  }
+
+  function renderFileItem(f) {
+    const info = getFileInfo(f.type);
+    const sizeStr = formatFileSize(f.size);
+    return `
+      <div class="file-item">
+        <div class="file-icon ${info.class}">
+          <i data-lucide="${info.icon}"></i>
+        </div>
+        <div class="file-info">
+          <div class="file-name">${App.escapeHTML(f.name)}</div>
+          <div class="file-meta">${info.label} · ${sizeStr} · ${App.formatDate(f.uploadedAt)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="Descargar">
+            <i data-lucide="download"></i>
+          </button>
+          <button class="action-btn delete" onclick="FilesModule.deleteFile(${f.id})" title="Eliminar">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function downloadFile(id) {
+    const file = await DB.getById('files', id);
+    if (!file) return;
+
+    const blob = new Blob([file.data], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function deleteFile(id) {
+    if (!confirm('¿Eliminar este archivo?')) return;
+    await DB.remove('files', id);
+    App.toast('Archivo eliminado', 'info');
+    loadFiles();
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  return { init, downloadFile, deleteFile };
+})();
