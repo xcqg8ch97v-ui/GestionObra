@@ -113,10 +113,18 @@ const App = (() => {
     grid.innerHTML = projects.map(p => {
       const statusClass = p.status === 'active' ? 'badge-active' : p.status === 'finished' ? 'badge-positive' : 'badge-pending';
       const statusLabel = p.status === 'active' ? 'Activa' : p.status === 'finished' ? 'Finalizada' : 'En pausa';
+      const photoHTML = p.clientPhoto
+        ? `<img class="project-card-photo" src="${p.clientPhoto}" alt="">`
+        : '';
       return `
         <div class="project-card" onclick="App.enterProject(${p.id})">
-          <div class="project-card-name">${escapeHTML(p.name)}</div>
-          <div class="project-card-client">${escapeHTML(p.client || 'Sin cliente')}</div>
+          <div class="project-card-header">
+            ${photoHTML}
+            <div>
+              <div class="project-card-name">${escapeHTML(p.name)}</div>
+              <div class="project-card-client">${escapeHTML(p.client || 'Sin cliente')}</div>
+            </div>
+          </div>
           <div class="project-card-meta">
             <span class="badge ${statusClass}">${statusLabel}</span>
             <span class="project-card-date">${formatDate(p.createdAt)}</span>
@@ -143,6 +151,7 @@ const App = (() => {
     const isEdit = project && project.id;
     const title = isEdit ? 'Editar Obra' : 'Nueva Obra';
 
+    const hasPhoto = isEdit && project.clientPhoto;
     const body = `
       <div class="form-group">
         <label>Nombre de la Obra *</label>
@@ -151,6 +160,19 @@ const App = (() => {
       <div class="form-group">
         <label>Cliente</label>
         <input type="text" id="proj-client" value="${isEdit ? escapeHTML(project.client || '') : ''}" placeholder="Nombre del cliente">
+      </div>
+      <div class="form-group">
+        <label>Foto / Logo del cliente</label>
+        <div class="client-photo-upload">
+          <div class="client-photo-preview" id="proj-photo-preview" ${hasPhoto ? 'style="background-image:url(' + project.clientPhoto + ')"' : ''}>
+            ${hasPhoto ? '' : '<i data-lucide="camera"></i><span>Subir foto</span>'}
+          </div>
+          <input type="file" id="proj-photo-input" accept="image/*" style="display:none">
+          <div class="client-photo-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-proj-photo">Elegir imagen</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-proj-photo-remove" style="display:${hasPhoto ? 'inline-flex' : 'none'}">Quitar</button>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Dirección</label>
@@ -179,6 +201,42 @@ const App = (() => {
 
     openModal(title, body, footer);
 
+    // Client photo upload logic
+    let clientPhotoData = isEdit ? (project.clientPhoto || null) : null;
+    const photoPreview = document.getElementById('proj-photo-preview');
+    const photoInput = document.getElementById('proj-photo-input');
+    const btnPhoto = document.getElementById('btn-proj-photo');
+    const btnPhotoRemove = document.getElementById('btn-proj-photo-remove');
+
+    btnPhoto.addEventListener('click', () => photoInput.click());
+    photoPreview.addEventListener('click', () => photoInput.click());
+
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        toast('La imagen no puede superar 2 MB', 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        clientPhotoData = ev.target.result;
+        photoPreview.style.backgroundImage = `url(${clientPhotoData})`;
+        photoPreview.innerHTML = '';
+        btnPhotoRemove.style.display = 'inline-flex';
+      };
+      reader.readAsDataURL(file);
+      photoInput.value = '';
+    });
+
+    btnPhotoRemove.addEventListener('click', () => {
+      clientPhotoData = null;
+      photoPreview.style.backgroundImage = '';
+      photoPreview.innerHTML = '<i data-lucide="camera"></i><span>Subir foto</span>';
+      btnPhotoRemove.style.display = 'none';
+      safeIcons();
+    });
+
     document.getElementById('btn-save-project').addEventListener('click', async () => {
       const name = document.getElementById('proj-name').value.trim();
       if (!name) { toast('El nombre es obligatorio', 'warning'); return; }
@@ -186,6 +244,7 @@ const App = (() => {
       const data = {
         name,
         client: document.getElementById('proj-client').value.trim(),
+        clientPhoto: clientPhotoData || null,
         address: document.getElementById('proj-address').value.trim(),
         status: document.getElementById('proj-status').value,
         notes: document.getElementById('proj-notes').value.trim(),

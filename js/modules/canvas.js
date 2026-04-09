@@ -218,7 +218,8 @@ const CanvasModule = (() => {
       }
 
       if (currentTool === 'table') {
-        addTable(opt.e.clientX, opt.e.clientY);
+        const p = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : opt.e;
+        addTable(p.clientX, p.clientY);
         setTool('select');
       }
     });
@@ -305,6 +306,30 @@ const CanvasModule = (() => {
           showCanvasFileMenu(opt.e.clientX, opt.e.clientY, target);
         }
       }
+    });
+
+    // Long-press on touch to open file context menu
+    let fileLongPressTimer = null;
+    let fileLongPressTarget = null;
+    canvas.on('mouse:down', (opt) => {
+      if (!opt.e.touches || opt.e.touches.length !== 1) return;
+      const target = canvas.findTarget(opt.e, false);
+      if (target && target._isAttachedFile) {
+        fileLongPressTarget = target;
+        fileLongPressTimer = setTimeout(() => {
+          const touch = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : opt.e;
+          canvas.setActiveObject(fileLongPressTarget);
+          canvas.requestRenderAll();
+          showCanvasFileMenu(touch.clientX, touch.clientY, fileLongPressTarget);
+          fileLongPressTarget = null;
+        }, 600);
+      }
+    });
+    canvas.on('mouse:move', () => {
+      if (fileLongPressTimer) { clearTimeout(fileLongPressTimer); fileLongPressTimer = null; }
+    });
+    canvas.on('mouse:up', () => {
+      if (fileLongPressTimer) { clearTimeout(fileLongPressTimer); fileLongPressTimer = null; }
     });
 
     // Prevent default context menu on the upper canvas
@@ -1576,16 +1601,29 @@ const CanvasModule = (() => {
       } else if (action === 'rename') {
         const newName = prompt('Nombre del archivo:', target._attachedFileName || '');
         if (newName && newName.trim()) {
-          target._attachedFileName = newName.trim();
-          // Update label in group
+          const trimmed = newName.trim();
+          target._attachedFileName = trimmed;
+          // Update label in group — find the smallest-font text (the label, not the emoji)
           if (target.type === 'group') {
             const objs = target.getObjects();
-            const label = objs.find(o => o.type === 'text' || o.type === 'i-text');
+            const textObjs = objs.filter(o => o.type === 'text' && o.fontFamily);
+            const label = textObjs.length > 0 ? textObjs[textObjs.length - 1] : null;
             if (label) {
-              label.set('text', newName.trim().length > 18 ? newName.trim().slice(0, 16) + '…' : newName.trim());
+              const maxLen = target._isImagePreview ? 28 : 22;
+              const display = trimmed.length > maxLen ? trimmed.substring(0, maxLen - 3) + '...' : trimmed;
+              label.set('text', display);
               canvas.requestRenderAll();
             }
           }
+          // Also update the file record name in DB
+          try {
+            const fileRec = await DB.getById('files', target._attachedFileId);
+            if (fileRec) {
+              fileRec.name = trimmed;
+              await DB.put('files', fileRec);
+            }
+          } catch(e) { /* ignore if file not found */ }
+          saveHistory();
         }
       } else if (action === 'delete') {
         canvas.remove(target);

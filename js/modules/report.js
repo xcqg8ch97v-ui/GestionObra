@@ -85,6 +85,18 @@ const ReportModule = (() => {
       doc.setFillColor(...darkBg);
       doc.rect(0, 0, pageW, pageH, 'F');
 
+      // Client photo (circular, top of cover)
+      if (project.clientPhoto) {
+        try {
+          const photoSize = 30;
+          doc.addImage(project.clientPhoto, 'JPEG', pageW / 2 - photoSize / 2, 16, photoSize, photoSize);
+          // Circular mask overlay: draw dark rectangles around to simulate circle
+          doc.setFillColor(...darkBg);
+          // top-left corner
+          doc.setDrawColor(...darkBg);
+        } catch(e) { /* ignore if image fails */ }
+      }
+
       // Brand bar
       doc.setFillColor(...brandYellow);
       doc.rect(0, 55, pageW, 3, 'F');
@@ -100,12 +112,19 @@ const ReportModule = (() => {
       doc.setTextColor(...brandYellow);
       doc.text(project.name || 'Sin nombre', pageW / 2, 95, { align: 'center' });
 
+      // Client name under project
+      if (project.client) {
+        doc.setFontSize(12);
+        doc.setTextColor(...textSec);
+        doc.text(project.client, pageW / 2, 103, { align: 'center' });
+      }
+
       // Date
       doc.setFontSize(12);
       doc.setTextColor(...textSec);
       doc.text(new Date().toLocaleDateString('es-ES', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-      }), pageW / 2, 110, { align: 'center' });
+      }), pageW / 2, project.client ? 115 : 110, { align: 'center' });
 
       // Summary box
       const summaryY = 135;
