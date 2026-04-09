@@ -158,6 +158,26 @@ const PlansModule = (() => {
       if (blob && file.type && file.type.startsWith('image/')) {
         const url = URL.createObjectURL(blob);
         thumbHTML = `<img src="${url}" alt="${App.escapeHTML(plan.name)}" class="plan-thumb" loading="lazy">`;
+      } else if (blob && file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+        // Render first page of PDF as thumbnail
+        try {
+          const arrayBuf = await blob.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+          const page = await pdf.getPage(1);
+          const vp = page.getViewport({ scale: 1 });
+          const scale = Math.min(400 / vp.width, 300 / vp.height);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/png');
+          thumbHTML = `<img src="${dataUrl}" alt="${App.escapeHTML(plan.name)}" class="plan-thumb" loading="lazy">`;
+        } catch(e) {
+          console.warn('PDF thumb error:', e);
+          thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="file-text"></i><span>PDF</span></div>`;
+        }
       } else if (file.type === 'application/pdf') {
         thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="file-text"></i><span>PDF</span></div>`;
       }
