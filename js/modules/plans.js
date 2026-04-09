@@ -331,6 +331,7 @@ const PlansModule = (() => {
   function setupViewer() {
     const overlay = document.getElementById('plan-viewer-overlay');
     document.getElementById('plan-viewer-close').addEventListener('click', closeViewer);
+    document.getElementById('plan-viewer-download').addEventListener('click', downloadCurrentPlan);
     document.getElementById('plan-viewer-zoom-in').addEventListener('click', () => setZoom(viewerZoom * 1.3));
     document.getElementById('plan-viewer-zoom-out').addEventListener('click', () => setZoom(viewerZoom / 1.3));
     document.getElementById('plan-viewer-fit').addEventListener('click', () => setZoom(1));
@@ -417,6 +418,21 @@ const PlansModule = (() => {
     viewerZoom = Math.max(0.1, Math.min(z, 10));
     const imgs = document.querySelectorAll('#plan-viewer-body img');
     imgs.forEach(img => img.style.transform = `scale(${viewerZoom})`);
+  }
+
+  async function downloadCurrentPlan() {
+    const plan = viewerPlans[viewerIndex];
+    if (!plan) return;
+    const file = await DB.getFile(plan.fileId);
+    if (!file) { App.toast('Archivo no encontrado', 'error'); return; }
+    const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name || plan.name + (file.type === 'application/pdf' ? '.pdf' : '.png');
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function renderViewerContent() {
