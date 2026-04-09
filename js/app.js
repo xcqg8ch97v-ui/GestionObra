@@ -10,6 +10,7 @@ const App = (() => {
     dashboard: 'Proveedores y Presupuestos',
     timeline: 'Cronograma de Obra',
     diary: 'Diario de Obra',
+    plans: 'Planos de Obra',
     files: 'Documentos de Obra',
     participants: 'Participantes de la Obra'
   };
@@ -375,7 +376,7 @@ const App = (() => {
 
     toast('Exportando obra...', 'info');
 
-    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'participants'];
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'participants', 'plans'];
     const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
     let incidents = [];
 
@@ -441,7 +442,7 @@ const App = (() => {
         const newProjectId = await DB.add('projects', projData);
 
         // Import each store with updated projectId
-        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants'];
+        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants', 'plans'];
         const idMap = {}; // old ID -> new ID mapping for references
 
         for (const store of STORES) {
@@ -511,6 +512,20 @@ const App = (() => {
           }
         }
 
+        // Fix plan fileId references
+        if (data.plans) {
+          for (const oldPlan of data.plans) {
+            if (oldPlan.fileId) {
+              const newPlanId = idMap.plans[oldPlan.id];
+              const plan = await DB.getById('plans', newPlanId);
+              if (plan) {
+                plan.fileId = idMap.files[oldPlan.fileId] || plan.fileId;
+                await DB.put('plans', plan);
+              }
+            }
+          }
+        }
+
         // Import canvas state (multi-sheet or legacy)
         if (data.canvasSheetIndex && data.canvasSheets) {
           const newSheets = data.canvasSheetIndex.map(s => ({ ...s }));
@@ -571,6 +586,7 @@ const App = (() => {
       ['TimelineModule', TimelineModule],
       ['DiaryModule', DiaryModule],
       ['OverviewModule', OverviewModule],
+      ['PlansModule', typeof PlansModule !== 'undefined' ? PlansModule : null],
       ['FilesModule', FilesModule],
       ['ParticipantsModule', typeof ParticipantsModule !== 'undefined' ? ParticipantsModule : null],
       ['ReportModule', typeof ReportModule !== 'undefined' ? ReportModule : null]

@@ -5,7 +5,7 @@
 
 const DB = (() => {
   const DB_NAME = 'GestionObraDB';
-  const DB_VERSION = 4;
+  const DB_VERSION = 5;
   let db = null;
 
   function open() {
@@ -100,6 +100,13 @@ const DB = (() => {
           const store = database.createObjectStore('participants', { keyPath: 'id', autoIncrement: true });
           store.createIndex('projectId', 'projectId', { unique: false });
           store.createIndex('type', 'type', { unique: false });
+        }
+
+        // Planos de obra
+        if (!database.objectStoreNames.contains('plans')) {
+          const store = database.createObjectStore('plans', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('projectId', 'projectId', { unique: false });
+          store.createIndex('category', 'category', { unique: false });
         }
       };
 

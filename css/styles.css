@@ -3918,3 +3918,221 @@ body.is-resizing-timeline-label {
     min-width: 120px;
   }
 }
+
+/* ========================================
+   PLANS MODULE - Planos de Obra
+   ======================================== */
+
+.plans-categories {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-md);
+  padding: 0 var(--sp-md);
+}
+
+.plans-cat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.plans-cat-btn:hover {
+  border-color: var(--primary);
+  background: var(--bg-primary);
+}
+.plans-cat-btn.active {
+  background: var(--primary);
+  color: var(--primary-contrast, #000);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+.plans-cat-btn svg { width: 14px; height: 14px; }
+.plans-cat-count {
+  background: rgba(0,0,0,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.plans-cat-btn.active .plans-cat-count {
+  background: rgba(0,0,0,0.2);
+}
+
+.plans-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-md);
+  padding: 0 var(--sp-md) var(--sp-md);
+}
+
+.plan-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.plan-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.plan-card-thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+.plan-card-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  transition: background 0.2s;
+}
+.plan-card-thumb:hover::after {
+  background: rgba(0,0,0,0.08);
+}
+.plan-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.plan-thumb-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+.plan-thumb-pdf svg { width: 40px; height: 40px; }
+
+.plan-card-info {
+  padding: 10px 12px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-card-name {
+  flex: 1;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-card-cat { font-size: 0.7rem; }
+
+.plan-card-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 10px;
+  justify-content: flex-end;
+}
+
+/* ---- Plan Viewer Lightbox ---- */
+
+.plan-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.92);
+  display: none;
+  flex-direction: column;
+}
+.plan-viewer-overlay.active {
+  display: flex;
+}
+
+.plan-viewer-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+.plan-viewer-title {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 12px;
+}
+.plan-viewer-controls {
+  display: flex;
+  gap: 4px;
+}
+.plan-viewer-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.plan-viewer-btn:hover { background: rgba(255,255,255,0.25); }
+.plan-viewer-btn svg { width: 18px; height: 18px; }
+.plan-viewer-close { background: rgba(255,60,60,0.3); }
+.plan-viewer-close:hover { background: rgba(255,60,60,0.6); }
+
+.plan-viewer-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+}
+.plan-viewer-body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 0.15s;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+@media (max-width: 640px) {
+  .plans-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--sp-sm);
+    padding: 0 var(--sp-sm) var(--sp-sm);
+  }
+  .plans-categories {
+    padding: 0 var(--sp-sm);
+    margin-bottom: var(--sp-sm);
+  }
+  .plan-viewer-topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .plan-viewer-title {
+    width: 100%;
+    text-align: center;
+  }
+  .plan-viewer-controls {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -85,6 +85,12 @@
           </a>
         </li>
         <li>
+          <a href="#plans" class="nav-link" data-section="plans">
+            <i data-lucide="map"></i>
+            <span class="nav-text">Planos</span>
+          </a>
+        </li>
+        <li>
           <a href="#files" class="nav-link" data-section="files">
             <i data-lucide="folder-open"></i>
             <span class="nav-text">Documentos</span>
@@ -529,6 +535,42 @@
       </div>
     </section>
 
+    <section id="section-plans" class="content-section">
+      <div class="panel-header">
+        <h2>Planos de Obra</h2>
+        <div class="plans-actions">
+          <button class="btn btn-primary" id="btn-upload-plan">
+            <i data-lucide="upload"></i> Subir Plano
+          </button>
+        </div>
+      </div>
+      <div class="plans-categories" id="plans-categories"></div>
+      <div class="plans-gallery" id="plans-gallery"></div>
+      <div class="empty-state" id="plans-empty">
+        <i data-lucide="map"></i>
+        <p>No hay planos subidos</p>
+        <small style="color:var(--text-muted)">Sube imágenes o PDFs de planos: arquitectura, estructura, instalaciones…</small>
+        <button class="btn btn-outline" id="btn-upload-plan-empty">Subir primer plano</button>
+      </div>
+      <input type="file" id="plan-file-input" accept="image/*,application/pdf" multiple hidden>
+    </section>
+
+    <!-- Plan Viewer Lightbox -->
+    <div class="plan-viewer-overlay" id="plan-viewer-overlay">
+      <div class="plan-viewer-topbar">
+        <span class="plan-viewer-title" id="plan-viewer-title"></span>
+        <div class="plan-viewer-controls">
+          <button class="plan-viewer-btn" id="plan-viewer-zoom-in" title="Ampliar"><i data-lucide="zoom-in"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-zoom-out" title="Reducir"><i data-lucide="zoom-out"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-fit" title="Ajustar"><i data-lucide="maximize-2"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-prev" title="Anterior"><i data-lucide="chevron-left"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-next" title="Siguiente"><i data-lucide="chevron-right"></i></button>
+          <button class="plan-viewer-btn plan-viewer-close" id="plan-viewer-close" title="Cerrar"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <div class="plan-viewer-body" id="plan-viewer-body"></div>
+    </div>
+
     <section id="section-files" class="content-section">
       <div class="panel-header">
         <h2>Documentos de Obra</h2>
@@ -650,6 +692,7 @@
   <script src="js/modules/timeline.js"></script>
   <script src="js/modules/diary.js"></script>
   <script src="js/modules/overview.js"></script>
+  <script src="js/modules/plans.js"></script>
   <script src="js/modules/files.js"></script>
   <script src="js/modules/participants.js"></script>
   <script src="js/modules/report.js"></script>
