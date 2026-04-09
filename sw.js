@@ -3,7 +3,7 @@
    Cache-first strategy for offline support
    ======================================== */
 
-const CACHE_NAME = 'gestion-obra-v5';
+const CACHE_NAME = 'gestion-obra-v7';
 const ASSETS = [
   './',
   './index.html',

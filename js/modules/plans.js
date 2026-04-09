@@ -51,7 +51,7 @@ const PlansModule = (() => {
     document.getElementById('plan-file-input').onchange = handleUpload;
 
     const triggerUpload = () => document.getElementById('plan-file-input').click();
-    const btnUpload = document.getElementById('btn-upload-plan');
+    const btnUpload = document.getElementById('btn-upload-plan-section');
     if (btnUpload) btnUpload.onclick = triggerUpload;
     const btnEmpty = document.getElementById('btn-upload-plan-empty');
     if (btnEmpty) btnEmpty.onclick = triggerUpload;
@@ -150,6 +150,38 @@ const PlansModule = (() => {
     try { lucide.createIcons(); } catch(e) {}
   }
 
+  async function buildCardHTML(plan, idx) {
+    const file = await DB.getFile(plan.fileId);
+    let thumbHTML = '';
+    if (file) {
+      const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type || 'image/*' }) : null);
+      if (blob && file.type && file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(blob);
+        thumbHTML = `<img src="${url}" alt="${App.escapeHTML(plan.name)}" class="plan-thumb" loading="lazy">`;
+      } else if (file.type === 'application/pdf') {
+        thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="file-text"></i><span>PDF</span></div>`;
+      }
+    }
+    if (!thumbHTML) {
+      thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="image"></i></div>`;
+    }
+
+    const catObj = PLAN_CATEGORIES.find(c => c.key === plan.category) || PLAN_CATEGORIES[PLAN_CATEGORIES.length - 1];
+
+    return `
+      <div class="plan-card" data-plan-idx="${idx}">
+        <div class="plan-card-thumb" data-plan-id="${plan.id}">${thumbHTML}</div>
+        <div class="plan-card-info">
+          <strong class="plan-card-name">${App.escapeHTML(plan.name)}</strong>
+          <span class="badge badge-neutral plan-card-cat">${catObj.label}</span>
+        </div>
+        <div class="plan-card-actions">
+          <button class="action-btn plan-edit-btn" data-id="${plan.id}" title="Editar nombre/categoría"><i data-lucide="pencil"></i></button>
+          <button class="action-btn delete plan-delete-btn" data-id="${plan.id}" title="Eliminar"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`;
+  }
+
   async function renderGallery() {
     const gallery = document.getElementById('plans-gallery');
     const empty = document.getElementById('plans-empty');
@@ -163,48 +195,44 @@ const PlansModule = (() => {
       gallery.style.display = 'none';
       empty.style.display = allPlans.length === 0 ? 'flex' : 'none';
       if (allPlans.length > 0 && filtered.length === 0) {
-        gallery.style.display = 'flex';
-        gallery.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>No hay planos en esta categoría</p></div>';
+        gallery.style.display = 'block';
+        gallery.innerHTML = '<div class="empty-state"><p>No hay planos en esta categoría</p></div>';
       }
       return;
     }
 
-    gallery.style.display = 'grid';
     empty.style.display = 'none';
 
-    const cards = await Promise.all(filtered.map(async (plan, idx) => {
-      const file = await DB.getFile(plan.fileId);
-      let thumbHTML = '';
-      if (file) {
-        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type || 'image/*' }) : null);
-        if (blob && file.type && file.type.startsWith('image/')) {
-          const url = URL.createObjectURL(blob);
-          thumbHTML = `<img src="${url}" alt="${App.escapeHTML(plan.name)}" class="plan-thumb" loading="lazy">`;
-        } else if (file.type === 'application/pdf') {
-          thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="file-text"></i><span>PDF</span></div>`;
-        }
+    // Grouped view when showing all categories
+    if (activeCategory === '__all__') {
+      gallery.style.display = 'block';
+      let html = '';
+      let globalIdx = 0;
+
+      for (const cat of PLAN_CATEGORIES) {
+        const catPlans = filtered.filter(p => p.category === cat.key);
+        if (catPlans.length === 0) continue;
+
+        const cards = await Promise.all(catPlans.map((plan) => buildCardHTML(plan, globalIdx++)));
+
+        html += `
+          <div class="plans-group">
+            <div class="plans-group-header">
+              <i data-lucide="${cat.icon}"></i>
+              <h3>${cat.label}</h3>
+              <span class="plans-group-count">${catPlans.length}</span>
+            </div>
+            <div class="plans-group-grid">${cards.join('')}</div>
+          </div>`;
       }
-      if (!thumbHTML) {
-        thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="image"></i></div>`;
-      }
 
-      const catObj = PLAN_CATEGORIES.find(c => c.key === plan.category) || PLAN_CATEGORIES[PLAN_CATEGORIES.length - 1];
-
-      return `
-        <div class="plan-card" data-plan-idx="${idx}">
-          <div class="plan-card-thumb" data-plan-id="${plan.id}">${thumbHTML}</div>
-          <div class="plan-card-info">
-            <strong class="plan-card-name">${App.escapeHTML(plan.name)}</strong>
-            <span class="badge badge-neutral plan-card-cat">${catObj.label}</span>
-          </div>
-          <div class="plan-card-actions">
-            <button class="action-btn plan-edit-btn" data-id="${plan.id}" title="Editar nombre/categoría"><i data-lucide="pencil"></i></button>
-            <button class="action-btn delete plan-delete-btn" data-id="${plan.id}" title="Eliminar"><i data-lucide="trash-2"></i></button>
-          </div>
-        </div>`;
-    }));
-
-    gallery.innerHTML = cards.join('');
+      gallery.innerHTML = html;
+    } else {
+      // Single category — flat grid
+      gallery.style.display = 'grid';
+      const cards = await Promise.all(filtered.map((plan, idx) => buildCardHTML(plan, idx)));
+      gallery.innerHTML = cards.join('');
+    }
 
     // Bind thumbnail click → viewer
     gallery.querySelectorAll('.plan-card-thumb').forEach((thumb, i) => {
