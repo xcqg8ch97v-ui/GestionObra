@@ -4109,10 +4109,12 @@ body.is-resizing-timeline-label {
 .plan-viewer-body {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: auto;
   padding: 16px;
+  gap: 8px;
 }
 .plan-viewer-body img {
   max-width: 100%;
@@ -4122,6 +4124,17 @@ body.is-resizing-timeline-label {
   transition: transform 0.15s;
   user-select: none;
   -webkit-user-drag: none;
+}
+/* Single image: center vertically */
+.plan-viewer-body img:only-child {
+  margin: auto;
+}
+/* Multi-page PDF: full-width pages with shadow separators */
+.plan-viewer-page {
+  max-width: 100%;
+  width: auto;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  border-radius: 4px;
 }
 
 @media (max-width: 640px) {

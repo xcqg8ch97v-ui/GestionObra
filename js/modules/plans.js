@@ -415,8 +415,8 @@ const PlansModule = (() => {
   function setZoom(z) {
     if (annoMode) return;
     viewerZoom = Math.max(0.1, Math.min(z, 10));
-    const img = document.querySelector('#plan-viewer-body img');
-    if (img) img.style.transform = `scale(${viewerZoom})`;
+    const imgs = document.querySelectorAll('#plan-viewer-body img');
+    imgs.forEach(img => img.style.transform = `scale(${viewerZoom})`);
   }
 
   async function renderViewerContent() {
@@ -437,16 +437,48 @@ const PlansModule = (() => {
       return;
     }
 
-    // Show annotate button only for images
+    // Show annotate button for images and PDFs (rendered as image)
     const annoBtn = document.getElementById('plan-viewer-annotate');
-    annoBtn.style.display = (file.type && file.type.startsWith('image/')) ? '' : 'none';
+    const isImage = file.type && file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    annoBtn.style.display = (isImage || isPDF) ? '' : 'none';
 
-    if (file.type && file.type.startsWith('image/')) {
+    if (isImage) {
       const url = URL.createObjectURL(blob);
       body.innerHTML = `<img src="${url}" alt="${App.escapeHTML(plan.name)}" style="transform:scale(${viewerZoom})" draggable="false">`;
-    } else if (file.type === 'application/pdf') {
+    } else if (isPDF && typeof pdfjsLib !== 'undefined') {
+      // Render PDF pages as images for viewing and annotation support
+      try {
+        const arrayBuf = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+        const numPages = pdf.numPages;
+        let pagesHTML = '';
+        for (let i = 1; i <= numPages; i++) {
+          const page = await pdf.getPage(i);
+          const vp = page.getViewport({ scale: 1 });
+          const scale = Math.min(1200 / vp.width, 2);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/png');
+          pagesHTML += `<img src="${dataUrl}" alt="Página ${i}" class="plan-viewer-page" style="transform:scale(${viewerZoom})" draggable="false">`;
+        }
+        body.innerHTML = pagesHTML;
+        // Store rendered data URL for annotation use
+        body.dataset.pdfRendered = 'true';
+      } catch(e) {
+        console.warn('PDF render error:', e);
+        const url = URL.createObjectURL(blob);
+        body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>`;
+        annoBtn.style.display = 'none';
+      }
+    } else if (isPDF) {
       const url = URL.createObjectURL(blob);
       body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>`;
+      annoBtn.style.display = 'none';
     } else {
       body.innerHTML = '<p style="color:#fff;text-align:center">Vista previa no disponible para este tipo de archivo</p>';
     }
@@ -459,7 +491,11 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
     const file = await DB.getFile(plan.fileId);
-    if (!file || !file.type || !file.type.startsWith('image/')) return;
+    if (!file) return;
+
+    const isImage = file.type && file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    if (!isImage && !isPDF) return;
 
     annoMode = true;
     annoHistory = [];
@@ -472,12 +508,37 @@ const PlansModule = (() => {
     });
 
     const body = document.getElementById('plan-viewer-body');
-    const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-    const url = URL.createObjectURL(blob);
+    let bgUrl;
+
+    if (isImage) {
+      const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+      bgUrl = URL.createObjectURL(blob);
+    } else if (isPDF) {
+      // Use the first rendered page image already in viewer, or render it
+      const existingImg = body.querySelector('img');
+      if (existingImg && existingImg.src) {
+        bgUrl = existingImg.src;
+      } else {
+        // Fallback: render first page
+        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+        const arrayBuf = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+        const page = await pdf.getPage(1);
+        const vp = page.getViewport({ scale: 1 });
+        const scale = Math.min(1200 / vp.width, 2);
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        bgUrl = canvas.toDataURL('image/png');
+      }
+    }
 
     // Load image to get dimensions
     const img = new Image();
-    img.src = url;
+    img.src = bgUrl;
     await new Promise(r => { img.onload = r; });
 
     // Fit canvas to available space
@@ -495,7 +556,7 @@ const PlansModule = (() => {
     });
 
     // Set plan as background
-    annoCanvas.setBackgroundImage(url, annoCanvas.renderAll.bind(annoCanvas), {
+    annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), {
       scaleX: cw / img.width,
       scaleY: ch / img.height
     });
@@ -508,7 +569,7 @@ const PlansModule = (() => {
           await new Promise(resolve => {
             annoCanvas.loadFromJSON(parsed, () => {
               // Re-set background (loadFromJSON clears it)
-              annoCanvas.setBackgroundImage(url, () => {
+              annoCanvas.setBackgroundImage(bgUrl, () => {
                 annoCanvas.renderAll();
                 resolve();
               }, { scaleX: cw / img.width, scaleY: ch / img.height });
