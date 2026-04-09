@@ -669,6 +669,14 @@ const DashboardModule = (() => {
     return best;
   }
 
+  // Normalize BC3 codes: strip trailing # / ## suffixes
+  function normCode(code) { return code.replace(/#+$/, ''); }
+
+  // Lookup concept by code, trying with and without # suffix
+  function findConcept(concepts, code) {
+    return concepts[code] || concepts[code + '#'] || concepts[code + '##'];
+  }
+
   function parseBC3(text) {
     const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     // Split into records: each starts with ~LETTER|
@@ -688,13 +696,16 @@ const DashboardModule = (() => {
       switch (typeChar) {
         case 'C': {
           const codes = (fields[0] || '').split('\\');
-          const code = codes[0].trim();
-          if (!code) break;
+          const rawCode = codes[0].trim();
+          if (!rawCode) break;
+          const isRoot = rawCode.endsWith('##');
+          const isChapter = !isRoot && rawCode.endsWith('#');
+          const code = rawCode;
           const unit = (fields[1] || '').trim();
           const summary = (fields[2] || '').trim();
           const priceField = (fields[3] || '').trim();
           const prices = priceField ? priceField.split('\\').map(p => parseFloat(p) || 0) : [0];
-          concepts[code] = { code, unit, summary, price: prices[0] || 0 };
+          concepts[code] = { code, unit, summary, price: prices[0] || 0, isRoot, isChapter };
           break;
         }
         case 'D': {
@@ -725,20 +736,24 @@ const DashboardModule = (() => {
     return { concepts, decompositions, texts };
   }
 
-  function collectLeafPartidas(code, decompositions, concepts, parentYield) {
-    const children = decompositions[code];
+  function collectLeafPartidas(code, decompositions, concepts) {
+    const normKey = normCode(code);
+    const children = decompositions[normKey] || decompositions[code];
     if (!children || children.length === 0) return [];
     const result = [];
     for (const child of children) {
-      const concept = concepts[child.code];
+      const concept = findConcept(concepts, child.code);
       if (!concept) continue;
-      if (decompositions[child.code]) {
+      const childDecomp = decompositions[normCode(child.code)] || decompositions[child.code];
+      // If child decomposes into 1 auxiliary (A_), treat the child itself as the leaf
+      const isSingleAux = childDecomp && childDecomp.length === 1 && childDecomp[0].code.startsWith('A_');
+      if (childDecomp && !isSingleAux) {
         // Sub-chapter: recurse
-        result.push(...collectLeafPartidas(child.code, decompositions, concepts, child.yield || 1));
+        result.push(...collectLeafPartidas(child.code, decompositions, concepts));
       } else {
-        // Leaf partida
-        const qty = child.yield || 0;
-        const total = Math.round(concept.price * qty * (child.factor || 1) * 100) / 100;
+        // Leaf partida (or product wrapping a single auxiliary)
+        const qty = child.yield || 1;
+        const total = Math.round(concept.price * qty * 100) / 100;
         result.push({
           code: child.code,
           summary: concept.summary || child.code,
@@ -754,12 +769,12 @@ const DashboardModule = (() => {
 
   function buildBC3Tree(parsed) {
     const { concepts, decompositions, texts } = parsed;
-    // Find root: code ending with ##
+    // Find root: concept marked with ## suffix
     let rootCode = null;
-    for (const code of Object.keys(concepts)) {
-      if (code.endsWith('##')) { rootCode = code; break; }
+    for (const [code, c] of Object.entries(concepts)) {
+      if (c.isRoot) { rootCode = code; break; }
     }
-    // Fallback: parent not child of anything
+    // Fallback: parent that is not a child of anything
     if (!rootCode) {
       const allChildren = new Set();
       for (const children of Object.values(decompositions)) {
@@ -769,12 +784,14 @@ const DashboardModule = (() => {
         if (!allChildren.has(code)) { rootCode = code; break; }
       }
     }
+    // Decomposition keys don't have # suffix — normalize
+    const rootDecompKey = normCode(rootCode || '');
+    const rootChildren = decompositions[rootDecompKey] || decompositions[rootCode] || [];
     const chapters = [];
-    const rootChildren = decompositions[rootCode] || [];
     for (const rc of rootChildren) {
-      const ch = concepts[rc.code];
+      const ch = findConcept(concepts, rc.code);
       if (!ch) continue;
-      const partidas = collectLeafPartidas(rc.code, decompositions, concepts, 1);
+      const partidas = collectLeafPartidas(rc.code, decompositions, concepts);
       const trade = matchTrade(ch.summary || '');
       chapters.push({
         code: rc.code,
@@ -784,7 +801,7 @@ const DashboardModule = (() => {
         totalCost: partidas.reduce((s, p) => s + p.totalCost, 0)
       });
     }
-    return { rootCode, rootName: concepts[rootCode]?.summary || '', chapters };
+    return { rootCode, rootName: findConcept(concepts, rootCode || '')?.summary || '', chapters };
   }
 
   function setupBC3Import() {
