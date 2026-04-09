@@ -431,8 +431,10 @@ const PlansModule = (() => {
     const a = document.createElement('a');
     a.href = url;
     a.download = file.name || plan.name + (file.type === 'application/pdf' ? '.pdf' : '.png');
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   async function renderViewerContent() {
@@ -774,15 +776,63 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
 
-    // Save only the annotation objects (no background)
+    // Save annotation JSON for future editing
     const json = annoCanvas.toJSON();
-    // Remove background to save only annotations
     delete json.backgroundImage;
     delete json.background;
-
     plan.annotations = JSON.stringify(json);
+
+    // Bake annotations into the actual image file at full resolution
+    const file = await DB.getFile(plan.fileId);
+    if (file) {
+      const origBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+      if (origBlob) {
+        // Load original image at full size
+        const origUrl = URL.createObjectURL(origBlob);
+        const origImg = new Image();
+        origImg.src = origUrl;
+        await new Promise(r => { origImg.onload = r; });
+
+        const fullW = origImg.width;
+        const fullH = origImg.height;
+
+        // Create full-res canvas
+        const fullCanvas = document.createElement('canvas');
+        fullCanvas.width = fullW;
+        fullCanvas.height = fullH;
+        const ctx = fullCanvas.getContext('2d');
+
+        // Draw original image as base
+        ctx.drawImage(origImg, 0, 0);
+        URL.revokeObjectURL(origUrl);
+
+        // Render only annotation objects (no background) and scale up
+        const scaleX = fullW / annoCanvas.width;
+        const scaleY = fullH / annoCanvas.height;
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+        const objs = annoCanvas.getObjects();
+        for (const obj of objs) {
+          obj.render(ctx);
+        }
+        ctx.restore();
+
+        // Convert to blob and update the file
+        const newBlob = await new Promise(r => fullCanvas.toBlob(r, 'image/png'));
+        const newData = await newBlob.arrayBuffer();
+        file.data = newData;
+        file.blob = undefined;
+        file.type = 'image/png';
+        file.size = newData.byteLength;
+        if (file.name && !file.name.endsWith('.png')) {
+          file.name = file.name.replace(/\.[^.]+$/, '.png');
+        }
+        await DB.put('files', file);
+      }
+    }
+
     await DB.put('plans', plan);
-    App.toast('Anotaciones guardadas', 'success');
+    App.toast('Anotaciones guardadas en el plano', 'success');
   }
 
   return {
