@@ -317,28 +317,74 @@ const App = (() => {
     return bytes.buffer;
   }
 
+  async function encodeFileRecordForExport(fileRecord) {
+    let binaryData = fileRecord.data || null;
+    if (!binaryData && fileRecord.blob) {
+      binaryData = await fileRecord.blob.arrayBuffer();
+    }
+
+    return {
+      ...fileRecord,
+      data: binaryData ? arrayBufferToBase64(binaryData) : null,
+      blob: undefined,
+      _encoded: true
+    };
+  }
+
+  async function collectProjectFilesForExport(projectId, incidents = []) {
+    const projectFiles = await DB.getAllForProject('files', projectId);
+    const exportedFiles = [...projectFiles];
+    const seenIds = new Set(projectFiles.map(file => file.id));
+
+    const referencedIds = new Set();
+    incidents.forEach(incident => {
+      (incident.photoIds || []).forEach(photoId => {
+        if (photoId !== null && photoId !== undefined) referencedIds.add(photoId);
+      });
+    });
+
+    for (const fileId of referencedIds) {
+      if (seenIds.has(fileId)) continue;
+      const fileRecord = await DB.getById('files', fileId);
+      if (fileRecord) {
+        exportedFiles.push(fileRecord);
+        seenIds.add(fileId);
+      }
+    }
+
+    return exportedFiles;
+  }
+
+  function remapCanvasFileReferences(node, fileIdMap) {
+    if (!node || typeof node !== 'object') return;
+
+    if (node._attachedFileId && fileIdMap[node._attachedFileId]) {
+      node._attachedFileId = fileIdMap[node._attachedFileId];
+    }
+
+    if (Array.isArray(node.objects)) {
+      node.objects.forEach(child => remapCanvasFileReferences(child, fileIdMap));
+    }
+  }
+
   async function exportProject(id) {
     const project = await DB.getById('projects', id);
     if (!project) { toast('Obra no encontrada', 'error'); return; }
 
     toast('Exportando obra...', 'info');
 
-    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants'];
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'participants'];
     const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
+    let incidents = [];
 
     for (const store of STORES) {
       const records = await DB.getAllForProject(store, id);
-      if (store === 'files') {
-        // Convert ArrayBuffer to base64 for JSON serialization
-        data[store] = records.map(f => ({
-          ...f,
-          data: f.data ? arrayBufferToBase64(f.data) : null,
-          _encoded: true
-        }));
-      } else {
-        data[store] = records;
-      }
+      data[store] = records;
+      if (store === 'incidents') incidents = records;
     }
+
+    const files = await collectProjectFilesForExport(id, incidents);
+    data.files = await Promise.all(files.map(encodeFileRecordForExport));
 
     // Canvas state (multi-sheet)
     const sheetIndex = await DB.getSheetIndex(id);
@@ -405,8 +451,11 @@ const App = (() => {
             recData.projectId = newProjectId;
 
             // Restore file binary data from base64
-            if (store === 'files' && recData._encoded && recData.data) {
-              recData.data = base64ToArrayBuffer(recData.data);
+            if (store === 'files') {
+              if (recData._encoded && recData.data) {
+                recData.data = base64ToArrayBuffer(recData.data);
+              }
+              delete recData.blob;
               delete recData._encoded;
             }
 
@@ -443,6 +492,19 @@ const App = (() => {
           }
         }
 
+        if (data.incidents) {
+          for (const oldIncident of data.incidents) {
+            if (oldIncident.photoIds && oldIncident.photoIds.length > 0) {
+              const newIncidentId = idMap.incidents[oldIncident.id];
+              const incident = await DB.getById('incidents', newIncidentId);
+              if (incident) {
+                incident.photoIds = oldIncident.photoIds.map(fileId => idMap.files[fileId]).filter(Boolean);
+                await DB.put('incidents', incident);
+              }
+            }
+          }
+        }
+
         // Import canvas state (multi-sheet or legacy)
         if (data.canvasSheetIndex && data.canvasSheets) {
           const newSheets = data.canvasSheetIndex.map(s => ({ ...s }));
@@ -450,6 +512,8 @@ const App = (() => {
           for (const sheet of newSheets) {
             const sheetData = data.canvasSheets[sheet.id];
             if (sheetData) {
+              remapCanvasFileReferences(sheetData.canvas, idMap.files || {});
+              remapCanvasFileReferences(sheetData, idMap.files || {});
               await DB.saveCanvasState(newProjectId, sheetData, sheet.id);
             }
           }
@@ -458,6 +522,7 @@ const App = (() => {
           const sheetId = 'sheet_' + Date.now();
           const newSheets = [{ id: sheetId, name: 'Hoja 1' }];
           await DB.saveSheetIndex(newProjectId, newSheets);
+          remapCanvasFileReferences(data.canvas.data, idMap.files || {});
           await DB.saveCanvasState(newProjectId, data.canvas.data, sheetId);
         }
 

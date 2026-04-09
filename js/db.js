@@ -196,12 +196,16 @@ const DB = (() => {
 
   // --- File helpers ---
 
-  async function saveFile(blob, name, type) {
+  async function saveFile(blob, name, type, projectId = null) {
+    const data = await blob.arrayBuffer();
     return add('files', {
-      blob,
+      projectId,
       name,
       type,
-      createdAt: new Date().toISOString()
+      size: blob.size,
+      data,
+      createdAt: new Date().toISOString(),
+      uploadedAt: new Date().toISOString()
     });
   }
 

@@ -2188,32 +2188,61 @@ const CanvasModule = (() => {
 
     uploadBtn.addEventListener('click', () => fileInput.click());
 
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+    fileInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        fabric.Image.fromURL(event.target.result, (img) => {
-          // Scale image to fit canvas
-          const maxW = canvas.width * 0.8;
-          const maxH = canvas.height * 0.8;
-          const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) {
+        App.toast('Selecciona archivos de imagen (PNG, JPG, etc.)', 'warning');
+        fileInput.value = '';
+        return;
+      }
 
-          img.set({
-            scaleX: scale,
-            scaleY: scale,
-            left: (canvas.width - img.width * scale) / 2,
-            top: (canvas.height - img.height * scale) / 2
-          });
+      App.toast(`Importando ${imageFiles.length} imagen(es)...`, 'info');
 
-          canvas.add(img);
-          canvas.sendToBack(img);
-          canvas.requestRenderAll();
-          App.toast('Plano cargado correctamente', 'success');
+      const GAP = 40;
+      let cursorX = 60;
+      let cursorY = 60;
+      let rowMaxH = 0;
+      const canvasW = canvas.width || 3000;
+
+      for (const file of imageFiles) {
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.readAsDataURL(file);
         });
-      };
-      reader.readAsDataURL(file);
+
+        await new Promise((resolve) => {
+          fabric.Image.fromURL(dataUrl, (img) => {
+            if (!img || !img.width) { resolve(); return; }
+
+            const maxW = Math.min(canvasW * 0.45, 800);
+            const maxH = 600;
+            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+            const w = img.width * scale;
+            const h = img.height * scale;
+
+            if (cursorX + w > canvasW - 60 && cursorX > 60) {
+              cursorX = 60;
+              cursorY += rowMaxH + GAP;
+              rowMaxH = 0;
+            }
+
+            img.set({ scaleX: scale, scaleY: scale, left: cursorX, top: cursorY });
+            canvas.add(img);
+            canvas.sendToBack(img);
+
+            cursorX += w + GAP;
+            if (h > rowMaxH) rowMaxH = h;
+            resolve();
+          });
+        });
+      }
+
+      canvas.requestRenderAll();
+      App.toast(`${imageFiles.length} imagen(es) importada(s) al canvas`, 'success');
       fileInput.value = '';
     });
   }

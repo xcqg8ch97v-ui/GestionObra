@@ -92,8 +92,9 @@ const DiaryModule = (() => {
         const photoElements = [];
         for (const photoId of incident.photoIds) {
           const file = await DB.getFile(photoId);
-          if (file && file.blob) {
-            const url = URL.createObjectURL(file.blob);
+          const fileBlob = file?.blob || (file?.data ? new Blob([file.data], { type: file.type || 'image/*' }) : null);
+          if (fileBlob) {
+            const url = URL.createObjectURL(fileBlob);
             photoElements.push(`
               <div class="incident-photo" onclick="App.openLightbox('${url}')">
                 <img src="${url}" alt="Imagen adjunta del diario" loading="lazy">
@@ -361,7 +362,7 @@ const DiaryModule = (() => {
       // Save new photos to IndexedDB
       const newPhotoIds = [];
       for (const photo of pendingPhotos) {
-        const id = await DB.saveFile(photo.blob, photo.name, photo.blob.type);
+        const id = await DB.saveFile(photo.blob, photo.name, photo.blob.type, projectId);
         newPhotoIds.push(id);
       }
 
