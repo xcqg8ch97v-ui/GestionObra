@@ -220,9 +220,18 @@ const FilesModule = (() => {
 
   async function downloadFile(id) {
     const file = await DB.getById('files', id);
-    if (!file) return;
+    if (!file) {
+      App.toast('Archivo no encontrado', 'error');
+      return;
+    }
 
-    const blob = new Blob([file.data], { type: file.type });
+    const binaryData = file.data || (file.blob instanceof Blob ? await file.blob.arrayBuffer() : null);
+    if (!binaryData) {
+      App.toast('No se pudo recuperar el contenido del archivo', 'error');
+      return;
+    }
+
+    const blob = new Blob([binaryData], { type: file.type });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

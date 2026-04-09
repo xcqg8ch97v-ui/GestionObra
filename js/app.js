@@ -301,9 +301,11 @@ const App = (() => {
 
   function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
+    const CHUNK = 8192;
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+      binary += String.fromCharCode.apply(null, slice);
     }
     return btoa(binary);
   }
@@ -446,21 +448,25 @@ const App = (() => {
           const records = data[store] || [];
           idMap[store] = {};
           for (const record of records) {
-            const oldRecId = record.id;
-            const { id, ...recData } = record;
-            recData.projectId = newProjectId;
+            try {
+              const oldRecId = record.id;
+              const { id, ...recData } = record;
+              recData.projectId = newProjectId;
 
-            // Restore file binary data from base64
-            if (store === 'files') {
-              if (recData._encoded && recData.data) {
-                recData.data = base64ToArrayBuffer(recData.data);
+              // Restore file binary data from base64
+              if (store === 'files') {
+                if (recData._encoded && recData.data) {
+                  recData.data = base64ToArrayBuffer(recData.data);
+                }
+                delete recData.blob;
+                delete recData._encoded;
               }
-              delete recData.blob;
-              delete recData._encoded;
-            }
 
-            const newId = await DB.add(store, recData);
-            idMap[store][oldRecId] = newId;
+              const newId = await DB.add(store, recData);
+              idMap[store][oldRecId] = newId;
+            } catch (recErr) {
+              console.warn(`Import: error en registro de ${store}:`, recErr);
+            }
           }
         }
 
