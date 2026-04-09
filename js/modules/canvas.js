@@ -119,6 +119,7 @@ const CanvasModule = (() => {
 
     // --- Pinch-to-zoom & two-finger pan (touch) ---
     let touchState = { active: false, dist: 0, midX: 0, midY: 0, zoom: 1, vpX: 0, vpY: 0 };
+    let touchInsertHandled = false;
 
     const upperCanvas = container.querySelector('.upper-canvas') || canvas.upperCanvasEl;
     if (upperCanvas) {
@@ -137,6 +138,39 @@ const CanvasModule = (() => {
           canvas.selection = false;
         }
       }, { passive: false });
+
+      upperCanvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || touchState.active) return;
+        const touch = e.touches[0];
+
+        if (currentTool === 'postit') {
+          e.preventDefault();
+          e.stopPropagation();
+          touchInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addPostIt(pointer.x, pointer.y);
+          setTool('select');
+          return;
+        }
+
+        if (currentTool === 'text') {
+          e.preventDefault();
+          e.stopPropagation();
+          touchInsertHandled = true;
+          const pointer = canvas.getPointer(e);
+          addText(pointer.x, pointer.y);
+          setTool('select');
+          return;
+        }
+
+        if (currentTool === 'table') {
+          e.preventDefault();
+          e.stopPropagation();
+          touchInsertHandled = true;
+          addTable(touch.clientX, touch.clientY);
+          setTool('select');
+        }
+      }, { passive: false, capture: true });
 
       upperCanvas.addEventListener('touchmove', (e) => {
         if (touchState.active && e.touches.length === 2) {
@@ -168,6 +202,7 @@ const CanvasModule = (() => {
           canvas.selection = currentTool === 'select';
           canvas.setViewportTransform(canvas.viewportTransform);
         }
+        touchInsertHandled = false;
       });
     }
 
@@ -189,6 +224,7 @@ const CanvasModule = (() => {
 
     canvas.on('mouse:down', (opt) => {
       const e = opt.e;
+      if (touchInsertHandled && e.type === 'touchstart') return;
       const isTouchPan = e.type === 'touchstart' && currentTool === 'hand';
       if (e.altKey || e.button === 1 || currentTool === 'hand' || isTouchPan) {
         isPanning = true;

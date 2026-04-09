@@ -81,10 +81,11 @@ const App = (() => {
   // ========================================
 
   function setupProjectSelector() {
-    document.getElementById('btn-new-project').addEventListener('click', openProjectForm);
-    document.getElementById('btn-new-project-empty').addEventListener('click', openProjectForm);
-    document.getElementById('btn-import-project').addEventListener('click', importProject);
-    document.getElementById('btn-back-projects').addEventListener('click', showProjectSelector);
+    document.getElementById('btn-new-project')?.addEventListener('click', openProjectForm);
+    document.getElementById('btn-new-project-empty')?.addEventListener('click', openProjectForm);
+    document.getElementById('btn-import-project')?.addEventListener('click', importProject);
+    document.getElementById('btn-back-projects')?.addEventListener('click', showProjectSelector);
+    document.getElementById('btn-topbar-projects')?.addEventListener('click', showProjectSelector);
   }
 
   async function showProjectSelector() {

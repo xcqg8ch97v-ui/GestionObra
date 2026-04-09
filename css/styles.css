@@ -299,6 +299,9 @@ input:focus, select:focus, textarea:focus {
 .sidebar-footer {
   padding: var(--sp-md);
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
 }
 
 .project-info {
@@ -348,6 +351,17 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: var(--sp-md);
+}
+
+.topbar-projects-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-xs);
+}
+
+.topbar-projects-btn i {
+  width: 16px;
+  height: 16px;
 }
 
 .mobile-menu-toggle {
