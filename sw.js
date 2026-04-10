@@ -3,23 +3,23 @@
    Cache-first strategy for offline support
    ======================================== */
 
-const CACHE_NAME = 'gestion-obra-v15';
+const CACHE_NAME = 'gestion-obra-v16';
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
-  './js/db.js?v=15',
-  './js/app.js?v=15',
-  './js/modules/pdf-parser.js?v=15',
-  './js/modules/canvas.js?v=15',
-  './js/modules/dashboard.js?v=15',
-  './js/modules/timeline.js?v=15',
-  './js/modules/diary.js?v=15',
-  './js/modules/overview.js?v=15',
-  './js/modules/files.js?v=15',
-  './js/modules/plans.js?v=15',
-  './js/modules/participants.js?v=15',
-  './js/modules/report.js?v=15',
+  './js/db.js?v=16',
+  './js/app.js?v=16',
+  './js/modules/pdf-parser.js?v=16',
+  './js/modules/canvas.js?v=16',
+  './js/modules/dashboard.js?v=16',
+  './js/modules/timeline.js?v=16',
+  './js/modules/diary.js?v=16',
+  './js/modules/overview.js?v=16',
+  './js/modules/files.js?v=16',
+  './js/modules/plans.js?v=16',
+  './js/modules/participants.js?v=16',
+  './js/modules/report.js?v=16',
   './manifest.json'
 ];
 

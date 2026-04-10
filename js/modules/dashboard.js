@@ -29,26 +29,16 @@ const DashboardModule = (() => {
   }
 
   // --- Sub-tabs ---
-  function cloneAndBind(id, fn) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const clone = el.cloneNode(true);
-    el.parentNode.replaceChild(clone, el);
-    clone.addEventListener('click', fn);
-  }
-
   function setupSubTabs() {
     document.querySelectorAll('.sub-tab').forEach(tab => {
-      const clone = tab.cloneNode(true);
-      tab.parentNode.replaceChild(clone, tab);
-      clone.addEventListener('click', () => {
+      tab.addEventListener('click', () => {
         document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
-        clone.classList.add('active');
-        const panel = document.getElementById(`panel-${clone.dataset.subtab}`);
+        tab.classList.add('active');
+        const panel = document.getElementById(`panel-${tab.dataset.subtab}`);
         if (panel) panel.classList.add('active');
 
-        if (clone.dataset.subtab === 'comparator') {
+        if (tab.dataset.subtab === 'comparator') {
           renderComparator();
         }
       });
@@ -56,10 +46,10 @@ const DashboardModule = (() => {
   }
 
   function setupButtons() {
-    cloneAndBind('btn-add-supplier',       () => openSupplierForm());
-    cloneAndBind('btn-add-supplier-empty', () => openSupplierForm());
-    cloneAndBind('btn-add-budget',         () => openBudgetForm());
-    cloneAndBind('btn-add-budget-empty',   () => openBudgetForm());
+    document.getElementById('btn-add-supplier').addEventListener('click', () => openSupplierForm());
+    document.getElementById('btn-add-supplier-empty').addEventListener('click', () => openSupplierForm());
+    document.getElementById('btn-add-budget').addEventListener('click', () => openBudgetForm());
+    document.getElementById('btn-add-budget-empty').addEventListener('click', () => openBudgetForm());
   }
 
   // ========================================
