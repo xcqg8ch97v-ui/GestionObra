@@ -202,11 +202,11 @@ const FirebaseSync = (() => {
             // Strip internal Firebase fields before storing locally
             const { _localId, _syncedAt, ...clean } = record;
             const toSave = { ...clean, id: localId };
-            const existing = await window.DB.getById(store, localId);
+            const existing = await DB.getById(store, localId);
             const remoteTs = toSave.updatedAt || toSave.createdAt || '';
             const localTs  = existing ? (existing.updatedAt || existing.createdAt || '') : '';
             if (!existing || remoteTs > localTs) {
-              await window.DB.put(store, toSave);
+              await DB.put(store, toSave);
             }
           }
           console.log(`[FB Pull] ${store}: ${records.length} documentos en Firestore`);
@@ -222,7 +222,7 @@ const FirebaseSync = (() => {
           if (!meta._localId || !meta.storagePath) continue;
           const fileLocalId = parseInt(meta._localId, 10);
           if (isNaN(fileLocalId)) continue;
-          const existing = await window.DB.getById('files', fileLocalId);
+          const existing = await DB.getById('files', fileLocalId);
           if (existing && existing.data) continue; // already have binary locally
           try {
             const ref = storage.ref(meta.storagePath);
@@ -230,7 +230,7 @@ const FirebaseSync = (() => {
             const resp = await fetch(url);
             const buffer = await resp.arrayBuffer();
             const { _localId, _syncedAt, ...cleanMeta } = meta;
-            await window.DB.put('files', {
+            await DB.put('files', {
               ...cleanMeta,
               id: fileLocalId,
               data: buffer
@@ -257,7 +257,7 @@ const FirebaseSync = (() => {
 
     for (const store of FIRESTORE_STORES) {
       try {
-        const records = await window.DB.getAll(store);
+        const records = await DB.getAll(store);
         console.log(`[FB Push] ${store}: ${records.length} registros locales`);
         for (const record of records) {
           await fsSet(store, record);
@@ -270,7 +270,7 @@ const FirebaseSync = (() => {
 
     // Push binary files to Storage
     try {
-      const files = await window.DB.getAll('files');
+      const files = await DB.getAll('files');
       console.log(`[FB Push] files: ${files.length} archivos locales`);
       for (const file of files) {
         await storageSave(file);
