@@ -828,7 +828,7 @@ const TimelineModule = (() => {
               </select>
             </td>
             <td>
-              <input class="tl-inline" type="text" value="${App.escapeHTML(task.responsible || '')}" placeholder="—"
+              <input class="tl-inline" type="text" value="${App.escapeHTML(task.responsible || '')}" placeholder="${App.t('responsible_placeholder')}"
                 onchange="TimelineModule.inlineUpdate(${task.id},'responsible',this.value)">
             </td>
             <td class="tl-cell-date">

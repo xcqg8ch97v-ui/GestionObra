@@ -1,3 +1,5 @@
+  responsible_placeholder: 'Responsable...',
+  responsible_placeholder: 'Responsible...',
 /* ========================================
    App.js - Navegación y Utilidades
    Gestión de Obra PWA
