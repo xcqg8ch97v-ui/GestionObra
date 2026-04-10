@@ -1114,6 +1114,7 @@ const App = (() => {
       setupModal();
       setupProjectSelector();
       setupThemeToggle();
+      setupFirebaseAuth();
       registerSW();
       safeIcons();
       showProjectSelector();
@@ -1122,6 +1123,79 @@ const App = (() => {
       console.error('App init error:', e);
       document.getElementById('project-selector').style.display = 'flex';
     }
+  }
+
+  function setupFirebaseAuth() {
+    if (typeof FirebaseSync === 'undefined') return;
+    FirebaseSync.init();
+
+    const elLoggedOut = document.getElementById('auth-logged-out');
+    const elLoggedIn  = document.getElementById('auth-logged-in');
+    const elAvatar    = document.getElementById('auth-avatar');
+    const elName      = document.getElementById('auth-name');
+    const elStatus    = document.getElementById('auth-sync-status');
+
+    FirebaseSync.onAuthChange(user => {
+      if (user) {
+        elLoggedOut.style.display = 'none';
+        elLoggedIn.style.display  = 'flex';
+        elAvatar.src  = user.photoURL || '';
+        elName.textContent = user.displayName || user.email || '';
+        if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Conectado';
+        safeIcons();
+        // Pull remote data on login (merge strategy)
+        FirebaseSync.pullAllToLocal().then(() => {
+          loadProjectCards();
+          if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Sincronizado';
+          safeIcons();
+        });
+      } else {
+        elLoggedOut.style.display = 'flex';
+        elLoggedIn.style.display  = 'none';
+      }
+    });
+
+    document.getElementById('btn-login-google')?.addEventListener('click', async () => {
+      try {
+        await FirebaseSync.loginWithGoogle();
+      } catch(e) {
+        toast('Error al iniciar sesión: ' + (e.message || e), 'error');
+      }
+    });
+
+    document.getElementById('btn-logout')?.addEventListener('click', async () => {
+      await FirebaseSync.logout();
+      toast('Sesión cerrada', 'info');
+    });
+
+    document.getElementById('btn-push-firebase')?.addEventListener('click', async () => {
+      if (elStatus) elStatus.innerHTML = '<i data-lucide="upload-cloud"></i> Subiendo…';
+      safeIcons();
+      try {
+        await FirebaseSync.pushAllToFirebase();
+        toast('Datos subidos a la nube', 'success');
+        if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Sincronizado';
+      } catch(e) {
+        toast('Error al subir datos: ' + (e.message || e), 'error');
+        if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-off"></i> Error';
+      }
+      safeIcons();
+    });
+
+    document.getElementById('btn-pull-firebase')?.addEventListener('click', async () => {
+      if (elStatus) elStatus.innerHTML = '<i data-lucide="download-cloud"></i> Descargando…';
+      safeIcons();
+      try {
+        await FirebaseSync.pullAllToLocal();
+        loadProjectCards();
+        toast('Datos descargados de la nube', 'success');
+        if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Sincronizado';
+      } catch(e) {
+        toast('Error al descargar datos: ' + (e.message || e), 'error');
+        if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-off"></i> Error';
+      }
+      safeIcons();
+    });
   }
 
   // ========================================

@@ -178,35 +178,68 @@ const DB = (() => {
 
   async function add(storeName, data) {
     const database = await open();
-    return new Promise((resolve, reject) => {
+    const id = await new Promise((resolve, reject) => {
       const tx = database.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
       const request = store.add(data);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
+    // Firebase sync
+    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+      const record = { ...data, id };
+      if (storeName === 'files') {
+        FirebaseSync.storageSave(record).catch(e => console.warn('[FB] storageSave error:', e));
+      } else {
+        FirebaseSync.fsSet(storeName, record).catch(e => console.warn('[FB] fsSet error:', e));
+      }
+    }
+    return id;
   }
 
   async function put(storeName, data) {
     const database = await open();
-    return new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       const tx = database.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
       const request = store.put(data);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
+    // Firebase sync
+    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+      if (storeName === 'files') {
+        FirebaseSync.storageSave(data).catch(e => console.warn('[FB] storageSave error:', e));
+      } else {
+        FirebaseSync.fsSet(storeName, data).catch(e => console.warn('[FB] fsSet error:', e));
+      }
+    }
+    return result;
   }
 
   async function remove(storeName, id) {
     const database = await open();
-    return new Promise((resolve, reject) => {
+    // Get storage path before deleting locally (for files)
+    let storagePath = null;
+    if (storeName === 'files' && typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+      const record = await getById('files', id);
+      storagePath = record?.storagePath || null;
+    }
+    await new Promise((resolve, reject) => {
       const tx = database.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+    // Firebase sync
+    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+      if (storeName === 'files') {
+        FirebaseSync.storageDelete(id, storagePath).catch(e => console.warn('[FB] storageDelete error:', e));
+      } else {
+        FirebaseSync.fsDelete(storeName, id).catch(e => console.warn('[FB] fsDelete error:', e));
+      }
+    }
   }
 
   async function clearStore(storeName) {
