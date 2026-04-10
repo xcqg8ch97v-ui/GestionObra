@@ -36,15 +36,31 @@ const DiaryModule = (() => {
     loadIncidents();
   }
 
+  function cloneAndBind(id, fn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    el.parentNode.replaceChild(clone, el);
+    clone.addEventListener('click', fn);
+  }
+
   function setupButtons() {
-    document.getElementById('btn-add-incident').addEventListener('click', () => openIncidentForm(null, 'incident'));
-    document.getElementById('btn-add-comment').addEventListener('click', () => openIncidentForm(null, 'comment'));
-    document.getElementById('btn-add-evolution').addEventListener('click', () => openIncidentForm(null, 'evolution'));
-    document.getElementById('btn-add-incident-empty').addEventListener('click', () => openIncidentForm(null, 'incident'));
-    document.getElementById('btn-add-comment-empty').addEventListener('click', () => openIncidentForm(null, 'comment'));
-    document.getElementById('btn-add-evolution-empty').addEventListener('click', () => openIncidentForm(null, 'evolution'));
-    document.getElementById('diary-filter').addEventListener('change', loadIncidents);
-    document.getElementById('diary-type-filter').addEventListener('change', loadIncidents);
+    cloneAndBind('btn-add-incident',       () => openIncidentForm(null, 'incident'));
+    cloneAndBind('btn-add-comment',        () => openIncidentForm(null, 'comment'));
+    cloneAndBind('btn-add-evolution',      () => openIncidentForm(null, 'evolution'));
+    cloneAndBind('btn-add-incident-empty', () => openIncidentForm(null, 'incident'));
+    cloneAndBind('btn-add-comment-empty',  () => openIncidentForm(null, 'comment'));
+    cloneAndBind('btn-add-evolution-empty',() => openIncidentForm(null, 'evolution'));
+
+    const filter = document.getElementById('diary-filter');
+    const newFilter = filter.cloneNode(true);
+    filter.parentNode.replaceChild(newFilter, filter);
+    newFilter.addEventListener('change', loadIncidents);
+
+    const typeFilter = document.getElementById('diary-type-filter');
+    const newTypeFilter = typeFilter.cloneNode(true);
+    typeFilter.parentNode.replaceChild(newTypeFilter, typeFilter);
+    newTypeFilter.addEventListener('change', loadIncidents);
   }
 
   async function loadIncidents() {
@@ -75,9 +91,13 @@ const DiaryModule = (() => {
     const feed = document.getElementById('diary-feed');
     const emptyState = document.getElementById('diary-empty');
 
+    // Revoke any existing blob URLs to avoid memory leaks
+    feed.querySelectorAll('img[src^="blob:"]').forEach(img => URL.revokeObjectURL(img.src));
+
     if (incidents.length === 0) {
       feed.style.display = 'none';
       emptyState.style.display = 'flex';
+      feed.innerHTML = '';
       return;
     }
 

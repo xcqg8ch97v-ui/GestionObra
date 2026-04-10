@@ -10,6 +10,7 @@ const ASSETS = [
   './css/styles.css',
   './js/db.js?v=15',
   './js/app.js?v=15',
+  './js/modules/pdf-parser.js?v=15',
   './js/modules/canvas.js?v=15',
   './js/modules/dashboard.js?v=15',
   './js/modules/timeline.js?v=15',

@@ -178,7 +178,7 @@ const FilesModule = (() => {
       }
 
       let html = '';
-      for (const [key, cat] of Object.entries(CATEGORIES)) {
+      for (const [key, cat] of Object.entries(getCategories())) {
         const items = groups[key];
         if (!items || items.length === 0) continue;
         html += `

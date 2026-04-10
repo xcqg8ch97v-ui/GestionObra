@@ -655,7 +655,7 @@ const TimelineModule = (() => {
     body.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     bindGanttInteractions();
-    renderDependencyLines(visibleTasks);
+    requestAnimationFrame(() => renderDependencyLines(visibleTasks));
   }
 
   function renderDependencyLines(visibleTasks) {
