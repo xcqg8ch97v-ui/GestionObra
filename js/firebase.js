@@ -194,12 +194,19 @@ const FirebaseSync = (() => {
         try {
           const records = await fsPullAll(store);
           for (const record of records) {
-            const localId = record._localId ?? record.id;
-            const existing = localId ? await window.DB.getById(store, localId) : null;
-            const remoteTs = record.updatedAt || record.createdAt || '';
+            // canvas uses string IDs (e.g. "project_1_sheet_abc"); others use numeric
+            const rawId = record._localId ?? record.id;
+            const localId = store === 'canvas' ? rawId : parseInt(rawId, 10);
+            if (store !== 'canvas' && isNaN(localId)) continue;
+            if (!localId) continue;
+            // Strip internal Firebase fields before storing locally
+            const { _localId, _syncedAt, ...clean } = record;
+            const toSave = { ...clean, id: localId };
+            const existing = await window.DB.getById(store, localId);
+            const remoteTs = toSave.updatedAt || toSave.createdAt || '';
             const localTs  = existing ? (existing.updatedAt || existing.createdAt || '') : '';
             if (!existing || remoteTs > localTs) {
-              await window.DB.put(store, { ...record, id: localId });
+              await window.DB.put(store, toSave);
             }
           }
           console.log(`[Firebase] Pulled ${records.length} records from ${store}`);
@@ -213,16 +220,19 @@ const FirebaseSync = (() => {
         const fileMetas = await storagePullAll();
         for (const meta of fileMetas) {
           if (!meta._localId || !meta.storagePath) continue;
-          const existing = await window.DB.getById('files', meta._localId);
+          const fileLocalId = parseInt(meta._localId, 10);
+          if (isNaN(fileLocalId)) continue;
+          const existing = await window.DB.getById('files', fileLocalId);
           if (existing && existing.data) continue; // already have binary locally
           try {
             const ref = storage.ref(meta.storagePath);
             const url = await ref.getDownloadURL();
             const resp = await fetch(url);
             const buffer = await resp.arrayBuffer();
+            const { _localId, _syncedAt, ...cleanMeta } = meta;
             await window.DB.put('files', {
-              ...meta,
-              id: meta._localId,
+              ...cleanMeta,
+              id: fileLocalId,
               data: buffer
             });
           } catch(fe) {
