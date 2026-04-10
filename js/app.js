@@ -1,5 +1,4 @@
-  responsible_placeholder: 'Responsable...',
-  responsible_placeholder: 'Responsible...',
+
 /* ========================================
    App.js - Navegación y Utilidades
    Gestión de Obra PWA
@@ -2591,7 +2590,7 @@ const App = (() => {
   // --- Service Worker ---
   function registerSW() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=14')
+      navigator.serviceWorker.register('sw.js?v=15')
         .then(reg => { reg.update(); console.log('Service Worker registrado'); })
         .catch(err => console.warn('SW registro fallido:', err));
     }

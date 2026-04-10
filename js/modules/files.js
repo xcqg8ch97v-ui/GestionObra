@@ -6,29 +6,35 @@
 const FilesModule = (() => {
   let projectId = null;
 
-  const FILE_TYPES = {
-    'application/pdf': { icon: 'file-text', class: 'pdf', label: App.t('file_type_pdf') },
-    'image/jpeg': { icon: 'image', class: 'image', label: App.t('file_type_image') },
-    'image/png': { icon: 'image', class: 'image', label: App.t('file_type_image') },
-    'image/webp': { icon: 'image', class: 'image', label: App.t('file_type_image') },
-    'image/gif': { icon: 'image', class: 'image', label: App.t('file_type_image') },
-    'application/msword': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
-    'application/vnd.ms-excel': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
-    'text/plain': { icon: 'file-text', class: 'doc', label: App.t('file_type_text') },
-    'application/zip': { icon: 'archive', class: 'other', label: App.t('file_type_zip') }
-  };
 
-  const CATEGORIES = {
-    pdf:         { label: App.t('files_category_pdf'),              icon: 'file-text',  match: f => f.type === 'application/pdf' },
-    image:       { label: App.t('files_category_image'),            icon: 'image',      match: f => f.type.startsWith('image/') },
-    doc:         { label: App.t('files_category_doc'),              icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
-    spreadsheet: { label: App.t('files_category_spreadsheet'),      icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
-    other:       { label: App.t('files_category_other'),            icon: 'file',       match: () => true }
-  };
+  function getFileTypes() {
+    return {
+      'application/pdf': { icon: 'file-text', class: 'pdf', label: App.t('file_type_pdf') },
+      'image/jpeg': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+      'image/png': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+      'image/webp': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+      'image/gif': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+      'application/msword': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
+      'application/vnd.ms-excel': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
+      'text/plain': { icon: 'file-text', class: 'doc', label: App.t('file_type_text') },
+      'application/zip': { icon: 'archive', class: 'other', label: App.t('file_type_zip') }
+    };
+  }
+
+  function getCategories() {
+    return {
+      pdf:         { label: App.t('files_category_pdf'),              icon: 'file-text',  match: f => f.type === 'application/pdf' },
+      image:       { label: App.t('files_category_image'),            icon: 'image',      match: f => f.type.startsWith('image/') },
+      doc:         { label: App.t('files_category_doc'),              icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
+      spreadsheet: { label: App.t('files_category_spreadsheet'),      icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
+      other:       { label: App.t('files_category_other'),            icon: 'file',       match: () => true }
+    };
+  }
 
   function getCategory(f) {
+    const CATEGORIES = getCategories();
     for (const [key, cat] of Object.entries(CATEGORIES)) {
       if (key !== 'other' && cat.match(f)) return key;
     }
@@ -36,6 +42,7 @@ const FilesModule = (() => {
   }
 
   function getFileInfo(mimeType) {
+    const FILE_TYPES = getFileTypes();
     return FILE_TYPES[mimeType] || { icon: 'file', class: 'other', label: 'Archivo' };
   }
 

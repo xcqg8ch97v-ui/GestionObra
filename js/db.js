@@ -10,26 +10,25 @@ const DB = (() => {
 
   function open() {
     return new Promise((resolve, reject) => {
-      if (db) { resolve(db); return; }
+      if (db) { console.log('[DB] Ya abierta'); resolve(db); return; }
 
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = (e) => {
         const database = e.target.result;
-
+        console.log('[DB] onupgradeneeded');
+        // ...existing code...
         // Categorías personalizadas por proyecto
         if (!database.objectStoreNames.contains('custom_categories')) {
           const store = database.createObjectStore('custom_categories', { keyPath: 'id', autoIncrement: true });
           store.createIndex('projectId', 'projectId', { unique: false });
           store.createIndex('type', 'type', { unique: false });
         }
-
         // Proyectos / Obras
         if (!database.objectStoreNames.contains('projects')) {
           const store = database.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
           store.createIndex('status', 'status', { unique: false });
         }
-
         // Proveedores / Subcontratas
         if (!database.objectStoreNames.contains('suppliers')) {
           const store = database.createObjectStore('suppliers', { keyPath: 'id', autoIncrement: true });
@@ -43,7 +42,6 @@ const DB = (() => {
             store.createIndex('projectId', 'projectId', { unique: false });
           }
         }
-
         // Partidas presupuestarias
         if (!database.objectStoreNames.contains('budgets')) {
           const store = database.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true });
@@ -57,7 +55,6 @@ const DB = (() => {
             store.createIndex('projectId', 'projectId', { unique: false });
           }
         }
-
         // Tareas del cronograma
         if (!database.objectStoreNames.contains('tasks')) {
           const store = database.createObjectStore('tasks', { keyPath: 'id', autoIncrement: true });
@@ -70,7 +67,6 @@ const DB = (() => {
             store.createIndex('projectId', 'projectId', { unique: false });
           }
         }
-
         // Incidencias del diario
         if (!database.objectStoreNames.contains('incidents')) {
           const store = database.createObjectStore('incidents', { keyPath: 'id', autoIncrement: true });
@@ -84,7 +80,6 @@ const DB = (() => {
             store.createIndex('projectId', 'projectId', { unique: false });
           }
         }
-
         // Archivos y fotos (blobs)
         if (!database.objectStoreNames.contains('files')) {
           const filesStore = database.createObjectStore('files', { keyPath: 'id', autoIncrement: true });
@@ -96,19 +91,16 @@ const DB = (() => {
             filesStore.createIndex('projectId', 'projectId', { unique: false });
           }
         }
-
         // Estado del canvas (por proyecto)
         if (!database.objectStoreNames.contains('canvas')) {
           database.createObjectStore('canvas', { keyPath: 'id' });
         }
-
         // Participantes / Contactos
         if (!database.objectStoreNames.contains('participants')) {
           const store = database.createObjectStore('participants', { keyPath: 'id', autoIncrement: true });
           store.createIndex('projectId', 'projectId', { unique: false });
           store.createIndex('type', 'type', { unique: false });
         }
-
         // Planos de obra
         if (!database.objectStoreNames.contains('plans')) {
           const store = database.createObjectStore('plans', { keyPath: 'id', autoIncrement: true });
@@ -119,11 +111,28 @@ const DB = (() => {
 
       request.onsuccess = (e) => {
         db = e.target.result;
+        console.log('[DB] abierta correctamente');
         resolve(db);
       };
 
       request.onerror = (e) => {
-        reject(new Error('Error abriendo IndexedDB: ' + e.target.error));
+        console.error('[DB] Error abriendo IndexedDB:', e.target.error);
+        // Forzar limpieza automática si hay error de versión o corrupción
+        if (e.target.error && (e.target.error.name === 'VersionError' || e.target.error.name === 'InvalidStateError' || e.target.error.name === 'UnknownError')) {
+          console.warn('[DB] Intentando borrar base de datos corrupta...');
+          const deleteReq = indexedDB.deleteDatabase(DB_NAME);
+          deleteReq.onsuccess = () => {
+            console.warn('[DB] Base de datos borrada. Recargando página...');
+            location.reload();
+          };
+          deleteReq.onerror = () => {
+            alert('No se pudo reparar la base de datos. Prueba a limpiar el almacenamiento del navegador manualmente.');
+            reject(new Error('No se pudo borrar la base de datos.'));
+          };
+        } else {
+          alert('Error abriendo la base de datos. Prueba a limpiar el almacenamiento del navegador.');
+          reject(new Error('Error abriendo IndexedDB: ' + e.target.error));
+        }
       };
     });
   }

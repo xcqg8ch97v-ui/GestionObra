@@ -3,22 +3,22 @@
    Cache-first strategy for offline support
    ======================================== */
 
-const CACHE_NAME = 'gestion-obra-v14';
+const CACHE_NAME = 'gestion-obra-v15';
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
-  './js/db.js',
-  './js/app.js',
-  './js/modules/canvas.js',
-  './js/modules/dashboard.js',
-  './js/modules/timeline.js',
-  './js/modules/diary.js',
-  './js/modules/overview.js',
-  './js/modules/files.js',
-  './js/modules/plans.js',
-  './js/modules/participants.js',
-  './js/modules/report.js',
+  './js/db.js?v=15',
+  './js/app.js?v=15',
+  './js/modules/canvas.js?v=15',
+  './js/modules/dashboard.js?v=15',
+  './js/modules/timeline.js?v=15',
+  './js/modules/diary.js?v=15',
+  './js/modules/overview.js?v=15',
+  './js/modules/files.js?v=15',
+  './js/modules/plans.js?v=15',
+  './js/modules/participants.js?v=15',
+  './js/modules/report.js?v=15',
   './manifest.json'
 ];
 
