@@ -93,8 +93,7 @@ const FilesModule = (() => {
     newGroup.addEventListener('change', loadFiles);
 
     // Drag & drop
-    const dropZone = document.getElementById('files-drop-zone');
-    const dropOverlay = document.getElementById('files-drop-overlay');
+    const dropZone = document.getElementById('section-files');
     if (dropZone) {
       let dragCounter = 0;
       dropZone.addEventListener('dragenter', e => { e.preventDefault(); dragCounter++; dropZone.classList.add('drag-active'); });

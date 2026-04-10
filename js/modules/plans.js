@@ -80,7 +80,7 @@ const PlansModule = (() => {
     setupViewer();
 
     // Drag & drop
-    const dropZone = document.getElementById('plans-drop-zone');
+    const dropZone = document.getElementById('section-plans');
     if (dropZone) {
       let dragCounter = 0;
       dropZone.addEventListener('dragenter', e => { e.preventDefault(); dragCounter++; dropZone.classList.add('drag-active'); });
