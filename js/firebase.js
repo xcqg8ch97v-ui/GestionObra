@@ -186,25 +186,57 @@ const FirebaseSync = (() => {
     if (!currentUser) return;
     console.log('[Firebase] Pulling all data from Firestore…');
 
-    for (const store of FIRESTORE_STORES) {
-      try {
-        const records = await fsPullAll(store);
-        for (const record of records) {
-          const existing = await window.DB.getById(store, record._localId ?? record.id);
-          if (!existing) {
-            await window.DB.put(store, record);
-          } else {
-            // Merge: remote wins if more recent
+    // Suppress sync hooks during pull to avoid write-back loop
+    window._fbSyncSuppressed = true;
+
+    try {
+      for (const store of FIRESTORE_STORES) {
+        try {
+          const records = await fsPullAll(store);
+          for (const record of records) {
+            const localId = record._localId ?? record.id;
+            const existing = localId ? await window.DB.getById(store, localId) : null;
             const remoteTs = record.updatedAt || record.createdAt || '';
-            const localTs  = existing.updatedAt || existing.createdAt || '';
-            if (remoteTs > localTs) await window.DB.put(store, record);
+            const localTs  = existing ? (existing.updatedAt || existing.createdAt || '') : '';
+            if (!existing || remoteTs > localTs) {
+              await window.DB.put(store, { ...record, id: localId });
+            }
+          }
+          console.log(`[Firebase] Pulled ${records.length} records from ${store}`);
+        } catch(e) {
+          console.warn(`[Firebase] Error pulling ${store}:`, e);
+        }
+      }
+
+      // Pull binary files from Storage
+      try {
+        const fileMetas = await storagePullAll();
+        for (const meta of fileMetas) {
+          if (!meta._localId || !meta.storagePath) continue;
+          const existing = await window.DB.getById('files', meta._localId);
+          if (existing && existing.data) continue; // already have binary locally
+          try {
+            const ref = storage.ref(meta.storagePath);
+            const url = await ref.getDownloadURL();
+            const resp = await fetch(url);
+            const buffer = await resp.arrayBuffer();
+            await window.DB.put('files', {
+              ...meta,
+              id: meta._localId,
+              data: buffer
+            });
+          } catch(fe) {
+            console.warn(`[Firebase] Error downloading file ${meta.name}:`, fe);
           }
         }
-        console.log(`[Firebase] Pulled ${records.length} records from ${store}`);
+        console.log(`[Firebase] Pulled ${fileMetas.length} file records from Storage`);
       } catch(e) {
-        console.warn(`[Firebase] Error pulling ${store}:`, e);
+        console.warn('[Firebase] Error pulling files:', e);
       }
+    } finally {
+      window._fbSyncSuppressed = false;
     }
+
     console.log('[Firebase] Pull complete.');
   }
 

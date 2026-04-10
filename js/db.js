@@ -186,7 +186,7 @@ const DB = (() => {
       request.onerror = () => reject(request.error);
     });
     // Firebase sync
-    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+    if (!window._fbSyncSuppressed && typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
       const record = { ...data, id };
       if (storeName === 'files') {
         FirebaseSync.storageSave(record).catch(e => console.warn('[FB] storageSave error:', e));
@@ -207,7 +207,7 @@ const DB = (() => {
       request.onerror = () => reject(request.error);
     });
     // Firebase sync
-    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+    if (!window._fbSyncSuppressed && typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
       if (storeName === 'files') {
         FirebaseSync.storageSave(data).catch(e => console.warn('[FB] storageSave error:', e));
       } else {
@@ -233,7 +233,7 @@ const DB = (() => {
       request.onerror = () => reject(request.error);
     });
     // Firebase sync
-    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+    if (!window._fbSyncSuppressed && typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
       if (storeName === 'files') {
         FirebaseSync.storageDelete(id, storagePath).catch(e => console.warn('[FB] storageDelete error:', e));
       } else {
