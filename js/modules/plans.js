@@ -299,8 +299,12 @@ const PlansModule = (() => {
     }
 
     // Bind thumbnail click → viewer
-    gallery.querySelectorAll('.plan-card-thumb').forEach((thumb, i) => {
-      thumb.addEventListener('click', () => openViewer(filtered, i));
+    gallery.querySelectorAll('.plan-card-thumb').forEach((thumb) => {
+      thumb.addEventListener('click', () => {
+        const planId = parseInt(thumb.dataset.planId);
+        const idx = filtered.findIndex(p => p.id === planId);
+        openViewer(filtered, idx >= 0 ? idx : 0);
+      });
     });
 
     // Bind edit
