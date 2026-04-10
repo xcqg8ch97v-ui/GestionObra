@@ -211,7 +211,8 @@ const DiaryModule = (() => {
   }
 
   // --- Incident Form ---
-  function openIncidentForm(incident = null, presetType = 'incident') {
+  async function openIncidentForm(incident = null, presetType = 'incident') {
+    customIncidentCategories = await DB.getCustomCategories(projectId, 'incidentCategory');
     const isEdit = !!incident;
     const effectiveType = isEdit ? (incident.entryType || 'incident') : presetType;
     const typeTitles = {
