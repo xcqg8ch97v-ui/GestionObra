@@ -15,15 +15,12 @@ const FirebaseSync = (() => {
     appId: "1:834830006871:web:9e65c0dc3b3f9e27da8112"
   };
 
-  // Stores que van a Firestore (sin archivos binarios)
+  // Stores que van a Firestore
   const FIRESTORE_STORES = [
     'projects', 'tasks', 'incidents', 'suppliers',
     'budgets', 'participants', 'plans', 'canvas',
-    'custom_categories'
+    'custom_categories', 'files'
   ];
-
-  // Stores que van a Firebase Storage (binarios)
-  const STORAGE_STORES = ['files'];
 
   let app = null;
   let auth = null;
@@ -119,6 +116,11 @@ const FirebaseSync = (() => {
     const { id, ...data } = record;
     if (id === undefined || id === null) return;
     const stripped = stripBinary(data);
+    // For files, also strip data/blob binary fields explicitly
+    if (store === 'files') {
+      delete stripped.data;
+      delete stripped.blob;
+    }
     await db.collection(colPath(currentUser.uid, store))
             .doc(toFsId(id))
             .set({ ...stripped, _localId: id, _syncedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -191,6 +193,7 @@ const FirebaseSync = (() => {
 
     try {
       for (const store of FIRESTORE_STORES) {
+        if (store === 'files') continue; // handled separately below with Cloudinary download
         try {
           const records = await fsPullAll(store);
           for (const record of records) {
@@ -268,21 +271,14 @@ const FirebaseSync = (() => {
       }
     }
 
-    // Push binary files via Cloudinary
+    // Push binary files via Cloudinary (metadata already pushed in loop above)
     try {
       if (typeof CloudinarySync !== 'undefined') {
         const { ok, fail } = await CloudinarySync.pushAllFiles();
-        console.log(`[FB Push] files: ${ok} subidos a Cloudinary, ${fail} errores`);
-      } else {
-        const files = await DB.getAll('files');
-        for (const file of files) {
-          const { data, blob, ...meta } = file;
-          await fsSet('files', meta);
-        }
-        console.log(`[FB Push] files: solo metadatos (Cloudinary no disponible)`);
+        console.log(`[FB Push] files Cloudinary: ${ok} subidos, ${fail} errores`);
       }
     } catch(e) {
-      console.error('[FB Push] Error en files:', e);
+      console.error('[FB Push] Error Cloudinary:', e);
     }
 
     console.log('[FB Push] ✅ Completado');
