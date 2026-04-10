@@ -1171,30 +1171,54 @@ const App = (() => {
     document.getElementById('btn-push-firebase')?.addEventListener('click', async () => {
       if (elStatus) elStatus.innerHTML = '<i data-lucide="upload-cloud"></i> Subiendo…';
       safeIcons();
+      const log = [];
+      const origLog  = console.log;
+      const origWarn = console.warn;
+      const origErr  = console.error;
+      console.log   = (...a) => { origLog(...a);  log.push('✅ ' + a.join(' ')); };
+      console.warn  = (...a) => { origWarn(...a); log.push('⚠️ ' + a.join(' ')); };
+      console.error = (...a) => { origErr(...a);  log.push('❌ ' + a.join(' ')); };
       try {
         await FirebaseSync.pushAllToFirebase();
-        toast('Datos subidos a la nube', 'success');
         if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Sincronizado';
       } catch(e) {
-        toast('Error al subir datos: ' + (e.message || e), 'error');
+        log.push('❌ EXCEPCIÓN: ' + (e.message || e));
         if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-off"></i> Error';
+      } finally {
+        console.log   = origLog;
+        console.warn  = origWarn;
+        console.error = origErr;
       }
       safeIcons();
+      const body = `<pre style="font-size:11px;line-height:1.6;max-height:320px;overflow-y:auto;white-space:pre-wrap;background:var(--bg-dark);padding:12px;border-radius:6px">${log.join('\n') || '(sin salida)'}</pre>`;
+      openModal('Resultado subida', body, `<button class="btn btn-primary" onclick="App.closeModal()">Cerrar</button>`, { size: 'sm' });
     });
 
     document.getElementById('btn-pull-firebase')?.addEventListener('click', async () => {
       if (elStatus) elStatus.innerHTML = '<i data-lucide="download-cloud"></i> Descargando…';
       safeIcons();
+      const log = [];
+      const origLog  = console.log;
+      const origWarn = console.warn;
+      const origErr  = console.error;
+      console.log   = (...a) => { origLog(...a);  log.push('✅ ' + a.join(' ')); };
+      console.warn  = (...a) => { origWarn(...a); log.push('⚠️ ' + a.join(' ')); };
+      console.error = (...a) => { origErr(...a);  log.push('❌ ' + a.join(' ')); };
       try {
         await FirebaseSync.pullAllToLocal();
         loadProjectCards();
-        toast('Datos descargados de la nube', 'success');
         if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-check"></i> Sincronizado';
       } catch(e) {
-        toast('Error al descargar datos: ' + (e.message || e), 'error');
+        log.push('❌ EXCEPCIÓN: ' + (e.message || e));
         if (elStatus) elStatus.innerHTML = '<i data-lucide="cloud-off"></i> Error';
+      } finally {
+        console.log   = origLog;
+        console.warn  = origWarn;
+        console.error = origErr;
       }
       safeIcons();
+      const body = `<pre style="font-size:11px;line-height:1.6;max-height:320px;overflow-y:auto;white-space:pre-wrap;background:var(--bg-dark);padding:12px;border-radius:6px">${log.join('\n') || '(sin salida)'}</pre>`;
+      openModal('Resultado descarga', body, `<button class="btn btn-primary" onclick="App.closeModal()">Cerrar</button>`, { size: 'sm' });
     });
   }
 
