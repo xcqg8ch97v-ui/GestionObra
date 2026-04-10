@@ -56,12 +56,37 @@ const FirebaseSync = (() => {
       currentUser = user;
       if (_onAuthChange) _onAuthChange(user);
     });
+
+    // Capturar resultado de signInWithRedirect al volver
+    auth.getRedirectResult().then(result => {
+      if (result && result.user) {
+        console.log('[Firebase] Redirect login ok:', result.user.displayName);
+      }
+    }).catch(err => {
+      if (err.code && err.code !== 'auth/no-current-user') {
+        console.error('[Firebase] Redirect result error:', err);
+      }
+    });
   }
 
   // ── Auth ────────────────────────────────
-  function loginWithGoogle() {
+  async function loginWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    return auth.signInWithPopup(provider);
+    // signInWithRedirect funciona en todos los entornos (https, Safari, iPad)
+    // signInWithPopup falla en file:// y algunos contextos Safari
+    try {
+      // Intentar popup primero (más rápido en desktop Chrome/Firefox)
+      await auth.signInWithPopup(provider);
+    } catch(e) {
+      if (e.code === 'auth/operation-not-supported-in-this-environment' ||
+          e.code === 'auth/popup-blocked' ||
+          e.code === 'auth/popup-closed-by-user') {
+        // Fallback a redirect (funciona en Safari, iPad, file://)
+        await auth.signInWithRedirect(provider);
+      } else {
+        throw e;
+      }
+    }
   }
 
   function logout() {
