@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#FFD500">
   <meta name="description" content="Abessis - Gestión de Obra">
-  <title>Abessis · Gestión de Obra</title>
+  <title data-i18n="app_title">Abessis · Gestión de Obra</title>
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +28,7 @@
       <button class="btn btn-outline" id="btn-import-project">
         <i data-lucide="upload"></i> <span data-i18n="import_project">Importar Obra</span>
       </button>
-      <button class="btn btn-outline" id="btn-theme-selector" title="Cambiar tema">
+      <button class="btn btn-outline" id="btn-theme-selector" title="Cambiar tema" data-i18n-attr="title" data-i18n="theme_toggle">
         <i data-lucide="sun" class="theme-icon-light"></i>
         <i data-lucide="moon" class="theme-icon-dark"></i>
       </button>
@@ -106,7 +106,7 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="sidebar-theme-btn" id="btn-theme-toggle" title="Cambiar tema" data-i18n-attr="title" data-i18n="options">
+      <button class="sidebar-theme-btn" id="btn-theme-toggle" title="Cambiar tema" data-i18n-attr="title" data-i18n="theme_toggle">
         <i data-lucide="sun" class="theme-icon-light"></i>
         <i data-lucide="moon" class="theme-icon-dark"></i>
         <span class="nav-text theme-label">Modo Claro</span>
@@ -122,7 +122,7 @@
   <main id="main-content" class="main-content" style="display:none">
     <!-- Top Bar -->
     <header class="topbar">
-      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Abrir menú">
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" data-i18n-attr="aria-label" data-i18n="open_menu">
         <i data-lucide="menu"></i>
       </button>
       <div class="topbar-title">
@@ -148,9 +148,9 @@
     <!-- Sections -->
     <section id="section-overview" class="content-section active">
       <div class="panel-header">
-        <h2>Resumen del Proyecto</h2>
-        <button class="overview-report-btn" id="btn-generate-report" title="Generar informe PDF">
-          <i data-lucide="file-text"></i> Generar Informe PDF
+        <h2 data-i18n="overview_title">Resumen del Proyecto</h2>
+        <button class="overview-report-btn" id="btn-generate-report" title="Generar informe PDF" data-i18n-attr="title" data-i18n="overview_report_button">
+          <i data-lucide="file-text"></i> <span data-i18n="overview_report_button">Generar Informe PDF</span>
         </button>
       </div>
       <div class="overview-grid" id="overview-grid"></div>
@@ -158,85 +158,85 @@
     <section id="section-canvas" class="content-section">
       <div class="canvas-toolbar">
         <div class="tool-group">
-          <button class="tool-btn active" data-tool="select" title="Seleccionar">
+          <button class="tool-btn active" data-tool="select" title="Seleccionar" data-i18n-attr="title" data-i18n="canvas_tool_select">
             <i data-lucide="mouse-pointer-2"></i>
           </button>
-          <button class="tool-btn" data-tool="hand" title="Mano (Desplazar)">
+          <button class="tool-btn" data-tool="hand" title="Mano (Desplazar)" data-i18n-attr="title" data-i18n="canvas_tool_hand">
             <i data-lucide="hand"></i>
           </button>
-          <button class="tool-btn" data-tool="draw" title="Redline (Dibujo libre)">
+          <button class="tool-btn" data-tool="draw" title="Redline (Dibujo libre)" data-i18n-attr="title" data-i18n="canvas_tool_draw">
             <i data-lucide="pencil"></i>
           </button>
-          <button class="tool-btn" data-tool="arrow" title="Flecha">
+          <button class="tool-btn" data-tool="arrow" title="Flecha" data-i18n-attr="title" data-i18n="canvas_tool_arrow">
             <i data-lucide="move-right"></i>
           </button>
-          <button class="tool-btn" data-tool="connector" title="Conector entre elementos">
+          <button class="tool-btn" data-tool="connector" title="Conector entre elementos" data-i18n-attr="title" data-i18n="canvas_tool_connector">
             <i data-lucide="git-merge"></i>
           </button>
-          <button class="tool-btn" data-tool="postit" title="Post-it">
+          <button class="tool-btn" data-tool="postit" title="Post-it" data-i18n-attr="title" data-i18n="canvas_tool_postit">
             <i data-lucide="sticky-note"></i>
           </button>
-          <button class="tool-btn" data-tool="text" title="Texto">
+          <button class="tool-btn" data-tool="text" title="Texto" data-i18n-attr="title" data-i18n="canvas_tool_text">
             <i data-lucide="type"></i>
           </button>
-          <button class="tool-btn" data-tool="shape-rect" title="Rectángulo con texto">
+          <button class="tool-btn" data-tool="shape-rect" title="Rectángulo con texto" data-i18n-attr="title" data-i18n="canvas_tool_shape_rect">
             <i data-lucide="square"></i>
           </button>
-          <button class="tool-btn" data-tool="shape-circle" title="Círculo con texto">
+          <button class="tool-btn" data-tool="shape-circle" title="Círculo con texto" data-i18n-attr="title" data-i18n="canvas_tool_shape_circle">
             <i data-lucide="circle"></i>
           </button>
-          <button class="tool-btn" data-tool="shape-diamond" title="Rombo con texto">
+          <button class="tool-btn" data-tool="shape-diamond" title="Rombo con texto" data-i18n-attr="title" data-i18n="canvas_tool_shape_diamond">
             <i data-lucide="diamond"></i>
           </button>
-          <button class="tool-btn" data-tool="shape-triangle" title="Triángulo con texto">
+          <button class="tool-btn" data-tool="shape-triangle" title="Triángulo con texto" data-i18n-attr="title" data-i18n="canvas_tool_shape_triangle">
             <i data-lucide="triangle"></i>
           </button>
-          <button class="tool-btn" data-tool="table" title="Tabla">
+          <button class="tool-btn" data-tool="table" title="Tabla" data-i18n-attr="title" data-i18n="canvas_tool_table">
             <i data-lucide="table"></i>
           </button>
         </div>
         <div class="tool-group">
-          <input type="color" id="draw-color" class="color-picker" value="#EF4444" title="Color de contorno">
-          <input type="color" id="fill-color" class="color-picker" value="#F8FAFC" title="Color de relleno">
-          <input type="color" id="text-border-color" class="color-picker" value="#0F172A" title="Color del marco del texto">
-          <input type="color" id="canvas-bg-color" class="color-picker" value="#1a1a2e" title="Color de fondo del canvas">
-          <select id="connector-arrow-mode" class="canvas-tool-select" title="Puntas del conector">
-            <option value="end">Punta destino</option>
-            <option value="start">Punta origen</option>
-            <option value="both">Puntas en ambos</option>
+          <input type="color" id="draw-color" class="color-picker" value="#EF4444" title="Color de contorno" data-i18n-attr="title" data-i18n="canvas_color_border">
+          <input type="color" id="fill-color" class="color-picker" value="#F8FAFC" title="Color de relleno" data-i18n-attr="title" data-i18n="canvas_color_fill">
+          <input type="color" id="text-border-color" class="color-picker" value="#0F172A" title="Color del marco del texto" data-i18n-attr="title" data-i18n="canvas_color_text_border">
+          <input type="color" id="canvas-bg-color" class="color-picker" value="#1a1a2e" title="Color de fondo del canvas" data-i18n-attr="title" data-i18n="canvas_color_bg">
+          <select id="connector-arrow-mode" class="canvas-tool-select" title="Puntas del conector" data-i18n-attr="title" data-i18n="canvas_arrow_mode_title">
+            <option value="end" data-i18n="connector_option_end">Punta destino</option>
+            <option value="start" data-i18n="connector_option_start">Punta origen</option>
+            <option value="both" data-i18n="connector_option_both">Puntas en ambos</option>
           </select>
-          <input type="range" id="draw-width" class="draw-width" min="1" max="16" step="1" value="4" title="Grosor">
+          <input type="range" id="draw-width" class="draw-width" min="1" max="16" step="1" value="4" title="Grosor" data-i18n-attr="title" data-i18n="draw_width_title">
           <span id="draw-width-value" class="draw-width-value">4 px</span>
         </div>
         <div class="tool-group">
-          <button class="tool-btn" id="btn-undo" title="Deshacer (Ctrl+Z)">
+          <button class="tool-btn" id="btn-undo" title="Deshacer (Ctrl+Z)" data-i18n-attr="title" data-i18n="tool_undo">
             <i data-lucide="undo-2"></i>
           </button>
-          <button class="tool-btn" id="btn-upload-plan" title="Importar imágenes al canvas (planos, capturas OneNote, fotos...)">
+          <button class="tool-btn" id="btn-upload-plan" title="Importar imágenes al canvas (planos, capturas OneNote, fotos...)" data-i18n-attr="title" data-i18n="tool_upload_plan">
             <i data-lucide="image-plus"></i>
           </button>
-          <button class="tool-btn" id="btn-attach-file" title="Adjuntar archivo">
+          <button class="tool-btn" id="btn-attach-file" title="Adjuntar archivo" data-i18n-attr="title" data-i18n="tool_attach_file">
             <i data-lucide="paperclip"></i>
           </button>
-          <button class="tool-btn" id="btn-clear-canvas" title="Limpiar canvas">
+          <button class="tool-btn" id="btn-clear-canvas" title="Limpiar canvas" data-i18n-attr="title" data-i18n="tool_clear_canvas">
             <i data-lucide="trash-2"></i>
           </button>
-          <button class="tool-btn" id="btn-save-canvas" title="Guardar estado">
+          <button class="tool-btn" id="btn-save-canvas" title="Guardar estado" data-i18n-attr="title" data-i18n="tool_save_canvas">
             <i data-lucide="save"></i>
           </button>
-          <button class="tool-btn" id="btn-export-canvas" title="Exportar imagen">
+          <button class="tool-btn" id="btn-export-canvas" title="Exportar imagen" data-i18n-attr="title" data-i18n="tool_export_image">
             <i data-lucide="download"></i>
           </button>
         </div>
         <div class="tool-group zoom-controls">
-          <button class="tool-btn" id="btn-zoom-out" title="Alejar">
+          <button class="tool-btn" id="btn-zoom-out" title="Alejar" data-i18n-attr="title" data-i18n="tool_zoom_out">
             <i data-lucide="zoom-out"></i>
           </button>
           <span id="zoom-level" class="zoom-level">100%</span>
-          <button class="tool-btn" id="btn-zoom-in" title="Acercar">
+          <button class="tool-btn" id="btn-zoom-in" title="Acercar" data-i18n-attr="title" data-i18n="tool_zoom_in">
             <i data-lucide="zoom-in"></i>
           </button>
-          <button class="tool-btn" id="btn-zoom-fit" title="Ajustar">
+          <button class="tool-btn" id="btn-zoom-fit" title="Ajustar" data-i18n-attr="title" data-i18n="tool_zoom_fit">
             <i data-lucide="maximize-2"></i>
           </button>
         </div>
@@ -298,7 +298,7 @@
       <!-- Sheet tabs -->
       <div class="sheet-tabs" id="sheet-tabs">
         <div class="sheet-tabs-list" id="sheet-tabs-list"></div>
-        <button class="sheet-tab-add" id="sheet-tab-add" title="Añadir hoja">
+        <button class="sheet-tab-add" id="sheet-tab-add" title="Añadir hoja" data-i18n-attr="title" data-i18n="sheet_add">
           <i data-lucide="plus"></i>
         </button>
       </div>
@@ -310,13 +310,13 @@
       <!-- Dashboard Sub-tabs -->
       <div class="sub-tabs">
         <button class="sub-tab active" data-subtab="suppliers">
-          <i data-lucide="users"></i> Proveedores
+          <i data-lucide="users"></i> <span data-i18n="dashboard_suppliers">Proveedores</span>
         </button>
         <button class="sub-tab" data-subtab="budgets">
-          <i data-lucide="calculator"></i> Presupuestos
+          <i data-lucide="calculator"></i> <span data-i18n="dashboard_budgets">Presupuestos</span>
         </button>
         <button class="sub-tab" data-subtab="comparator">
-          <i data-lucide="bar-chart-horizontal"></i> Comparador
+          <i data-lucide="bar-chart-horizontal"></i> <span data-i18n="dashboard_comparator">Comparador</span>
         </button>
       </div>
 
@@ -324,43 +324,43 @@
       <input type="file" id="pdf-import-input" accept=".pdf" style="display:none">
       <div id="panel-suppliers" class="sub-panel active">
         <div class="panel-header">
-          <h2>Subcontratas y Proveedores</h2>
+          <h2 data-i18n="dashboard_suppliers_title">Subcontratas y Proveedores</h2>
           <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-outline" id="btn-import-pdf" title="Importar PDF de proveedor (presupuesto, factura o albarán)">
-              <i data-lucide="file-text"></i> Importar PDF
+            <button class="btn btn-outline" id="btn-import-pdf" title="Importar PDF de proveedor (presupuesto, factura o albarán)" data-i18n-attr="title" data-i18n="dashboard_import_pdf">
+              <i data-lucide="file-text"></i> <span data-i18n="dashboard_import_pdf">Importar PDF</span>
             </button>
             <button class="btn btn-primary" id="btn-add-supplier">
-              <i data-lucide="plus"></i> Nuevo Proveedor
+              <i data-lucide="plus"></i> <span data-i18n="new_supplier">Nuevo Proveedor</span>
             </button>
           </div>
         </div>
         <div class="suppliers-filters">
           <div class="filter-search">
             <i data-lucide="search"></i>
-            <input type="text" id="supplier-search" placeholder="Buscar proveedor...">
+            <input type="text" id="supplier-search" placeholder="Buscar proveedor..." data-i18n-attr="placeholder" data-i18n="search_supplier">
           </div>
           <select id="supplier-trade-filter" class="filter-select">
-            <option value="__all__">Todos los gremios</option>
+            <option value="__all__" data-i18n="all_trades">Todos los gremios</option>
           </select>
         </div>
         <div class="table-container">
           <table class="data-table" id="suppliers-table">
             <thead>
               <tr>
-                <th>Empresa</th>
-                <th>Gremio</th>
-                <th>Contacto</th>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+                <th data-i18n="supplier_table_company">Empresa</th>
+                <th data-i18n="supplier_table_trade">Gremio</th>
+                <th data-i18n="supplier_table_contact">Contacto</th>
+                <th data-i18n="supplier_table_phone">Teléfono</th>
+                <th data-i18n="supplier_table_status">Estado</th>
+                <th data-i18n="supplier_table_actions">Acciones</th>
               </tr>
             </thead>
             <tbody id="suppliers-tbody"></tbody>
           </table>
           <div class="empty-state" id="suppliers-empty">
             <i data-lucide="users"></i>
-            <p>No hay proveedores registrados</p>
-            <button class="btn btn-outline" id="btn-add-supplier-empty">Añadir proveedor</button>
+            <p data-i18n="suppliers_empty">No hay proveedores registrados</p>
+            <button class="btn btn-outline" id="btn-add-supplier-empty"><span data-i18n="add_supplier">Añadir proveedor</span></button>
           </div>
         </div>
       </div>
@@ -368,13 +368,13 @@
       <!-- Budgets Panel -->
       <div id="panel-budgets" class="sub-panel">
         <div class="panel-header">
-          <h2>Partidas Presupuestarias</h2>
+          <h2 data-i18n="dashboard_budgets_title">Partidas Presupuestarias</h2>
           <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-outline" id="btn-import-bc3" title="Importar archivo BC3 / FIEBDC (Presto)">
-              <i data-lucide="file-up"></i> Importar BC3
+            <button class="btn btn-outline" id="btn-import-bc3" title="Importar archivo BC3 / FIEBDC (Presto)" data-i18n-attr="title" data-i18n="dashboard_import_bc3">
+              <i data-lucide="file-up"></i> <span data-i18n="dashboard_import_bc3">Importar BC3</span>
             </button>
             <button class="btn btn-primary" id="btn-add-budget">
-              <i data-lucide="plus"></i> Nueva Partida
+              <i data-lucide="plus"></i> <span data-i18n="add_budget">Nueva Partida</span>
             </button>
           </div>
           <input type="file" id="bc3-file-input" accept=".bc3,.BC3,.fiebdc,.FIEBDC" style="display:none">
@@ -422,52 +422,48 @@
 
     <section id="section-timeline" class="content-section">
       <div class="panel-header">
-        <h2>Cronograma de Obra</h2>
+        <h2 data-i18n="timeline_title">Cronograma de Obra</h2>
         <div class="timeline-actions">
-          <label class="tl-hide-completed" title="Ocultar tareas completadas">
+          <label class="tl-hide-completed" title="Ocultar tareas completadas" data-i18n-attr="title" data-i18n="timeline_hide_completed_label">
             <input type="checkbox" id="tl-hide-done">
-            <span>Ocultar completadas</span>
+            <span data-i18n="timeline_hide_completed">Ocultar completadas</span>
           </label>
-          <label class="tl-hide-completed" title="Mostrar u ocultar sábados y domingos">
+          <label class="tl-hide-completed" title="Mostrar u ocultar sábados y domingos" data-i18n-attr="title" data-i18n="timeline_show_weekends_label">
             <input type="checkbox" id="tl-show-weekends" checked>
-            <span>Fines de semana</span>
+            <span data-i18n="timeline_show_weekends">Fines de semana</span>
           </label>
           <div class="view-toggle">
-            <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt">
-              <i data-lucide="gantt-chart"></i>
-            </button>
-            <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista">
-              <i data-lucide="list"></i>
-            </button>
+            <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt" data-i18n-attr="title" data-i18n="timeline_view_gantt"></button>
+            <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista" data-i18n-attr="title" data-i18n="timeline_view_list"></button>
           </div>
-          <button class="btn btn-outline" id="btn-apply-template" title="Cargar plantilla base de cronograma">
-            <i data-lucide="layout-template"></i> Plantilla
+          <button class="btn btn-outline" id="btn-apply-template" title="Cargar plantilla base de cronograma" data-i18n-attr="title" data-i18n="timeline_apply_template">
+            <i data-lucide="layout-template"></i> <span data-i18n="timeline_template">Plantilla</span>
           </button>
-          <button class="btn btn-outline" id="btn-set-baseline" title="Guardar la planificación actual como referencia original para comparar después">
-            <i data-lucide="bookmark"></i> Guardar plan inicial
+          <button class="btn btn-outline" id="btn-set-baseline" title="Guardar la planificación actual como referencia original para comparar después" data-i18n-attr="title" data-i18n="timeline_set_baseline">
+            <i data-lucide="bookmark"></i> <span data-i18n="timeline_save_baseline">Guardar plan inicial</span>
           </button>
-          <button class="btn btn-outline" id="btn-clear-all-tasks" title="Borrar todas las tareas del cronograma">
-            <i data-lucide="trash-2"></i> Borrar todo
+          <button class="btn btn-outline" id="btn-clear-all-tasks" title="Borrar todas las tareas del cronograma" data-i18n-attr="title" data-i18n="timeline_clear_all">
+            <i data-lucide="trash-2"></i> <span data-i18n="timeline_clear_all">Borrar todo</span>
           </button>
           <button class="btn btn-primary" id="btn-add-task">
-            <i data-lucide="plus"></i> Nueva Tarea
+            <i data-lucide="plus"></i> <span data-i18n="add_task">Nueva Tarea</span>
           </button>
-          <button class="btn btn-outline" id="btn-zoom-timeline" title="Ajustar vista">
-            <i data-lucide="calendar"></i> Hoy
+          <button class="btn btn-outline" id="btn-zoom-timeline" title="Ajustar vista" data-i18n-attr="title" data-i18n="timeline_go_today">
+            <i data-lucide="calendar"></i> <span data-i18n="timeline_go_today">Hoy</span>
           </button>
         </div>
       </div>
       <div class="timeline-summary" id="timeline-summary"></div>
-      <div class="timeline-help-note">
+      <div class="timeline-help-note" data-i18n="timeline_help_note">
         El plan inicial es la fecha original prevista de cada tarea. Sirve para comparar lo planificado con lo que realmente va ocurriendo. La ruta crítica es el conjunto de tareas que no tienen margen: si una de ellas se retrasa, también se retrasa la fecha final de la obra. Las dependencias indican qué tarea depende de otra: hasta que la anterior no termina, la siguiente no debería arrancar.
       </div>
       <div class="timeline-legend">
-        <span class="legend-item"><span class="legend-color" style="background:var(--cyan)"></span> Normal</span>
-        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> En ejecución</span>
-        <span class="legend-item" title="La ruta crítica reúne las tareas sin margen. Si una de ellas se retrasa, se mueve la fecha final de la obra."><span class="legend-color" style="background:var(--red)"></span> Ruta Crítica</span>
-        <span class="legend-item"><span class="legend-color" style="background:var(--amber)"></span> Retrasada</span>
-        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> Completada</span>
-        <span class="legend-item"><span class="legend-color legend-color-baseline"></span> Plan inicial</span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--cyan)"></span> <span data-i18n="timeline_legend_normal">Normal</span></span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> <span data-i18n="timeline_legend_active">En ejecución</span></span>
+        <span class="legend-item" title="La ruta crítica reúne las tareas sin margen. Si una de ellas se retrasa, se mueve la fecha final de la obra." data-i18n-attr="title" data-i18n="timeline_legend_critical_label"><span class="legend-color" style="background:var(--red)"></span> <span data-i18n="timeline_legend_critical">Ruta Crítica</span></span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--amber)"></span> <span data-i18n="timeline_legend_delayed">Retrasada</span></span>
+        <span class="legend-item"><span class="legend-color" style="background:var(--green)"></span> <span data-i18n="timeline_legend_completed">Completada</span></span>
+        <span class="legend-item"><span class="legend-color legend-color-baseline"></span> <span data-i18n="timeline_legend_baseline">Plan inicial</span></span>
       </div>
       <div class="timeline-container" id="timeline-container">
         <div class="timeline-header" id="timeline-header"></div>
@@ -477,15 +473,15 @@
         <table class="timeline-table" id="timeline-table">
           <thead>
             <tr>
-              <th data-sort="name">Tarea</th>
-              <th data-sort="category">Categoría</th>
-              <th data-sort="responsible">Responsable</th>
-              <th data-sort="startDate">Inicio</th>
-              <th data-sort="endDate">Fin</th>
-              <th data-sort="duration">Duración</th>
-              <th data-sort="progress">Progreso</th>
-              <th>Dependencias</th>
-              <th>Estado</th>
+              <th data-sort="name" data-i18n="timeline_table_task">Tarea</th>
+              <th data-sort="category" data-i18n="timeline_table_category">Categoría</th>
+              <th data-sort="responsible" data-i18n="timeline_table_responsible">Responsable</th>
+              <th data-sort="startDate" data-i18n="timeline_table_start">Inicio</th>
+              <th data-sort="endDate" data-i18n="timeline_table_end">Fin</th>
+              <th data-sort="duration" data-i18n="timeline_table_duration">Duración</th>
+              <th data-sort="progress" data-i18n="timeline_table_progress">Progreso</th>
+              <th data-i18n="timeline_table_dependencies">Dependencias</th>
+              <th data-i18n="timeline_table_status">Estado</th>
               <th></th>
             </tr>
           </thead>
@@ -494,41 +490,41 @@
       </div>
       <div class="empty-state" id="timeline-empty">
         <i data-lucide="gantt-chart"></i>
-        <p>No hay tareas en el cronograma</p>
+        <p data-i18n="timeline_empty">No hay tareas en el cronograma</p>
         <div class="empty-state-actions">
-          <button class="btn btn-outline" id="btn-add-task-empty">Crear primera tarea</button>
-          <button class="btn btn-outline" id="btn-apply-template-empty">Usar plantilla base</button>
+          <button class="btn btn-outline" id="btn-add-task-empty" data-i18n="timeline_create_first_task">Crear primera tarea</button>
+          <button class="btn btn-outline" id="btn-apply-template-empty" data-i18n="timeline_use_template">Usar plantilla base</button>
         </div>
       </div>
     </section>
 
     <section id="section-diary" class="content-section">
       <div class="panel-header">
-        <h2>Diario de Obra</h2>
+        <h2 data-i18n="diary_title">Diario de Obra</h2>
         <div class="diary-actions">
           <button class="btn btn-primary" id="btn-add-incident">
-            <i data-lucide="alert-triangle"></i> Incidencia
+            <i data-lucide="alert-triangle"></i> <span data-i18n="diary_incident_button">Incidencia</span>
           </button>
           <button class="btn btn-outline" id="btn-add-comment">
-            <i data-lucide="message-square"></i> Comentario
+            <i data-lucide="message-square"></i> <span data-i18n="diary_comment_button">Comentario</span>
           </button>
           <button class="btn btn-outline" id="btn-add-evolution">
-            <i data-lucide="book-open"></i> Evolución
+            <i data-lucide="book-open"></i> <span data-i18n="diary_evolution_button">Evolución</span>
           </button>
           <div class="filter-group">
             <select id="diary-type-filter" class="filter-select">
-              <option value="all">Todos los tipos</option>
-              <option value="incident">Incidencias</option>
-              <option value="comment">Comentarios</option>
-              <option value="evolution">Evolución</option>
+              <option value="all" data-i18n="diary_type_all">Todos los tipos</option>
+              <option value="incident" data-i18n="diary_type_incidents">Incidencias</option>
+              <option value="comment" data-i18n="diary_type_comments">Comentarios</option>
+              <option value="evolution" data-i18n="diary_type_evolution">Evolución</option>
             </select>
           </div>
           <div class="filter-group">
             <select id="diary-filter" class="filter-select">
-              <option value="all">Todos los estados</option>
-              <option value="pending">Pendientes</option>
-              <option value="in-progress">En proceso</option>
-              <option value="resolved">Resueltas</option>
+              <option value="all" data-i18n="diary_filter_all">Todos los estados</option>
+              <option value="pending" data-i18n="diary_filter_pending">Pendientes</option>
+              <option value="in-progress" data-i18n="diary_filter_in_progress">En proceso</option>
+              <option value="resolved" data-i18n="diary_filter_resolved">Resueltas</option>
             </select>
           </div>
         </div>
@@ -536,21 +532,21 @@
       <div class="diary-feed" id="diary-feed"></div>
       <div class="empty-state" id="diary-empty">
         <i data-lucide="clipboard-list"></i>
-        <p>No hay entradas registradas</p>
+        <p data-i18n="diary_no_entries">No hay entradas registradas</p>
         <div class="empty-state-actions diary-empty-actions">
-          <button class="btn btn-outline" id="btn-add-incident-empty">Crear incidencia</button>
-          <button class="btn btn-outline" id="btn-add-comment-empty">Crear comentario</button>
-          <button class="btn btn-outline" id="btn-add-evolution-empty">Crear evolución</button>
+          <button class="btn btn-outline" id="btn-add-incident-empty" data-i18n="diary_create_incident">Crear incidencia</button>
+          <button class="btn btn-outline" id="btn-add-comment-empty" data-i18n="diary_create_comment">Crear comentario</button>
+          <button class="btn btn-outline" id="btn-add-evolution-empty" data-i18n="diary_create_evolution">Crear evolución</button>
         </div>
       </div>
     </section>
 
     <section id="section-plans" class="content-section">
       <div class="panel-header">
-        <h2>Planos de Obra</h2>
+        <h2 data-i18n="plans_title">Planos de Obra</h2>
         <div class="plans-actions">
           <button class="btn btn-primary" id="btn-upload-plan-section">
-            <i data-lucide="upload"></i> Subir Plano
+            <i data-lucide="upload"></i> <span data-i18n="plans_upload">Subir Plano</span>
           </button>
         </div>
       </div>
@@ -558,9 +554,9 @@
       <div class="plans-gallery" id="plans-gallery"></div>
       <div class="empty-state" id="plans-empty">
         <i data-lucide="map"></i>
-        <p>No hay planos subidos</p>
-        <small style="color:var(--text-muted)">Sube imágenes o PDFs de planos: arquitectura, estructura, instalaciones…</small>
-        <button class="btn btn-outline" id="btn-upload-plan-empty">Subir primer plano</button>
+        <p data-i18n="plans_empty_no_plans">No hay planos subidos</p>
+        <small style="color:var(--text-muted)" data-i18n="plans_empty_hint">Sube imágenes o PDFs de planos: arquitectura, estructura, instalaciones…</small>
+        <button class="btn btn-outline" id="btn-upload-plan-empty" data-i18n="plans_upload_first_plan">Subir primer plano</button>
       </div>
       <input type="file" id="plan-file-input" accept="image/*,application/pdf" multiple hidden>
     </section>
@@ -570,103 +566,103 @@
       <div class="plan-viewer-topbar">
         <span class="plan-viewer-title" id="plan-viewer-title"></span>
         <div class="plan-viewer-controls">
-          <button class="plan-viewer-btn plan-viewer-annotate" id="plan-viewer-annotate" title="Anotar plano"><i data-lucide="edit-3"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-download" title="Descargar plano"><i data-lucide="download"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-zoom-in" title="Ampliar"><i data-lucide="zoom-in"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-zoom-out" title="Reducir"><i data-lucide="zoom-out"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-fit" title="Ajustar"><i data-lucide="maximize-2"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-prev" title="Anterior"><i data-lucide="chevron-left"></i></button>
-          <button class="plan-viewer-btn" id="plan-viewer-next" title="Siguiente"><i data-lucide="chevron-right"></i></button>
-          <button class="plan-viewer-btn plan-viewer-close" id="plan-viewer-close" title="Cerrar"><i data-lucide="x"></i></button>
+          <button class="plan-viewer-btn plan-viewer-annotate" id="plan-viewer-annotate" title="Anotar plano" data-i18n-attr="title" data-i18n="plan_viewer_annotate"><i data-lucide="edit-3"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-download" title="Descargar plano" data-i18n-attr="title" data-i18n="plan_viewer_download"><i data-lucide="download"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-zoom-in" title="Ampliar" data-i18n-attr="title" data-i18n="plan_viewer_zoom_in"><i data-lucide="zoom-in"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-zoom-out" title="Reducir" data-i18n-attr="title" data-i18n="plan_viewer_zoom_out"><i data-lucide="zoom-out"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-fit" title="Ajustar" data-i18n-attr="title" data-i18n="plan_viewer_fit"><i data-lucide="maximize-2"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-prev" title="Anterior" data-i18n-attr="title" data-i18n="plan_viewer_prev"><i data-lucide="chevron-left"></i></button>
+          <button class="plan-viewer-btn" id="plan-viewer-next" title="Siguiente" data-i18n-attr="title" data-i18n="plan_viewer_next"><i data-lucide="chevron-right"></i></button>
+          <button class="plan-viewer-btn plan-viewer-close" id="plan-viewer-close" title="Cerrar" data-i18n-attr="title" data-i18n="plan_viewer_close"><i data-lucide="x"></i></button>
         </div>
       </div>
       <!-- Annotation toolbar (hidden until annotate mode) -->
       <div class="plan-anno-toolbar" id="plan-anno-toolbar">
-        <button class="plan-anno-btn active" data-tool="draw" title="Dibujo libre"><i data-lucide="pencil"></i></button>
-        <button class="plan-anno-btn" data-tool="arrow" title="Flecha"><i data-lucide="move-right"></i></button>
-        <button class="plan-anno-btn" data-tool="text" title="Texto"><i data-lucide="type"></i></button>
-        <button class="plan-anno-btn" data-tool="rect" title="Rectángulo"><i data-lucide="square"></i></button>
-        <button class="plan-anno-btn" data-tool="circle" title="Círculo"><i data-lucide="circle"></i></button>
+        <button class="plan-anno-btn active" data-tool="draw" title="Dibujo libre" data-i18n-attr="title" data-i18n="plan_anno_draw"><i data-lucide="pencil"></i></button>
+        <button class="plan-anno-btn" data-tool="arrow" title="Flecha" data-i18n-attr="title" data-i18n="plan_anno_arrow"><i data-lucide="move-right"></i></button>
+        <button class="plan-anno-btn" data-tool="text" title="Texto" data-i18n-attr="title" data-i18n="plan_anno_text"><i data-lucide="type"></i></button>
+        <button class="plan-anno-btn" data-tool="rect" title="Rectángulo" data-i18n-attr="title" data-i18n="plan_anno_rect"><i data-lucide="square"></i></button>
+        <button class="plan-anno-btn" data-tool="circle" title="Círculo" data-i18n-attr="title" data-i18n="plan_anno_circle"><i data-lucide="circle"></i></button>
         <span class="plan-anno-sep"></span>
-        <input type="color" id="plan-anno-color" value="#EF4444" class="plan-anno-color" title="Color">
-        <select id="plan-anno-width" class="plan-anno-select" title="Grosor">
-          <option value="2">Fino</option>
-          <option value="4" selected>Normal</option>
-          <option value="8">Grueso</option>
+        <input type="color" id="plan-anno-color" value="#EF4444" class="plan-anno-color" title="Color" data-i18n-attr="title" data-i18n="plan_anno_color">
+        <select id="plan-anno-width" class="plan-anno-select" title="Grosor" data-i18n-attr="title" data-i18n="plan_anno_width_title">
+          <option value="2" data-i18n="plan_anno_thin">Fino</option>
+          <option value="4" selected data-i18n="plan_anno_normal">Normal</option>
+          <option value="8" data-i18n="plan_anno_thick">Grueso</option>
         </select>
         <span class="plan-anno-sep"></span>
-        <button class="plan-anno-btn" id="plan-anno-undo" title="Deshacer"><i data-lucide="undo-2"></i></button>
-        <button class="plan-anno-btn" id="plan-anno-clear" title="Borrar todo"><i data-lucide="trash-2"></i></button>
+        <button class="plan-anno-btn" id="plan-anno-undo" title="Deshacer" data-i18n-attr="title" data-i18n="plan_anno_undo"><i data-lucide="undo-2"></i></button>
+        <button class="plan-anno-btn" id="plan-anno-clear" title="Borrar todo" data-i18n-attr="title" data-i18n="plan_anno_clear"><i data-lucide="trash-2"></i></button>
         <span class="plan-anno-sep"></span>
-        <button class="plan-anno-btn plan-anno-save" id="plan-anno-save" title="Guardar anotaciones"><i data-lucide="save"></i> Guardar</button>
-        <button class="plan-anno-btn plan-anno-exit" id="plan-anno-exit" title="Salir del editor"><i data-lucide="x"></i> Salir</button>
+        <button class="plan-anno-btn plan-anno-save" id="plan-anno-save" title="Guardar anotaciones" data-i18n-attr="title" data-i18n="plan_anno_save"><i data-lucide="save"></i> <span data-i18n="save">Guardar</span></button>
+        <button class="plan-anno-btn plan-anno-exit" id="plan-anno-exit" title="Salir del editor" data-i18n-attr="title" data-i18n="plan_anno_exit"><i data-lucide="x"></i> <span data-i18n="exit">Salir</span></button>
       </div>
       <div class="plan-viewer-body" id="plan-viewer-body"></div>
     </div>
 
     <section id="section-files" class="content-section">
       <div class="panel-header">
-        <h2>Documentos de Obra</h2>
+          <h2 data-i18n="files_title">Documentos</h2>
         <div class="files-actions">
           <button class="btn btn-primary" id="btn-upload-file">
-            <i data-lucide="upload"></i> Subir Documento
+            <i data-lucide="upload"></i> <span data-i18n="upload_file">Subir Documento</span>
           </button>
         </div>
       </div>
       <div class="files-filter-bar">
         <select id="files-filter-type" class="filter-select">
-          <option value="all">Todos los tipos</option>
-          <option value="pdf">PDF</option>
-          <option value="image">Imágenes</option>
-          <option value="doc">Documentos</option>
-          <option value="spreadsheet">Hojas de cálculo</option>
-          <option value="other">Otros</option>
+          <option value="all" data-i18n="files_filter_all_types">Todos los tipos</option>
+          <option value="pdf" data-i18n="files_filter_pdf">PDF</option>
+          <option value="image" data-i18n="files_filter_images">Imágenes</option>
+          <option value="doc" data-i18n="files_filter_docs">Documentos</option>
+          <option value="spreadsheet" data-i18n="files_filter_spreadsheets">Hojas de cálculo</option>
+          <option value="other" data-i18n="files_filter_other">Otros</option>
         </select>
         <select id="files-sort" class="filter-select">
-          <option value="date-desc">Más recientes</option>
-          <option value="date-asc">Más antiguos</option>
-          <option value="name-asc">Nombre A-Z</option>
-          <option value="name-desc">Nombre Z-A</option>
-          <option value="size-desc">Mayor tamaño</option>
-          <option value="size-asc">Menor tamaño</option>
+          <option value="date-desc" data-i18n="files_sort_recent">Más recientes</option>
+          <option value="date-asc" data-i18n="files_sort_oldest">Más antiguos</option>
+          <option value="name-asc" data-i18n="files_sort_name_az">Nombre A-Z</option>
+          <option value="name-desc" data-i18n="files_sort_name_za">Nombre Z-A</option>
+          <option value="size-desc" data-i18n="files_sort_size_desc">Mayor tamaño</option>
+          <option value="size-asc" data-i18n="files_sort_size_asc">Menor tamaño</option>
         </select>
         <label class="files-group-toggle">
           <input type="checkbox" id="files-group-by-type" checked>
-          <span>Agrupar por tipo</span>
+          <span data-i18n="files_group_by_type">Agrupar por tipo</span>
         </label>
       </div>
       <div class="files-list" id="files-list"></div>
       <div class="empty-state" id="files-empty">
         <i data-lucide="folder-open"></i>
-        <p>No hay documentos subidos</p>
-        <button class="btn btn-outline" id="btn-upload-file-empty">Subir primer documento</button>
+        <p data-i18n="files_empty">No hay documentos subidos</p>
+        <button class="btn btn-outline" id="btn-upload-file-empty" data-i18n="files_upload_first_document">Subir primer documento</button>
       </div>
       <input type="file" id="file-upload-input" multiple hidden>
     </section>
 
     <section id="section-participants" class="content-section">
       <div class="panel-header">
-        <h2>Participantes de la Obra</h2>
+          <h2 data-i18n="participants_title">Participantes</h2>
         <div class="participants-actions">
           <div class="filter-search">
             <i data-lucide="search"></i>
-            <input type="text" id="participants-search" placeholder="Buscar participante...">
+            <input type="text" id="participants-search" placeholder="Buscar participante..." data-i18n-attr="placeholder" data-i18n="participants_search_placeholder">
           </div>
           <select id="participants-type-filter" class="filter-select">
-            <option value="all">Todos</option>
-            <option value="internal">Internos</option>
-            <option value="external">Externos</option>
+            <option value="all" data-i18n="participants_filter_all">Todos</option>
+            <option value="internal" data-i18n="participants_filter_internal">Internos</option>
+            <option value="external" data-i18n="participants_filter_external">Externos</option>
           </select>
           <button class="btn btn-primary" id="btn-add-participant">
-            <i data-lucide="user-plus"></i> Nuevo Participante
+            <i data-lucide="user-plus"></i> <span data-i18n="new_participant">Nuevo Participante</span>
           </button>
         </div>
       </div>
       <div class="participants-grid" id="participants-grid"></div>
       <div class="empty-state" id="participants-empty">
         <i data-lucide="contact"></i>
-        <p>No hay participantes registrados</p>
-        <button class="btn btn-outline" id="btn-add-participant-empty">Añadir primer participante</button>
+        <p data-i18n="participants_no_participants">No hay participantes registrados</p>
+        <button class="btn btn-outline" id="btn-add-participant-empty" data-i18n="participants_add_first">Añadir primer participante</button>
       </div>
     </section>
   </main>
@@ -676,7 +672,7 @@
     <div class="modal" id="modal">
       <div class="modal-header">
         <h3 id="modal-title">Modal</h3>
-        <button class="modal-close" id="modal-close" aria-label="Cerrar">
+        <button class="modal-close" id="modal-close" aria-label="Cerrar" data-i18n-attr="aria-label" data-i18n="close">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -694,7 +690,7 @@
   <!-- Force-clear stale service workers and caches -->
   <script>
     (function() {
-      var SW_VERSION = 'v3';
+      var SW_VERSION = 'v4';
       var key = 'abessis-sw-version';
       var stored = localStorage.getItem(key);
       if (stored !== SW_VERSION && 'serviceWorker' in navigator) {

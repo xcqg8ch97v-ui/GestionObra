@@ -77,24 +77,24 @@ const OverviewModule = (() => {
 
   function formatRelativeDay(targetDate) {
     const days = daysDiff(new Date(), targetDate);
-    if (days === 0) return 'Hoy';
-    if (days === 1) return 'Mañana';
-    if (days > 1) return `En ${days} días`;
-    return `Hace ${Math.abs(days)} días`;
+    if (days === 0) return App.t('today');
+    if (days === 1) return App.t('tomorrow');
+    if (days > 1) return App.t('in_days', { count: days });
+    return App.t('days_ago', { count: Math.abs(days) });
   }
 
   function buildDeliverySummary(project) {
     if (!project?.targetEndDate) {
       return {
-        value: 'Sin fecha',
-        detail: 'Define una entrega objetivo para medir riesgo y crear el hito final.'
+        value: App.t('overview_no_date'),
+        detail: App.t('overview_set_target_date')
       };
     }
 
     const relative = formatRelativeDay(project.targetEndDate);
     return {
       value: App.formatDate(project.targetEndDate),
-      detail: `Entrega objetivo ${relative.toLowerCase()}`
+      detail: App.t('overview_delivery_target', { relative: relative.toLowerCase() })
     };
   }
 
@@ -176,8 +176,8 @@ const OverviewModule = (() => {
       alerts.push({
         level: 'danger',
         icon: 'triangle-alert',
-        title: 'Tareas retrasadas',
-        detail: `${delayedTasks.length} tarea(s) fuera de plazo`,
+        title: App.t('overview_alert_delayed_tasks'),
+        detail: App.t('overview_alert_delayed_count', { count: delayedTasks.length }),
         meta: delayedTasks.slice(0, 2).map(task => task.name).join(' · ')
       });
     }
@@ -185,8 +185,8 @@ const OverviewModule = (() => {
       alerts.push({
         level: 'success',
         icon: 'play-circle',
-        title: 'Tareas en ejecución',
-        detail: `${activeTasks.length} tarea(s) activas hoy`,
+        title: App.t('overview_alert_active_tasks'),
+        detail: App.t('overview_alert_active_count', { count: activeTasks.length }),
         meta: activeTasks.slice(0, 2).map(task => task.name).join(' · ')
       });
     }
@@ -194,20 +194,20 @@ const OverviewModule = (() => {
       alerts.push({
         level: 'warning',
         icon: 'shield-alert',
-        title: 'Incidencia pendiente',
+        title: App.t('overview_alert_pending_incident'),
         detail: item.description,
-        meta: `${App.formatDateTime(item.date)} · ${item.category || 'Sin categoría'}`,
+        meta: `${App.formatDateTime(item.date)} · ${item.category || App.t('overview_no_category')}`,
         action: 'open-incident',
         incidentId: item.id,
-        actionLabel: 'Abrir incidencia'
+        actionLabel: App.t('overview_open_incident')
       });
     });
     if (budgetDeviation > 5) {
       alerts.push({
         level: 'danger',
         icon: 'wallet-cards',
-        title: 'Desviación presupuestaria',
-        detail: `+${Math.round(budgetDeviation)}% sobre lo previsto`,
+        title: App.t('overview_alert_budget_deviation'),
+        detail: App.t('overview_alert_budget_deviation_detail', { percent: Math.round(budgetDeviation) }),
         meta: `${App.formatCurrency(totalReal)} vs ${App.formatCurrency(totalEstimated)}`
       });
     }
@@ -215,8 +215,8 @@ const OverviewModule = (() => {
       alerts.push({
         level: 'info',
         icon: 'users-round',
-        title: 'Proveedores pendientes',
-        detail: `${pendingSuppliers.length} proveedor(es) por activar`,
+        title: App.t('overview_alert_pending_suppliers'),
+        detail: App.t('overview_alert_pending_suppliers_detail', { count: pendingSuppliers.length }),
         meta: pendingSuppliers.slice(0, 2).map(item => item.name).join(' · ')
       });
     }
@@ -317,24 +317,24 @@ const OverviewModule = (() => {
       <div class="overview-card overview-card-wide overview-hero-card">
         <div class="overview-card-header">
           <i data-lucide="sparkles"></i>
-          <span>Panel Ejecutivo</span>
+          <span>${App.t('overview_hero_panel')}</span>
         </div>
         <div class="overview-hero-stats">
           <div class="overview-hero-stat">
             <strong>${taskProgress}%</strong>
-            <span>avance global</span>
+            <span>${App.t('overview_global_progress')}</span>
           </div>
           <div class="overview-hero-stat">
             <strong>${App.formatCurrency(totalReal)}</strong>
-            <span>coste actual</span>
+            <span>${App.t('overview_current_cost')}</span>
           </div>
           <div class="overview-hero-stat">
             <strong>${diaryEntries}</strong>
-            <span>entradas de diario</span>
+            <span>${App.t('overview_diary_entries')}</span>
           </div>
           <div class="overview-hero-stat">
             <strong>${suppliers.length}</strong>
-            <span>proveedores</span>
+            <span>${App.t('overview_suppliers')}</span>
           </div>
         </div>
       </div>
@@ -342,21 +342,21 @@ const OverviewModule = (() => {
       <div class="overview-card overview-card-wide">
         <div class="overview-card-header">
           <i data-lucide="zap"></i>
-          <span>Acciones rápidas</span>
+          <span>${App.t('overview_quick_actions')}</span>
         </div>
         <div class="overview-quick-actions">
-          <button class="overview-quick-btn" data-overview-action="new-task"><i data-lucide="plus"></i><span>Nueva tarea</span></button>
-          <button class="overview-quick-btn" data-overview-action="new-incident"><i data-lucide="triangle-alert"></i><span>Nueva incidencia</span></button>
-          <button class="overview-quick-btn" data-overview-action="new-comment"><i data-lucide="message-square"></i><span>Nuevo comentario</span></button>
-          <button class="overview-quick-btn" data-overview-action="upload-file"><i data-lucide="upload"></i><span>Subir documento</span></button>
-          <button class="overview-quick-btn" data-overview-action="new-participant"><i data-lucide="user-plus"></i><span>Añadir participante</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-task"><i data-lucide="plus"></i><span>${App.t('add_task')}</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-incident"><i data-lucide="triangle-alert"></i><span>${App.t('add_incident')}</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-comment"><i data-lucide="message-square"></i><span>${App.t('add_comment')}</span></button>
+          <button class="overview-quick-btn" data-overview-action="upload-file"><i data-lucide="upload"></i><span>${App.t('upload_file')}</span></button>
+          <button class="overview-quick-btn" data-overview-action="new-participant"><i data-lucide="user-plus"></i><span>${App.t('add_participant')}</span></button>
         </div>
       </div>
 
       <div class="overview-card overview-card-wide">
         <div class="overview-card-header">
           <i data-lucide="siren"></i>
-          <span>Alertas automáticas</span>
+          <span>${App.t('overview_alerts')}</span>
         </div>
         ${alerts.length > 0 ? `
           <div class="overview-alert-list">
@@ -367,12 +367,12 @@ const OverviewModule = (() => {
                   <div class="overview-alert-title">${App.escapeHTML(alert.title)}</div>
                   <div class="overview-alert-detail">${App.escapeHTML(alert.detail)}</div>
                   ${alert.meta ? `<div class="overview-alert-meta">${App.escapeHTML(alert.meta)}</div>` : ''}
-                  ${alert.action ? `<button class="overview-alert-link" data-overview-action="${alert.action}" data-incident-id="${alert.incidentId || ''}">${App.escapeHTML(alert.actionLabel || 'Abrir')}</button>` : ''}
+                  ${alert.action ? `<button class="overview-alert-link" data-overview-action="${alert.action}" data-incident-id="${alert.incidentId || ''}">${App.escapeHTML(alert.actionLabel || App.t('open'))}</button>` : ''}
                 </div>
               </div>
             `).join('')}
           </div>
-        ` : '<div class="overview-card-detail">No hay alertas relevantes ahora mismo</div>'}
+        ` : `<div class="overview-card-detail">${App.t('overview_no_alerts')}</div>`}
       </div>
 
       <div class="overview-card">

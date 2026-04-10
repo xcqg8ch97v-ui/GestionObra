@@ -695,12 +695,12 @@ const CanvasModule = (() => {
           connectorStartTarget = target;
           canvas.setActiveObject(target);
           canvas.requestRenderAll();
-          App.toast('Selecciona el elemento de destino para crear el conector', 'info');
+          App.toast(App.t('select_destination_element_for_connector'), 'info');
           return;
         }
 
         if (target === connectorStartTarget) {
-          App.toast('Selecciona otro elemento como destino', 'warning');
+          App.toast(App.t('select_other_destination_element'), 'warning');
           return;
         }
 
@@ -921,7 +921,7 @@ const CanvasModule = (() => {
 
     // Canvas actions
     document.getElementById('btn-clear-canvas').addEventListener('click', () => {
-      if (confirm('¿Limpiar toda la mesa de trabajo?')) {
+      if (confirm(App.t('confirm_clear_canvas'))) {
         canvas.clear();
         setCanvasBackgroundColor(getCanvasBackgroundColor(), false);
         drawGrid();
@@ -930,7 +930,7 @@ const CanvasModule = (() => {
         tables = [];
         clearTableDOM();
         deselectTable();
-        App.toast('Mesa de trabajo limpiada', 'info');
+        App.toast(App.t('canvas_cleared'), 'info');
       }
     });
 
@@ -1394,7 +1394,7 @@ const CanvasModule = (() => {
   function editShapeText(group) {
     const { label } = getShapeParts(group);
     if (!label) return;
-    const nextText = prompt('Texto de la forma:', label.text || '');
+    const nextText = prompt(App.t('shape_text_prompt'), label.text || '');
     if (nextText === null) return;
     label.set('text', nextText.trim());
     group.addWithUpdate();
@@ -1862,7 +1862,7 @@ const CanvasModule = (() => {
 
   function tableRemoveRow() {
     const table = getSelectedTableData(); if (!table) return;
-    if (table.data.length <= 2) { App.toast('Mínimo 2 filas', 'warning'); return; }
+    if (table.data.length <= 2) { App.toast(App.t('minimum_two_rows'), 'warning'); return; }
     table.data.pop();
     table.rowHeights.pop();
     renderHTMLTable(table); selectTable(table.id);
@@ -1870,7 +1870,7 @@ const CanvasModule = (() => {
 
   function tableRemoveCol() {
     const table = getSelectedTableData(); if (!table) return;
-    if (table.data[0].length <= 1) { App.toast('Mínimo 1 columna', 'warning'); return; }
+    if (table.data[0].length <= 1) { App.toast(App.t('minimum_one_column'), 'warning'); return; }
     table.data.forEach(row => row.pop());
     table.colWidths.pop();
     renderHTMLTable(table); selectTable(table.id);
@@ -1878,7 +1878,7 @@ const CanvasModule = (() => {
 
   function tableDeleteSelected() {
     const table = getSelectedTableData(); if (!table) return;
-    if (!confirm('¿Eliminar esta tabla?')) return;
+    if (!confirm(App.t('confirm_delete_table'))) return;
     const el = document.getElementById(table.id);
     if (el) el.remove();
     tables = tables.filter(t => t.id !== table.id);
@@ -2194,12 +2194,12 @@ const CanvasModule = (() => {
 
       const imageFiles = files.filter(f => f.type.startsWith('image/'));
       if (imageFiles.length === 0) {
-        App.toast('Selecciona archivos de imagen (PNG, JPG, etc.)', 'warning');
+        App.toast(App.t('select_image_files'), 'warning');
         fileInput.value = '';
         return;
       }
 
-      App.toast(`Importando ${imageFiles.length} imagen(es)...`, 'info');
+      App.toast(App.t('importing_images', { count: imageFiles.length }), 'info');
 
       const GAP = 40;
       let cursorX = 60;
@@ -2242,7 +2242,7 @@ const CanvasModule = (() => {
       }
 
       canvas.requestRenderAll();
-      App.toast(`${imageFiles.length} imagen(es) importada(s) al canvas`, 'success');
+      App.toast(App.t('images_imported_to_canvas', { count: imageFiles.length }), 'success');
       fileInput.value = '';
     });
   }
@@ -2466,13 +2466,13 @@ const CanvasModule = (() => {
   async function downloadAttachedFile(fileId, fallbackName) {
     const file = await DB.getById('files', fileId);
     if (!file) {
-      App.toast('Archivo no encontrado', 'error');
+      App.toast(App.t('file_not_found'), 'error');
       return;
     }
 
     const binaryData = file.data || (file.blob instanceof Blob ? await file.blob.arrayBuffer() : null);
     if (!binaryData) {
-      App.toast('No se pudo recuperar el contenido del archivo', 'error');
+      App.toast(App.t('file_content_unavailable'), 'error');
       return;
     }
 
@@ -2498,10 +2498,10 @@ const CanvasModule = (() => {
     const fileName = target._attachedFileName || 'Archivo';
     menu.innerHTML = `
       <div class="ctx-header">${fileName}</div>
-      <button class="ctx-item" data-action="download"><i data-lucide="download" style="width:14px;height:14px"></i> Descargar</button>
-      <button class="ctx-item" data-action="rename"><i data-lucide="pencil" style="width:14px;height:14px"></i> Renombrar</button>
+      <button class="ctx-item" data-action="download"><i data-lucide="download" style="width:14px;height:14px"></i> ${App.t('download')}</button>
+      <button class="ctx-item" data-action="rename"><i data-lucide="pencil" style="width:14px;height:14px"></i> ${App.t('rename')}</button>
       <div class="ctx-sep"></div>
-      <button class="ctx-item ctx-danger" data-action="delete"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Eliminar</button>
+      <button class="ctx-item ctx-danger" data-action="delete"><i data-lucide="trash-2" style="width:14px;height:14px"></i> ${App.t('delete')}</button>
     `;
 
     document.body.appendChild(menu);
@@ -2520,7 +2520,7 @@ const CanvasModule = (() => {
       if (action === 'download') {
         await downloadAttachedFile(target._attachedFileId, target._attachedFileName);
       } else if (action === 'rename') {
-        const newName = prompt('Nombre del archivo:', target._attachedFileName || '');
+        const newName = prompt(App.t('file_name_prompt'), target._attachedFileName || '');
         if (newName && newName.trim()) {
           const trimmed = newName.trim();
           target._attachedFileName = trimmed;
@@ -2597,7 +2597,7 @@ const CanvasModule = (() => {
     };
     await DB.saveCanvasState(projectId, payload, currentSheetId);
     await DB.saveSheetIndex(projectId, sheets);
-    App.toast('Mesa de trabajo guardada', 'success');
+    App.toast(App.t('canvas_saved'), 'success');
   }
 
   async function saveCurrentSheetSilent() {

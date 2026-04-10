@@ -7,25 +7,25 @@ const FilesModule = (() => {
   let projectId = null;
 
   const FILE_TYPES = {
-    'application/pdf': { icon: 'file-text', class: 'pdf', label: 'PDF' },
-    'image/jpeg': { icon: 'image', class: 'image', label: 'Imagen' },
-    'image/png': { icon: 'image', class: 'image', label: 'Imagen' },
-    'image/webp': { icon: 'image', class: 'image', label: 'Imagen' },
-    'image/gif': { icon: 'image', class: 'image', label: 'Imagen' },
-    'application/msword': { icon: 'file-text', class: 'doc', label: 'Doc' },
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { icon: 'file-text', class: 'doc', label: 'Doc' },
-    'application/vnd.ms-excel': { icon: 'table', class: 'spreadsheet', label: 'Excel' },
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'table', class: 'spreadsheet', label: 'Excel' },
-    'text/plain': { icon: 'file-text', class: 'doc', label: 'Texto' },
-    'application/zip': { icon: 'archive', class: 'other', label: 'ZIP' }
+    'application/pdf': { icon: 'file-text', class: 'pdf', label: App.t('file_type_pdf') },
+    'image/jpeg': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+    'image/png': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+    'image/webp': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+    'image/gif': { icon: 'image', class: 'image', label: App.t('file_type_image') },
+    'application/msword': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { icon: 'file-text', class: 'doc', label: App.t('file_type_doc') },
+    'application/vnd.ms-excel': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'table', class: 'spreadsheet', label: App.t('file_type_spreadsheet') },
+    'text/plain': { icon: 'file-text', class: 'doc', label: App.t('file_type_text') },
+    'application/zip': { icon: 'archive', class: 'other', label: App.t('file_type_zip') }
   };
 
   const CATEGORIES = {
-    pdf:         { label: 'PDF',              icon: 'file-text',  match: f => f.type === 'application/pdf' },
-    image:       { label: 'Imágenes',         icon: 'image',      match: f => f.type.startsWith('image/') },
-    doc:         { label: 'Documentos',       icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
-    spreadsheet: { label: 'Hojas de cálculo', icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
-    other:       { label: 'Otros',            icon: 'file',       match: () => true }
+    pdf:         { label: App.t('files_category_pdf'),              icon: 'file-text',  match: f => f.type === 'application/pdf' },
+    image:       { label: App.t('files_category_image'),            icon: 'image',      match: f => f.type.startsWith('image/') },
+    doc:         { label: App.t('files_category_doc'),              icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
+    spreadsheet: { label: App.t('files_category_spreadsheet'),      icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
+    other:       { label: App.t('files_category_other'),            icon: 'file',       match: () => true }
   };
 
   function getCategory(f) {
@@ -92,7 +92,7 @@ const FilesModule = (() => {
     for (const file of files) {
       // Max 50 MB per file
       if (file.size > 50 * 1024 * 1024) {
-        App.toast(`${file.name} excede 50MB`, 'warning');
+        App.toast(App.t('file_exceeds_size_limit', { name: file.name, size: '50MB' }), 'warning');
         continue;
       }
 
@@ -110,7 +110,7 @@ const FilesModule = (() => {
       await DB.add('files', record);
     }
 
-    App.toast(`${files.length} archivo(s) subido(s)`, 'success');
+    App.toast(App.t('files_uploaded_count', { count: files.length }), 'success');
     e.target.value = '';
     loadFiles();
   }
@@ -207,10 +207,10 @@ const FilesModule = (() => {
           <div class="file-meta">${info.label} · ${sizeStr} · ${App.formatDate(f.uploadedAt)}</div>
         </div>
         <div class="file-actions">
-          <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="Descargar">
+          <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="${App.t('download')}">
             <i data-lucide="download"></i>
           </button>
-          <button class="action-btn delete" onclick="FilesModule.deleteFile(${f.id})" title="Eliminar">
+          <button class="action-btn delete" onclick="FilesModule.deleteFile(${f.id})" title="${App.t('delete')}">
             <i data-lucide="trash-2"></i>
           </button>
         </div>
@@ -221,13 +221,13 @@ const FilesModule = (() => {
   async function downloadFile(id) {
     const file = await DB.getById('files', id);
     if (!file) {
-      App.toast('Archivo no encontrado', 'error');
+      App.toast(App.t('file_not_found'), 'error');
       return;
     }
 
     const binaryData = file.data || (file.blob instanceof Blob ? await file.blob.arrayBuffer() : null);
     if (!binaryData) {
-      App.toast('No se pudo recuperar el contenido del archivo', 'error');
+      App.toast(App.t('file_content_unavailable'), 'error');
       return;
     }
 
@@ -241,9 +241,9 @@ const FilesModule = (() => {
   }
 
   async function deleteFile(id) {
-    if (!confirm('¿Eliminar este archivo?')) return;
+    if (!confirm(App.t('confirm_delete_file'))) return;
     await DB.remove('files', id);
-    App.toast('Archivo eliminado', 'info');
+    App.toast(App.t('file_deleted'), 'info');
     loadFiles();
   }
 

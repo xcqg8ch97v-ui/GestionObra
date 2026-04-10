@@ -130,7 +130,7 @@ const DiaryModule = (() => {
       const statusHTML = isIncident
         ? `<span class="badge ${status.class} incident-status" 
                   onclick="DiaryModule.cycleStatus(${incident.id})" 
-                  title="Click para cambiar estado">
+                  title="${App.t('click_to_change_status')}">
               ${status.label}
             </span>`
         : '';
@@ -165,7 +165,7 @@ const DiaryModule = (() => {
           </div>
           <div class="incident-card-footer">
             <button class="btn btn-sm btn-outline" onclick="DiaryModule.editIncident(${incident.id})">
-              <i data-lucide="pencil"></i> Editar
+              <i data-lucide="pencil"></i> ${App.t('edit')}
             </button>
             <button class="btn btn-sm btn-danger" onclick="DiaryModule.deleteIncident(${incident.id})">
               <i data-lucide="trash-2"></i>
@@ -191,7 +191,7 @@ const DiaryModule = (() => {
     if (mainParts.length > 0) {
       sections.push(`
         <div class="diary-group">
-          <div class="diary-group-title">Entradas del diario</div>
+          <div class="diary-group-title">${App.t('diary_entries_title')}</div>
           <div class="diary-group-list">${mainParts.join('')}</div>
         </div>
       `);
@@ -200,7 +200,7 @@ const DiaryModule = (() => {
     if (evolutionParts.length > 0) {
       sections.push(`
         <div class="diary-group diary-group-evolution">
-          <div class="diary-group-title">Línea temporal de evolución</div>
+          <div class="diary-group-title">${App.t('diary_evolution_timeline_title')}</div>
           <div class="evolution-timeline">${evolutionParts.join('')}</div>
         </div>
       `);
@@ -216,11 +216,11 @@ const DiaryModule = (() => {
     const isEdit = !!incident;
     const effectiveType = isEdit ? (incident.entryType || 'incident') : presetType;
     const typeTitles = {
-      incident: 'Nueva Incidencia',
-      comment: 'Nuevo Comentario',
-      evolution: 'Nueva Evolución'
+      incident: App.t('diary_new_incident'),
+      comment: App.t('diary_new_comment'),
+      evolution: App.t('diary_new_evolution')
     };
-    const title = isEdit ? 'Editar Entrada' : (typeTitles[effectiveType] || 'Nueva Entrada');
+    const title = isEdit ? App.t('edit_entry') : (typeTitles[effectiveType] || App.t('new_entry'));
 
     const now = new Date().toISOString().slice(0, 16);
     const entryType = effectiveType;
@@ -228,29 +228,29 @@ const DiaryModule = (() => {
     const body = `
       <div class="form-row">
         <div class="form-group">
-          <label>Tipo de entrada</label>
+          <label>${App.t('entry_type')}</label>
           <select id="inc-entry-type">
-            <option value="incident" ${entryType === 'incident' ? 'selected' : ''}>Incidencia</option>
-            <option value="comment" ${entryType === 'comment' ? 'selected' : ''}>Comentario</option>
-            <option value="evolution" ${entryType === 'evolution' ? 'selected' : ''}>Evolución</option>
+            <option value="incident" ${entryType === 'incident' ? 'selected' : ''}>${App.t('diary_incident_button')}</option>
+            <option value="comment" ${entryType === 'comment' ? 'selected' : ''}>${App.t('diary_comment_button')}</option>
+            <option value="evolution" ${entryType === 'evolution' ? 'selected' : ''}>${App.t('diary_evolution_button')}</option>
           </select>
         </div>
         <div class="form-group incident-only-field">
-          <label>Estado</label>
+          <label>${App.t('status')}</label>
           <select id="inc-status">
-            <option value="pending" ${isEdit && incident.status === 'pending' ? 'selected' : ''}>Pendiente</option>
-            <option value="in-progress" ${isEdit && incident.status === 'in-progress' ? 'selected' : ''}>En proceso</option>
-            <option value="resolved" ${isEdit && incident.status === 'resolved' ? 'selected' : ''}>Resuelto</option>
+            <option value="pending" ${isEdit && incident.status === 'pending' ? 'selected' : ''}>${App.t('pending')}</option>
+            <option value="in-progress" ${isEdit && incident.status === 'in-progress' ? 'selected' : ''}>${App.t('in_progress')}</option>
+            <option value="resolved" ${isEdit && incident.status === 'resolved' ? 'selected' : ''}>${App.t('resolved')}</option>
           </select>
         </div>
       </div>
       <div class="form-group">
-        <label>Descripción *</label>
-        <textarea id="inc-description" rows="3" placeholder="Describe la entrada del diario...">${isEdit ? App.escapeHTML(incident.description) : ''}</textarea>
+        <label>${App.t('description')} *</label>
+        <textarea id="inc-description" rows="3" placeholder="${App.t('diary_description_placeholder')}">${isEdit ? App.escapeHTML(incident.description) : ''}</textarea>
       </div>
       <div class="form-row incident-only-row">
         <div class="form-group incident-only-field">
-          <label>Categoría</label>
+          <label>${App.t('category')}</label>
           <select id="inc-category">
             ${getIncidentCategories().map(c => `<option value="${App.escapeHTML(c)}" ${isEdit && incident.category === c ? 'selected' : ''}>${App.escapeHTML(c)}</option>`).join('')}
           </select>
@@ -258,23 +258,23 @@ const DiaryModule = (() => {
       </div>
       <div class="form-row incident-only-row">
         <div class="form-group incident-only-field">
-          <label>Persona responsable</label>
-          <input type="text" id="inc-responsible-person" placeholder="Nombre del responsable" value="${isEdit ? App.escapeHTML(incident.responsiblePerson || '') : ''}">
+          <label>${App.t('responsible_person')}</label>
+          <input type="text" id="inc-responsible-person" placeholder="${App.t('responsible_person_placeholder')}" value="${isEdit ? App.escapeHTML(incident.responsiblePerson || '') : ''}">
         </div>
         <div class="form-group incident-only-field">
-          <label>Empresa</label>
-          <input type="text" id="inc-responsible-company" placeholder="Empresa o subcontrata" value="${isEdit ? App.escapeHTML(incident.responsibleCompany || '') : ''}">
+          <label>${App.t('company')}</label>
+          <input type="text" id="inc-responsible-company" placeholder="${App.t('company_placeholder')}" value="${isEdit ? App.escapeHTML(incident.responsibleCompany || '') : ''}">
         </div>
       </div>
       <div class="form-group">
-        <label>Fecha y Hora</label>
+        <label>${App.t('date_time')}</label>
         <input type="datetime-local" id="inc-date" value="${isEdit ? incident.date.slice(0, 16) : now}">
       </div>
       <div class="form-group">
-        <label>Fotos</label>
+        <label>${App.t('photos')}</label>
         <div class="upload-zone" id="photo-upload-zone">
           <i data-lucide="camera"></i>
-          <p>Arrastra fotos aquí o haz click para seleccionar</p>
+          <p>${App.t('photo_drop_help')}</p>
           <input type="file" id="photo-input" accept="image/*" multiple hidden>
         </div>
         <div class="upload-preview" id="photo-preview"></div>
@@ -282,9 +282,9 @@ const DiaryModule = (() => {
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-outline" onclick="App.closeModal()">${App.t('cancel')}</button>
       <button class="btn btn-primary" id="btn-save-incident">
-        <i data-lucide="save"></i> ${isEdit ? 'Guardar' : 'Registrar'}
+        <i data-lucide="save"></i> ${isEdit ? App.t('save') : App.t('register')}
       </button>
     `;
 
@@ -348,7 +348,7 @@ const DiaryModule = (() => {
       preview.innerHTML = pendingPhotos.map((p, i) => `
         <div class="upload-preview-item">
           <img src="${p.dataUrl}" alt="${App.escapeHTML(p.name)}">
-          <button class="remove-photo" onclick="event.stopPropagation(); this.closest('.upload-preview-item').remove(); window._removePendingPhoto(${i});" title="Quitar">×</button>
+          <button class="remove-photo" onclick="event.stopPropagation(); this.closest('.upload-preview-item').remove(); window._removePendingPhoto(${i});" title="${App.t('remove_photo')}">×</button>
         </div>
       `).join('');
     }
@@ -362,7 +362,7 @@ const DiaryModule = (() => {
     document.getElementById('btn-save-incident').addEventListener('click', async () => {
       const description = document.getElementById('inc-description').value.trim();
       if (!description) {
-        App.toast('La descripción es obligatoria', 'warning');
+        App.toast(App.t('description_required'), 'warning');
         return;
       }
 
@@ -390,12 +390,12 @@ const DiaryModule = (() => {
         data.projectId = incident.projectId;
         data.createdAt = incident.createdAt;
         await DB.put('incidents', data);
-        App.toast('Entrada actualizada', 'success');
+        App.toast(App.t('diary_entry_updated'), 'success');
       } else {
         data.createdAt = new Date().toISOString();
         data.projectId = projectId;
         await DB.add('incidents', data);
-        App.toast('Entrada registrada', 'success');
+        App.toast(App.t('diary_entry_created'), 'success');
       }
 
       // Cleanup
@@ -411,9 +411,9 @@ const DiaryModule = (() => {
   }
 
   async function deleteIncident(id) {
-    if (!confirm('¿Eliminar esta entrada del diario?')) return;
+    if (!confirm(App.t('confirm_delete_diary_entry'))) return;
     await DB.remove('incidents', id);
-    App.toast('Entrada eliminada', 'info');
+    App.toast(App.t('diary_entry_deleted'), 'info');
     loadIncidents();
   }
 

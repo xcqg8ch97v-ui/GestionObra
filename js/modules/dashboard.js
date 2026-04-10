@@ -121,19 +121,21 @@ const DashboardModule = (() => {
     tbody.innerHTML = suppliers.map(s => {
       const statusClass = s.status === 'Activo' ? 'badge-active' :
                            s.status === 'Pendiente' ? 'badge-pending' : 'badge-inactive';
+      const statusLabel = s.status === 'Activo' ? App.t('status_active') :
+                          s.status === 'Pendiente' ? App.t('status_pending') : App.t('status_inactive');
       return `
         <tr>
           <td><strong>${App.escapeHTML(s.name)}</strong></td>
           <td>${App.escapeHTML(s.trade)}</td>
           <td>${App.escapeHTML(s.contact || '-')}</td>
           <td>${App.escapeHTML(s.phone || '-')}</td>
-          <td><span class="badge ${statusClass}">${App.escapeHTML(s.status)}</span></td>
+          <td><span class="badge ${statusClass}">${statusLabel}</span></td>
           <td>
             <div class="action-btns">
-              <button class="action-btn" onclick="DashboardModule.editSupplier(${s.id})" title="Editar">
+              <button class="action-btn" onclick="DashboardModule.editSupplier(${s.id})" title="${App.t('edit')}">
                 <i data-lucide="pencil"></i>
               </button>
-              <button class="action-btn delete" onclick="DashboardModule.deleteSupplier(${s.id})" title="Eliminar">
+              <button class="action-btn delete" onclick="DashboardModule.deleteSupplier(${s.id})" title="${App.t('delete')}">
                 <i data-lucide="trash-2"></i>
               </button>
             </div>
@@ -147,7 +149,7 @@ const DashboardModule = (() => {
 
   async function openSupplierForm(supplier = null) {
     const isEdit = !!supplier;
-    const title = isEdit ? 'Editar Proveedor' : 'Nuevo Proveedor';
+    const title = isEdit ? App.t('edit_supplier') : App.t('new_supplier');
 
     // Recargar customTrades por si se añadió alguno nuevo
     customTrades = await DB.getCustomCategories(projectId, 'trade');
@@ -155,50 +157,50 @@ const DashboardModule = (() => {
 
     const body = `
       <div class="form-group">
-        <label>Empresa *</label>
+        <label>${App.t('company')} *</label>
         <input type="text" id="sup-name" value="${isEdit ? App.escapeHTML(supplier.name) : ''}" required>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Gremio *</label>
+          <label>${App.t('trade')} *</label>
           <div style="display:flex;gap:8px;align-items:center">
             <select id="sup-trade">
               ${allTrades.map(t => `<option value="${t}" ${isEdit && supplier.trade === t ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
-            <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-trade" title="Añadir gremio"><i data-lucide="plus"></i></button>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-trade" title="${App.t('add_trade')}"><i data-lucide="plus"></i></button>
           </div>
         </div>
         <div class="form-group">
-          <label>Estado</label>
+          <label>${App.t('status')}</label>
           <select id="sup-status">
             ${SUPPLIER_STATUSES.map(s => `<option value="${s}" ${isEdit && supplier.status === s ? 'selected' : ''}>${s}</option>`).join('')}
           </select>
         </div>
       </div>
       <div class="form-group">
-        <label>Persona de Contacto</label>
+        <label>${App.t('contact_person')}</label>
         <input type="text" id="sup-contact" value="${isEdit ? App.escapeHTML(supplier.contact || '') : ''}">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Teléfono</label>
+          <label>${App.t('phone')}</label>
           <input type="tel" id="sup-phone" value="${isEdit ? App.escapeHTML(supplier.phone || '') : ''}">
         </div>
         <div class="form-group">
-          <label>Email</label>
+          <label>${App.t('email')}</label>
           <input type="email" id="sup-email" value="${isEdit ? App.escapeHTML(supplier.email || '') : ''}">
         </div>
       </div>
       <div class="form-group">
-        <label>Notas</label>
+        <label>${App.t('notes')}</label>
         <textarea id="sup-notes">${isEdit ? App.escapeHTML(supplier.notes || '') : ''}</textarea>
       </div>
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-outline" onclick="App.closeModal()">${App.t('cancel')}</button>
       <button class="btn btn-primary" id="btn-save-supplier">
-        <i data-lucide="save"></i> ${isEdit ? 'Guardar' : 'Crear'}
+        <i data-lucide="save"></i> ${isEdit ? App.t('save') : App.t('create')}
       </button>
     `;
 
@@ -206,28 +208,22 @@ const DashboardModule = (() => {
 
     // Botón para añadir gremio personalizado
     document.getElementById('btn-add-custom-trade').addEventListener('click', async () => {
-      const name = prompt('Nombre del nuevo gremio:');
+      const name = prompt(App.t('new_trade_name_prompt'));
       if (!name) return;
       const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
-      if (exists) { App.toast('Ese gremio ya existe', 'warning'); return; }
+      if (exists) { App.toast(App.t('trade_already_exists'), 'warning'); return; }
       await DB.addCustomCategory(projectId, 'trade', name.trim());
       customTrades = await DB.getCustomCategories(projectId, 'trade');
       const newAllTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
       const select = document.getElementById('sup-trade');
       select.innerHTML = newAllTrades.map(t => `<option value="${t}">${t}</option>`).join('');
       select.value = name.trim();
-      App.toast('Gremio añadido', 'success');
+      App.toast(App.t('trade_added'), 'success');
     });
 
     document.getElementById('btn-save-supplier').addEventListener('click', async () => {
-      const name = document.getElementById('sup-name').value.trim();
-      if (!name) {
-        App.toast('El nombre es obligatorio', 'warning');
-        return;
-      }
-
       const data = {
-        name,
+        name: document.getElementById('sup-name').value.trim(),
         trade: document.getElementById('sup-trade').value,
         status: document.getElementById('sup-status').value,
         contact: document.getElementById('sup-contact').value.trim(),
@@ -242,12 +238,12 @@ const DashboardModule = (() => {
         data.projectId = supplier.projectId;
         data.createdAt = supplier.createdAt;
         await DB.put('suppliers', data);
-        App.toast('Proveedor actualizado', 'success');
+        App.toast(App.t('supplier_updated'), 'success');
       } else {
         data.createdAt = new Date().toISOString();
         data.projectId = projectId;
         await DB.add('suppliers', data);
-        App.toast('Proveedor creado', 'success');
+        App.toast(App.t('supplier_created'), 'success');
       }
 
       App.closeModal();
@@ -261,9 +257,9 @@ const DashboardModule = (() => {
   }
 
   async function deleteSupplier(id) {
-    if (!confirm('¿Eliminar este proveedor?')) return;
+    if (!confirm(App.t('confirm_delete_supplier'))) return;
     await DB.remove('suppliers', id);
-    App.toast('Proveedor eliminado', 'info');
+    App.toast(App.t('supplier_deleted'), 'info');
     loadSuppliers();
   }
 
@@ -312,10 +308,10 @@ const DashboardModule = (() => {
           <td><span class="badge ${devClass}">${devSign}${App.formatCurrency(deviation)} (${devSign}${deviationPct}%)</span></td>
           <td>
             <div class="action-btns">
-              <button class="action-btn" onclick="DashboardModule.editBudget(${b.id})" title="Editar">
+              <button class="action-btn" onclick="DashboardModule.editBudget(${b.id})" title="${App.t('edit')}">
                 <i data-lucide="pencil"></i>
               </button>
-              <button class="action-btn delete" onclick="DashboardModule.deleteBudget(${b.id})" title="Eliminar">
+              <button class="action-btn delete" onclick="DashboardModule.deleteBudget(${b.id})" title="${App.t('delete')}">
                 <i data-lucide="trash-2"></i>
               </button>
             </div>
@@ -329,7 +325,7 @@ const DashboardModule = (() => {
 
   async function openBudgetForm(budget = null) {
     const isEdit = !!budget;
-    const title = isEdit ? 'Editar Partida' : 'Nueva Partida';
+    const title = isEdit ? App.t('edit_budget') : App.t('new_budget');
 
     // Recargar customTrades por si se añadió alguno nuevo
     customTrades = await DB.getCustomCategories(projectId, 'trade');
@@ -339,45 +335,45 @@ const DashboardModule = (() => {
 
     const body = `
       <div class="form-group">
-        <label>Partida / Categoría *</label>
+        <label>${App.t('budget_category')} *</label>
         <div style="display:flex;gap:8px;align-items:center">
           <select id="bud-category">
             ${allTrades.map(t => `<option value="${t}" ${isEdit && budget.category === t ? 'selected' : ''}>${t}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-budget-cat" title="Añadir categoría"><i data-lucide="plus"></i></button>
+          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-budget-cat" title="${App.t('add_category')}"><i data-lucide="plus"></i></button>
         </div>
       </div>
       <div class="form-group">
-        <label>Descripción</label>
-        <input type="text" id="bud-description" value="${isEdit ? App.escapeHTML(budget.description || '') : ''}" placeholder="Ej: Instalación completa de fontanería">
+        <label>${App.t('description')}</label>
+        <input type="text" id="bud-description" value="${isEdit ? App.escapeHTML(budget.description || '') : ''}" placeholder="${App.t('budget_description_placeholder')}">
       </div>
       <div class="form-group">
-        <label>Proveedor</label>
+        <label>${App.t('supplier')}</label>
         <select id="bud-supplier">
-          <option value="">— Sin asignar —</option>
+          <option value="">${App.t('unassigned')}</option>
           ${suppliers.map(s => `<option value="${s.id}" ${isEdit && budget.supplierId === s.id ? 'selected' : ''}>${App.escapeHTML(s.name)} (${App.escapeHTML(s.trade)})</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Coste Previsto (€) *</label>
+          <label>${App.t('estimated_cost')} (€) *</label>
           <input type="number" id="bud-estimated" min="0" step="0.01" value="${isEdit ? budget.estimatedCost : ''}">
         </div>
         <div class="form-group">
-          <label>Coste Real (€)</label>
+          <label>${App.t('actual_cost')} (€)</label>
           <input type="number" id="bud-real" min="0" step="0.01" value="${isEdit ? budget.realCost : '0'}">
         </div>
       </div>
       <div class="form-group">
-        <label>Beneficio objetivo (%)</label>
-        <input type="number" id="bud-profit-margin" min="0" max="100" step="0.1" value="${isEdit ? (budget.profitMargin || 0) : '0'}" placeholder="Ej: 15">
+        <label>${App.t('target_profit')} (%)</label>
+        <input type="number" id="bud-profit-margin" min="0" max="100" step="0.1" value="${isEdit ? (budget.profitMargin || 0) : '0'}" placeholder="${App.t('percentage_example')}">
       </div>
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-outline" onclick="App.closeModal()">${App.t('cancel')}</button>
       <button class="btn btn-primary" id="btn-save-budget">
-        <i data-lucide="save"></i> ${isEdit ? 'Guardar' : 'Crear'}
+        <i data-lucide="save"></i> ${isEdit ? App.t('save') : App.t('create')}
       </button>
     `;
 
@@ -385,10 +381,10 @@ const DashboardModule = (() => {
 
     // Botón para añadir categoría personalizada
     document.getElementById('btn-add-custom-budget-cat').addEventListener('click', async () => {
-      const name = prompt('Nombre de la nueva categoría:');
+      const name = prompt(App.t('new_category_name_prompt'));
       if (!name) return;
       const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
-      if (exists) { App.toast('Esa categoría ya existe', 'warning'); return; }
+      if (exists) { App.toast(App.t('category_already_exists'), 'warning'); return; }
       await DB.addCustomCategory(projectId, 'trade', name.trim());
       customTrades = await DB.getCustomCategories(projectId, 'trade');
       const newAllTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
@@ -401,7 +397,7 @@ const DashboardModule = (() => {
     document.getElementById('btn-save-budget').addEventListener('click', async () => {
       const estimated = parseFloat(document.getElementById('bud-estimated').value);
       if (isNaN(estimated)) {
-        App.toast('El coste previsto es obligatorio', 'warning');
+        App.toast(App.t('estimated_cost_required'), 'warning');
         return;
       }
 
@@ -420,12 +416,12 @@ const DashboardModule = (() => {
         data.projectId = budget.projectId;
         data.createdAt = budget.createdAt;
         await DB.put('budgets', data);
-        App.toast('Partida actualizada', 'success');
+        App.toast(App.t('budget_updated'), 'success');
       } else {
         data.createdAt = new Date().toISOString();
         data.projectId = projectId;
         await DB.add('budgets', data);
-        App.toast('Partida creada', 'success');
+        App.toast(App.t('budget_created'), 'success');
       }
 
       App.closeModal();
@@ -439,9 +435,9 @@ const DashboardModule = (() => {
   }
 
   async function deleteBudget(id) {
-    if (!confirm('¿Eliminar esta partida?')) return;
+    if (!confirm(App.t('confirm_delete_budget'))) return;
     await DB.remove('budgets', id);
-    App.toast('Partida eliminada', 'info');
+    App.toast(App.t('budget_deleted'), 'info');
     loadBudgets();
   }
 
@@ -478,7 +474,7 @@ const DashboardModule = (() => {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1">
           <i data-lucide="scale"></i>
-          <p>Añade partidas presupuestarias para comparar proveedores</p>
+          <p>${App.t('dashboard_add_budgets_hint')}</p>
         </div>`;
       detail.style.display = 'none';
       lucide.createIcons();
@@ -499,15 +495,15 @@ const DashboardModule = (() => {
         <button class="comp-trade-card ${isActive ? 'active' : ''}" data-trade="${App.escapeHTML(cat)}">
           <div class="comp-trade-card-title">${App.escapeHTML(cat)}</div>
           <div class="comp-trade-card-stats">
-            <span>${count} ${count === 1 ? 'partida' : 'partidas'}</span>
-            <span>${supplierCount} ${supplierCount === 1 ? 'proveedor' : 'proveedores'}</span>
+            <span>${App.t('budget_item_count', { count })}</span>
+            <span>${App.t('supplier_count', { count: supplierCount })}</span>
           </div>
           <div class="comp-trade-card-range">
             ${count > 1 
-              ? `<span class="comp-range-label">Rango:</span> ${App.formatCurrency(minEst)} — ${App.formatCurrency(maxEst)}`
+              ? `<span class="comp-range-label">${App.t('range_label')}</span> ${App.formatCurrency(minEst)} — ${App.formatCurrency(maxEst)}`
               : App.formatCurrency(totalEst)}
           </div>
-          ${spread > 0 ? `<div class="comp-trade-card-spread">Ahorro potencial: <strong>${App.formatCurrency(spread)}</strong></div>` : ''}
+          ${spread > 0 ? `<div class="comp-trade-card-spread">${App.t('potential_savings')}: <strong>${App.formatCurrency(spread)}</strong></div>` : ''}
         </button>`;
     }).join('');
 
@@ -547,10 +543,10 @@ const DashboardModule = (() => {
     headerEl.innerHTML = `
       <button class="comp-back-btn" id="comp-back-btn">
         <i data-lucide="arrow-left" style="width:16px;height:16px"></i>
-        Volver a gremios
+        ${App.t('compare_back_to_trades')}
       </button>
       <h3>${App.escapeHTML(comparatorTrade)}</h3>
-      <span class="comp-detail-count">${sorted.length} ${sorted.length === 1 ? 'presupuesto' : 'presupuestos'} de ${new Set(sorted.map(b => b.supplierId).filter(Boolean)).size} proveedores</span>
+      <span class="comp-detail-count">${App.t('comparative_summary', { count: sorted.length, suppliers: new Set(sorted.map(b => b.supplierId).filter(Boolean)).size })}</span>
     `;
 
     document.getElementById('comp-back-btn').addEventListener('click', () => {

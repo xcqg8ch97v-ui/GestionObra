@@ -71,7 +71,7 @@ const ParticipantsModule = (() => {
     if (empty) empty.style.display = 'none';
 
     grid.innerHTML = items.map(p => {
-      const typeLabel = p.type === 'internal' ? 'Interno' : 'Externo';
+      const typeLabel = p.type === 'internal' ? App.t('participant_type_internal') : App.t('participant_type_external');
       const typeBadge = p.type === 'internal' ? 'badge-active' : 'badge-pending';
       const initials = getInitials(p.name);
       const avatarColor = stringToColor(p.name || '');
@@ -81,7 +81,7 @@ const ParticipantsModule = (() => {
           <div class="participant-card-header">
             <div class="participant-avatar" style="background:${avatarColor}">${App.escapeHTML(initials)}</div>
             <div class="participant-info">
-              <div class="participant-name">${App.escapeHTML(p.name || 'Sin nombre')}</div>
+              <div class="participant-name">${App.escapeHTML(p.name || App.t('no_name'))}</div>
               <div class="participant-role">${App.escapeHTML(p.role || '')}</div>
             </div>
             <span class="badge ${typeBadge} participant-type-badge">${typeLabel}</span>
@@ -91,10 +91,10 @@ const ParticipantsModule = (() => {
           ${p.email ? `<div class="participant-detail participant-detail-link" onclick="ParticipantsModule.sendEmail('${App.escapeHTML(p.email)}')"><i data-lucide="mail"></i>${App.escapeHTML(p.email)}</div>` : ''}
           ${p.notes ? `<div class="participant-notes">${App.escapeHTML(p.notes)}</div>` : ''}
           <div class="participant-card-actions">
-            <button class="action-btn" onclick="ParticipantsModule.edit(${p.id})" title="Editar">
+            <button class="action-btn" onclick="ParticipantsModule.edit(${p.id})" title="${App.t('edit')}">
               <i data-lucide="pencil"></i>
             </button>
-            <button class="action-btn action-btn-danger" onclick="ParticipantsModule.remove(${p.id})" title="Eliminar">
+            <button class="action-btn action-btn-danger" onclick="ParticipantsModule.remove(${p.id})" title="${App.t('delete')}">
               <i data-lucide="trash-2"></i>
             </button>
           </div>
@@ -123,51 +123,51 @@ const ParticipantsModule = (() => {
 
   function openParticipantForm(existing) {
     const isEdit = !!existing;
-    const title = isEdit ? 'Editar Participante' : 'Nuevo Participante';
+    const title = isEdit ? App.t('edit_participant') : App.t('new_participant');
 
     const body = `
       <div class="form-grid">
         <div class="form-group">
-          <label>Nombre completo *</label>
+          <label>${App.t('full_name')} *</label>
           <input type="text" id="part-name" value="${App.escapeHTML(existing?.name || '')}" required>
         </div>
         <div class="form-group">
-          <label>Tipo</label>
+          <label>${App.t('type')}</label>
           <select id="part-type">
-            <option value="internal" ${(existing?.type || 'internal') === 'internal' ? 'selected' : ''}>Interno</option>
-            <option value="external" ${existing?.type === 'external' ? 'selected' : ''}>Externo</option>
+            <option value="internal" ${(existing?.type || 'internal') === 'internal' ? 'selected' : ''}>${App.t('participant_type_internal')}</option>
+            <option value="external" ${existing?.type === 'external' ? 'selected' : ''}>${App.t('participant_type_external')}</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Rol / Cargo</label>
+          <label>${App.t('role')}</label>
           <select id="part-role">
-            <option value="">Seleccionar...</option>
+            <option value="">${App.t('select')}</option>
             ${ROLES.map(r => `<option value="${r}" ${existing?.role === r ? 'selected' : ''}>${r}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
-          <label>Empresa</label>
+          <label>${App.t('company')}</label>
           <input type="text" id="part-company" value="${App.escapeHTML(existing?.company || '')}">
         </div>
         <div class="form-group">
-          <label>Teléfono</label>
+          <label>${App.t('phone')}</label>
           <input type="tel" id="part-phone" value="${App.escapeHTML(existing?.phone || '')}">
         </div>
         <div class="form-group">
-          <label>Email</label>
+          <label>${App.t('email')}</label>
           <input type="email" id="part-email" value="${App.escapeHTML(existing?.email || '')}">
         </div>
         <div class="form-group form-group-full">
-          <label>Notas</label>
+          <label>${App.t('notes')}</label>
           <textarea id="part-notes" rows="3">${App.escapeHTML(existing?.notes || '')}</textarea>
         </div>
       </div>
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-outline" onclick="App.closeModal()">${App.t('cancel')}</button>
       <button class="btn btn-primary" id="btn-save-participant">
-        <i data-lucide="save"></i> ${isEdit ? 'Guardar' : 'Crear'}
+        <i data-lucide="save"></i> ${isEdit ? App.t('save') : App.t('create')}
       </button>
     `;
 
@@ -175,7 +175,7 @@ const ParticipantsModule = (() => {
 
     document.getElementById('btn-save-participant').addEventListener('click', async () => {
       const name = document.getElementById('part-name').value.trim();
-      if (!name) { App.toast('El nombre es obligatorio', 'warning'); return; }
+      if (!name) { App.toast(App.t('participant_name_required'), 'warning'); return; }
 
       const data = {
         projectId,
@@ -193,11 +193,11 @@ const ParticipantsModule = (() => {
         data.id = existing.id;
         data.createdAt = existing.createdAt;
         await DB.put('participants', data);
-        App.toast('Participante actualizado', 'success');
+        App.toast(App.t('participant_updated'), 'success');
       } else {
         data.createdAt = new Date().toISOString();
         await DB.add('participants', data);
-        App.toast('Participante añadido', 'success');
+        App.toast(App.t('participant_added'), 'success');
       }
 
       App.closeModal();
@@ -211,9 +211,9 @@ const ParticipantsModule = (() => {
   }
 
   async function remove(id) {
-    if (!confirm('¿Eliminar este participante?')) return;
+    if (!confirm(App.t('confirm_delete_participant'))) return;
     await DB.remove('participants', id);
-    App.toast('Participante eliminado', 'success');
+    App.toast(App.t('participant_deleted'), 'success');
     loadParticipants();
   }
 

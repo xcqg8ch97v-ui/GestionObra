@@ -621,10 +621,10 @@ const TimelineModule = (() => {
               <span class="phase-color-dot" style="background:${group.color}"></span>
               <span class="task-name" title="${App.escapeHTML(task.name)}">${App.escapeHTML(task.name)}</span>
               <div class="task-actions">
-                <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="Editar">
+                <button class="action-btn" onclick="TimelineModule.editTask(${task.id})" title="${App.t('edit')}">
                   <i data-lucide="pencil" style="width:14px;height:14px"></i>
                 </button>
-                <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="Eliminar">
+                <button class="action-btn delete" onclick="TimelineModule.deleteTask(${task.id})" title="${App.t('delete')}">
                   <i data-lucide="trash-2" style="width:14px;height:14px"></i>
                 </button>
               </div>
@@ -637,7 +637,7 @@ const TimelineModule = (() => {
                    style="left:${startOffset * DAY_WIDTH}px; width:${duration * DAY_WIDTH - 4}px;"
                    title="${titleParts.join(' ')}">
                 ${task.progress > 0 ? `<div class="task-progress" style="width:${task.progress}%"></div>` : ''}
-                ${responsibleInitials ? `<span class="task-bar-responsible" title="Responsable: ${App.escapeHTML(task.responsible || '')}">${App.escapeHTML(responsibleInitials)}</span>` : ''}
+                ${responsibleInitials ? `<span class="task-bar-responsible" title="${App.t('responsible')}: ${App.escapeHTML(task.responsible || '')}">${App.escapeHTML(responsibleInitials)}</span>` : ''}
                 <span class="task-bar-label">${task.progress || 0}%</span>
               </div>
             </div>

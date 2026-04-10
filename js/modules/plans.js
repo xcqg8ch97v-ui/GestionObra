@@ -92,37 +92,37 @@ const PlansModule = (() => {
     const guessed = files.length === 1 ? guessCategory(files[0].name) : (activeCategory !== '__all__' ? activeCategory : 'otros');
     const body = `
       <div class="form-group">
-        <label>Categoría para ${files.length > 1 ? 'los ' + files.length + ' planos' : '<b>' + App.escapeHTML(files[0].name) + '</b>'}</label>
+        <label>${files.length > 1 ? App.t('plan_upload_category_label_multiple', { count: files.length }) : App.t('plan_upload_category_label_single', { name: '<b>' + App.escapeHTML(files[0].name) + '</b>' })}</label>
         <div style="display:flex;gap:8px;align-items:center">
           <select id="plan-upload-category" class="form-control">
             ${allCategories.map(c => `<option value="${c.key}" ${c.key === guessed ? 'selected' : ''}>${c.label}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-plan-cat" title="Añadir categoría"><i data-lucide="plus"></i></button>
+          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-plan-cat" title="${App.t('add_category')}"><i data-lucide="plus"></i></button>
         </div>
       </div>
       <div style="margin-top:.5rem;color:var(--text-muted);font-size:.85rem">
-        ${files.length > 1 ? 'Se aplicará la misma categoría a todos los planos. Puedes cambiarla luego individualmente.' : 'Puedes cambiar la categoría más tarde desde el botón editar.'}
+        ${files.length > 1 ? App.t('plan_upload_same_category_note', { count: files.length }) : App.t('plan_upload_change_category_note')}
       </div>`;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirm-upload"><i data-lucide="upload"></i> Subir</button>`;
+      <button class="btn btn-outline" onclick="App.closeModal()">${App.t('cancel')}</button>
+      <button class="btn btn-primary" id="btn-confirm-upload"><i data-lucide="upload"></i> ${App.t('upload')}</button>`;
 
-    App.openModal('Subir Plano', body, footer);
+    App.openModal(App.t('upload_plan_title'), body, footer);
 
     // Botón para añadir categoría personalizada
     document.getElementById('btn-add-custom-plan-cat').addEventListener('click', async () => {
-      const name = prompt('Nombre de la nueva categoría:');
+      const name = prompt(App.t('new_category_name_prompt'));
       if (!name) return;
       const exists = allCategories.some(c => c.label.toLowerCase() === name.trim().toLowerCase());
-      if (exists) { App.toast('Esa categoría ya existe', 'warning'); return; }
+      if (exists) { App.toast(App.t('category_already_exists'), 'warning'); return; }
       await DB.addCustomCategory(projectId, 'plan', name.trim());
       await refreshPlanCategories();
       const newAllCategories = getAllPlanCategories();
       const select = document.getElementById('plan-upload-category');
       select.innerHTML = newAllCategories.map(c => `<option value="${c.key}">${c.label}</option>`).join('');
       select.value = 'custom_' + customPlanCategories[customPlanCategories.length - 1].id;
-      App.toast('Categoría añadida', 'success');
+      App.toast(App.t('category_added'), 'success');
     });
 
     document.getElementById('btn-confirm-upload').addEventListener('click', async () => {
@@ -239,8 +239,8 @@ const PlansModule = (() => {
           <span class="badge badge-neutral plan-card-cat">${catObj.label}</span>
         </div>
         <div class="plan-card-actions">
-          <button class="action-btn plan-edit-btn" data-id="${plan.id}" title="Editar nombre/categoría"><i data-lucide="pencil"></i></button>
-          <button class="action-btn delete plan-delete-btn" data-id="${plan.id}" title="Eliminar"><i data-lucide="trash-2"></i></button>
+          <button class="action-btn plan-edit-btn" data-id="${plan.id}" title="${App.t('edit_plan_title')}" ><i data-lucide="pencil"></i></button>
+          <button class="action-btn delete plan-delete-btn" data-id="${plan.id}" title="${App.t('delete')}"><i data-lucide="trash-2"></i></button>
         </div>
       </div>`;
   }
@@ -259,7 +259,7 @@ const PlansModule = (() => {
       empty.style.display = allPlans.length === 0 ? 'flex' : 'none';
       if (allPlans.length > 0 && filtered.length === 0) {
         gallery.style.display = 'block';
-        gallery.innerHTML = '<div class="empty-state"><p>No hay planos en esta categoría</p></div>';
+        gallery.innerHTML = `<div class="empty-state"><p>${App.t('no_plans_in_category')}</p></div>`;
       }
       return;
     }
@@ -348,19 +348,19 @@ const PlansModule = (() => {
       plan.category = document.getElementById('plan-edit-category').value;
       await DB.put('plans', plan);
       App.closeModal();
-      App.toast('Plano actualizado', 'success');
+      App.toast(App.t('plan_updated'), 'success');
       loadPlans();
     });
   }
 
   async function deletePlan(id) {
-    if (!confirm('¿Eliminar este plano?')) return;
+    if (!confirm(App.t('confirm_delete_plan'))) return;
     const plan = await DB.getById('plans', id);
     if (plan) {
       await DB.remove('files', plan.fileId);
     }
     await DB.remove('plans', id);
-    App.toast('Plano eliminado', 'info');
+    App.toast(App.t('plan_deleted'), 'info');
     loadPlans();
   }
 
@@ -467,7 +467,7 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
     const file = await DB.getFile(plan.fileId);
-    if (!file) { App.toast('Archivo no encontrado', 'error'); return; }
+    if (!file) { App.toast(App.t('file_not_found'), 'error'); return; }
     const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
     if (!blob) return;
     const url = URL.createObjectURL(blob);
@@ -488,13 +488,13 @@ const PlansModule = (() => {
     document.getElementById('plan-viewer-title').textContent = `${plan.name} (${viewerIndex + 1}/${viewerPlans.length})`;
 
     if (!file) {
-      body.innerHTML = '<p style="color:#fff;text-align:center">Archivo no encontrado</p>';
+      body.innerHTML = `<p style="color:#fff;text-align:center">${App.t('file_not_found')}</p>`;
       return;
     }
 
     const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type || 'image/*' }) : null);
     if (!blob) {
-      body.innerHTML = '<p style="color:#fff;text-align:center">Datos del archivo no disponibles</p>';
+      body.innerHTML = `<p style="color:#fff;text-align:center">${App.t('file_content_unavailable')}</p>`;
       return;
     }
 
@@ -541,7 +541,7 @@ const PlansModule = (() => {
       body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>`;
       annoBtn.style.display = 'none';
     } else {
-      body.innerHTML = '<p style="color:#fff;text-align:center">Vista previa no disponible para este tipo de archivo</p>';
+      body.innerHTML = `<p style="color:#fff;text-align:center">${App.t('preview_not_available')}</p>`;
     }
     try { lucide.createIcons(); } catch(e) {}
   }
@@ -875,7 +875,7 @@ const PlansModule = (() => {
     }
 
     await DB.put('plans', plan);
-    App.toast('Anotaciones guardadas en el plano', 'success');
+    App.toast(App.t('annotations_saved_on_plan'), 'success');
   }
 
   return {
