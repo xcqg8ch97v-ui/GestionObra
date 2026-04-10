@@ -505,12 +505,13 @@ input:focus, select:focus, textarea:focus {
   border-right: none;
 }
 
-.tool-btn {
+..tool-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
+  position: relative;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   transition: all var(--transition);
@@ -519,6 +520,23 @@ input:focus, select:focus, textarea:focus {
 .tool-btn:hover {
   background: var(--bg-card);
   color: var(--text-primary);
+}
+
+.tool-btn:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.95);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  z-index: 20;
+  opacity: 1;
+  pointer-events: none;
 }
 
 .tool-btn.active {

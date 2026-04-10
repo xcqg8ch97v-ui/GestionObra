@@ -129,13 +129,13 @@ const DB = (() => {
   }
 
   // --- Custom categories helpers ---
-  async function addCustomCategory(projectId, type, name) {
-    return add('custom_categories', { projectId, type, name });
+  async function addCustomCategory(projectId, type, name, action = 'add') {
+    return add('custom_categories', { projectId, type, name, action });
   }
 
-  async function getCustomCategories(projectId, type) {
+  async function getCustomCategories(projectId, type, action = 'add') {
     const all = await getByIndex('custom_categories', 'projectId', projectId);
-    return all.filter(c => c.type === type);
+    return all.filter(c => c.type === type && c.action === action);
   }
 
   async function removeCustomCategory(id) {

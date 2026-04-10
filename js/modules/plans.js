@@ -31,9 +31,22 @@ const PlansModule = (() => {
   ];
 
   let customPlanCategories = [];
+  let hiddenPlanCategories = [];
+
+  async function refreshPlanCategories() {
+    hiddenPlanCategories = (await DB.getCustomCategories(projectId, 'plan', 'hide')).map(c => c.name);
+    customPlanCategories = (await DB.getCustomCategories(projectId, 'plan', 'add'))
+      .filter(c => !hiddenPlanCategories.includes(c.name))
+      .map(c => ({
+        key: 'custom_' + c.id,
+        label: c.name,
+        icon: 'tag',
+        keywords: []
+      }));
+  }
 
   function getAllPlanCategories() {
-    return DEFAULT_PLAN_CATEGORIES.concat(customPlanCategories);
+    return DEFAULT_PLAN_CATEGORIES.filter(cat => !hiddenPlanCategories.includes(cat.key)).concat(customPlanCategories);
   }
 
   function guessCategory(name) {
@@ -49,12 +62,7 @@ const PlansModule = (() => {
 
   async function init(pid) {
     projectId = pid;
-    customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
-      key: 'custom_' + c.id,
-      label: c.name,
-      icon: 'tag',
-      keywords: []
-    }));
+    await refreshPlanCategories();
     setupButtons();
     loadPlans();
   }
@@ -77,12 +85,7 @@ const PlansModule = (() => {
     e.target.value = '';
 
     // Recargar categorías personalizadas
-    customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
-      key: 'custom_' + c.id,
-      label: c.name,
-      icon: 'tag',
-      keywords: []
-    }));
+    await refreshPlanCategories();
     const allCategories = getAllPlanCategories();
 
     // Build category selector modal
@@ -114,12 +117,7 @@ const PlansModule = (() => {
       const exists = allCategories.some(c => c.label.toLowerCase() === name.trim().toLowerCase());
       if (exists) { App.toast('Esa categoría ya existe', 'warning'); return; }
       await DB.addCustomCategory(projectId, 'plan', name.trim());
-      customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
-        key: 'custom_' + c.id,
-        label: c.name,
-        icon: 'tag',
-        keywords: []
-      }));
+      await refreshPlanCategories();
       const newAllCategories = getAllPlanCategories();
       const select = document.getElementById('plan-upload-category');
       select.innerHTML = newAllCategories.map(c => `<option value="${c.key}">${c.label}</option>`).join('');
@@ -274,7 +272,7 @@ const PlansModule = (() => {
       let html = '';
       let globalIdx = 0;
 
-      for (const cat of PLAN_CATEGORIES) {
+      for (const cat of getAllPlanCategories()) {
         const catPlans = filtered.filter(p => p.category === cat.key);
         if (catPlans.length === 0) continue;
 
@@ -335,7 +333,7 @@ const PlansModule = (() => {
       <div class="form-group">
         <label>Categoría</label>
         <select id="plan-edit-category">
-          ${PLAN_CATEGORIES.map(c => `<option value="${c.key}" ${plan.category === c.key ? 'selected' : ''}>${c.label}</option>`).join('')}
+          ${getAllPlanCategories().map(c => `<option value="${c.key}" ${plan.category === c.key ? 'selected' : ''}>${c.label}</option>`).join('')}
         </select>
       </div>`;
 

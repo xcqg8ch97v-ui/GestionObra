@@ -18,6 +18,40 @@ const App = (() => {
   let currentSection = 'overview';
   let currentProjectId = null;
   let currentProjectName = '';
+  let contextMenuTarget = null;
+  let contextMenuTargetId = null;
+  let contextMenuTargetType = null;
+
+  const DEFAULT_TRADE_CATEGORIES = [
+    'Albañilería', 'Fontanería', 'Electricidad', 'Carpintería',
+    'Pintura', 'Cristalería', 'Climatización', 'Impermeabilización',
+    'Estructura', 'Cimentación', 'Paisajismo', 'Seguridad', 'Otros'
+  ];
+
+  const DEFAULT_PLAN_CATEGORY_OPTIONS = [
+    { key: 'situacion', label: 'Situación / Emplazamiento' },
+    { key: 'plantas', label: 'Plantas' },
+    { key: 'alzados', label: 'Alzados' },
+    { key: 'secciones', label: 'Secciones' },
+    { key: 'cotas', label: 'Cotas y Replanteo' },
+    { key: 'estructura', label: 'Estructura' },
+    { key: 'cimentacion', label: 'Cimentación' },
+    { key: 'cubiertas', label: 'Cubiertas' },
+    { key: 'electricidad', label: 'Electricidad' },
+    { key: 'fontaneria', label: 'Fontanería y Saneamiento' },
+    { key: 'climatizacion', label: 'Climatización y Ventilación' },
+    { key: 'telecom', label: 'Telecomunicaciones' },
+    { key: 'incendios', label: 'Protección contra Incendios' },
+    { key: 'urbanizacion', label: 'Urbanización' },
+    { key: 'detalle', label: 'Detalles Constructivos' },
+    { key: 'seguridad', label: 'Seguridad y Salud' },
+    { key: 'otros', label: 'Otros' }
+  ];
+
+  const DEFAULT_INCIDENT_CATEGORIES = [
+    'Estructural', 'Fontanería', 'Electricidad', 'Acabados',
+    'Seguridad', 'Material', 'Comunicación', 'Plazo', 'Otros'
+  ];
 
   function safeIcons() {
     try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch(e) { console.warn('Lucide icons error:', e); }
@@ -164,9 +198,15 @@ const App = (() => {
   async function openOptionsPanel() {
     const project = currentProjectId ? await DB.getById('projects', currentProjectId) : null;
     const projects = await DB.getAll('projects');
-    const customTrades = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'trade') : [];
-    const customPlans = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'plan') : [];
-    const customIncidents = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory') : [];
+    const customTrades = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'trade', 'add') : [];
+    const hiddenTradeEntries = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'trade', 'hide') : [];
+    const hiddenTrades = hiddenTradeEntries.map(c => c.name);
+    const customPlans = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'plan', 'add') : [];
+    const hiddenPlanEntries = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'plan', 'hide') : [];
+    const hiddenPlans = hiddenPlanEntries.map(c => c.name);
+    const customIncidents = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory', 'add') : [];
+    const hiddenIncidentEntries = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory', 'hide') : [];
+    const hiddenIncidents = hiddenIncidentEntries.map(c => c.name);
 
     const projectRows = projects.map(p => `
       <div class="options-project-row">
@@ -197,7 +237,9 @@ const App = (() => {
 
         <div class="options-section">
           <h3>Tipos de proveedores</h3>
-          <div id="options-trades-list" class="options-type-list"></div>
+          <div class="options-subtitle">Oculta los gremios que no apliquen al proyecto.</div>
+          <div id="options-trades-visible" class="options-type-list"></div>
+          <div id="options-trades-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
             <input type="text" id="options-new-trade" class="form-control" placeholder="Nuevo gremio" />
             <button class="btn btn-primary btn-sm" id="btn-options-add-trade">Agregar</button>
@@ -206,7 +248,9 @@ const App = (() => {
 
         <div class="options-section">
           <h3>Tipos de planos</h3>
-          <div id="options-plans-list" class="options-type-list"></div>
+          <div class="options-subtitle">Oculta categorías de planos por defecto en este proyecto.</div>
+          <div id="options-plans-visible" class="options-type-list"></div>
+          <div id="options-plans-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
             <input type="text" id="options-new-plan" class="form-control" placeholder="Nueva categoría de plano" />
             <button class="btn btn-primary btn-sm" id="btn-options-add-plan">Agregar</button>
@@ -215,7 +259,9 @@ const App = (() => {
 
         <div class="options-section">
           <h3>Tipos de incidencias</h3>
-          <div id="options-incidents-list" class="options-type-list"></div>
+          <div class="options-subtitle">Oculta categorías de incidencias que no utilices.</div>
+          <div id="options-incidents-visible" class="options-type-list"></div>
+          <div id="options-incidents-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
             <input type="text" id="options-new-incident" class="form-control" placeholder="Nueva categoría de incidencia" />
             <button class="btn btn-primary btn-sm" id="btn-options-add-incident">Agregar</button>
@@ -257,27 +303,92 @@ const App = (() => {
 
     App.openModal('Opciones del proyecto', body, footer);
 
-    function renderTypeList(items, containerId, type) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      container.innerHTML = items.map(item => `
+    function renderTypeList(visibleItems, hiddenItems, visibleContainerId, hiddenContainerId, type) {
+      const visibleContainer = document.getElementById(visibleContainerId);
+      const hiddenContainer = document.getElementById(hiddenContainerId);
+      if (!visibleContainer || !hiddenContainer) return;
+
+      visibleContainer.innerHTML = visibleItems.length ? visibleItems.map(item => `
         <div class="options-type-row">
-          <span>${App.escapeHTML(item.name)}</span>
-          <button class="btn btn-outline btn-sm btn-danger" data-type="${type}" data-id="${item.id}">Eliminar</button>
+          <span>${App.escapeHTML(item.label)}</span>
+          <div class="options-row-actions">
+            ${item.source === 'default' ? `<button class="btn btn-outline btn-sm" data-action="hide" data-type="${type}" data-name="${App.escapeHTML(item.name)}">Ocultar</button>` : `<button class="btn btn-outline btn-sm btn-danger" data-action="remove" data-type="${type}" data-id="${item.id}">Eliminar</button>`}
+          </div>
         </div>
-      `).join('');
-      container.querySelectorAll('.btn-danger').forEach(btn => {
+      `).join('') : '<div class="options-type-row"><em>No hay categorías visibles.</em></div>';
+
+      hiddenContainer.innerHTML = hiddenItems.length ? hiddenItems.map(item => `
+        <div class="options-type-row">
+          <span>${App.escapeHTML(item.label)}</span>
+          <button class="btn btn-primary btn-sm" data-action="show" data-type="${type}" data-name="${App.escapeHTML(item.name)}">Mostrar</button>
+        </div>
+      `).join('') : '<div class="options-type-row"><em>No hay categorías ocultas.</em></div>';
+
+      visibleContainer.querySelectorAll('[data-action]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const id = parseInt(btn.dataset.id);
-          await DB.removeCustomCategory(id);
+          const action = btn.dataset.action;
+          const type = btn.dataset.type;
+          const name = btn.dataset.name;
+          const id = btn.dataset.id ? parseInt(btn.dataset.id) : null;
+
+          if (action === 'hide') {
+            await DB.addCustomCategory(currentProjectId, type, name, 'hide');
+          }
+          if (action === 'show') {
+            const existing = hiddenItems.find(item => item.name === name);
+            if (existing && existing.id) {
+              await DB.removeCustomCategory(existing.id);
+            }
+          }
+          if (action === 'remove' && id) {
+            await DB.removeCustomCategory(id);
+          }
+          openOptionsPanel();
+        });
+      });
+
+      hiddenContainer.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const name = btn.dataset.name;
+          const existing = hiddenItems.find(item => item.name === name);
+          if (existing && existing.id) {
+            await DB.removeCustomCategory(existing.id);
+          }
           openOptionsPanel();
         });
       });
     }
 
-    renderTypeList(customTrades, 'options-trades-list', 'trade');
-    renderTypeList(customPlans, 'options-plans-list', 'plan');
-    renderTypeList(customIncidents, 'options-incidents-list', 'incidentCategory');
+    const tradeVisible = DEFAULT_TRADE_CATEGORIES.filter(t => !hiddenTrades.includes(t)).map(name => ({ name, label: name, source: 'default' }))
+      .concat(customTrades.filter(item => !hiddenTrades.includes(item.name)).map(item => ({ id: item.id, name: item.name, label: item.name, source: 'custom' })));
+    const tradeHidden = hiddenTradeEntries.map(entry => ({
+      id: entry.id,
+      name: entry.name,
+      label: DEFAULT_TRADE_CATEGORIES.includes(entry.name) ? entry.name : entry.name,
+      source: DEFAULT_TRADE_CATEGORIES.includes(entry.name) ? 'default' : 'custom'
+    }));
+
+    const planVisible = DEFAULT_PLAN_CATEGORY_OPTIONS.filter(cat => !hiddenPlans.includes(cat.key)).map(cat => ({ name: cat.key, label: cat.label, source: 'default' }))
+      .concat(customPlans.filter(item => !hiddenPlans.includes(item.name)).map(item => ({ id: item.id, name: item.name, label: item.name, source: 'custom' })));
+    const planHidden = hiddenPlanEntries.map(entry => ({
+      id: entry.id,
+      name: entry.name,
+      label: DEFAULT_PLAN_CATEGORY_OPTIONS.find(cat => cat.key === entry.name)?.label || entry.name,
+      source: DEFAULT_PLAN_CATEGORY_OPTIONS.some(cat => cat.key === entry.name) ? 'default' : 'custom'
+    }));
+
+    const incidentVisible = DEFAULT_INCIDENT_CATEGORIES.filter(name => !hiddenIncidents.includes(name)).map(name => ({ name, label: name, source: 'default' }))
+      .concat(customIncidents.filter(item => !hiddenIncidents.includes(item.name)).map(item => ({ id: item.id, name: item.name, label: item.name, source: 'custom' })));
+    const incidentHidden = hiddenIncidentEntries.map(entry => ({
+      id: entry.id,
+      name: entry.name,
+      label: DEFAULT_INCIDENT_CATEGORIES.includes(entry.name) ? entry.name : entry.name,
+      source: DEFAULT_INCIDENT_CATEGORIES.includes(entry.name) ? 'default' : 'custom'
+    }));
+
+    renderTypeList(tradeVisible, tradeHidden, 'options-trades-visible', 'options-trades-hidden', 'trade');
+    renderTypeList(planVisible, planHidden, 'options-plans-visible', 'options-plans-hidden', 'plan');
+    renderTypeList(incidentVisible, incidentHidden, 'options-incidents-visible', 'options-incidents-hidden', 'incidentCategory');
 
     document.getElementById('btn-options-import-project').addEventListener('click', importProject);
     document.getElementById('btn-options-download-attachments').addEventListener('click', downloadAttachmentsZip);
@@ -1170,31 +1281,91 @@ const App = (() => {
   // ========================================
 
   let ctxMenuReady = false;
+  let touchContextTimer = null;
+  let touchContextPointerId = null;
+  let touchContextStart = { x: 0, y: 0 };
 
   function setupContextMenu() {
     if (ctxMenuReady) return;
     ctxMenuReady = true;
 
     const menu = document.getElementById('ctx-menu');
+    const mainContent = document.getElementById('main-content');
+
+    function resetTouchContext() {
+      if (touchContextTimer) {
+        clearTimeout(touchContextTimer);
+        touchContextTimer = null;
+      }
+      touchContextPointerId = null;
+      contextMenuTarget = null;
+    }
+
+    function startTouchContext(e) {
+      if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      contextMenuTarget = e.target;
+      contextMenuTargetType = null;
+      contextMenuTargetId = null;
+      touchContextPointerId = e.pointerId;
+      touchContextStart = { x: e.clientX, y: e.clientY };
+
+      touchContextTimer = setTimeout(() => {
+        if (!contextMenuTarget) return;
+
+        if (currentSection === 'timeline' && typeof TimelineModule !== 'undefined' && TimelineModule.captureContextMenuTarget) {
+          TimelineModule.captureContextMenuTarget(contextMenuTarget, touchContextStart.x);
+        }
+
+        showContextMenu(touchContextStart.x, touchContextStart.y);
+        touchContextTimer = null;
+      }, 550);
+    }
+
+    function moveTouchContext(e) {
+      if (touchContextPointerId !== e.pointerId) return;
+      const distance = Math.hypot(e.clientX - touchContextStart.x, e.clientY - touchContextStart.y);
+      if (distance > 10) resetTouchContext();
+    }
+
+    function endTouchContext(e) {
+      if (touchContextPointerId !== e.pointerId) return;
+      resetTouchContext();
+    }
 
     // Close on click elsewhere or Escape
     document.addEventListener('click', () => hideContextMenu());
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
     window.addEventListener('blur', () => hideContextMenu());
 
+    if (mainContent) {
+      mainContent.addEventListener('pointerdown', startTouchContext);
+      mainContent.addEventListener('pointermove', moveTouchContext);
+      mainContent.addEventListener('pointerup', endTouchContext);
+      mainContent.addEventListener('pointercancel', endTouchContext);
+    }
+
     // Right click handler on main content
-    document.getElementById('main-content').addEventListener('contextmenu', (e) => {
-      // Don't override context menu on inputs/textareas/contenteditable
-      const tag = e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (mainContent) {
+      mainContent.addEventListener('contextmenu', (e) => {
+        // Don't override context menu on inputs/textareas/contenteditable
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
 
-      if (currentSection === 'timeline' && typeof TimelineModule !== 'undefined' && TimelineModule.captureContextMenuTarget) {
-        TimelineModule.captureContextMenuTarget(e.target, e.clientX);
-      }
+        contextMenuTarget = e.target;
+        contextMenuTargetType = null;
+        contextMenuTargetId = null;
 
-      e.preventDefault();
-      showContextMenu(e.clientX, e.clientY);
-    });
+        if (currentSection === 'timeline' && typeof TimelineModule !== 'undefined' && TimelineModule.captureContextMenuTarget) {
+          TimelineModule.captureContextMenuTarget(e.target, e.clientX);
+        }
+
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY);
+      });
+    }
   }
 
   function showContextMenu(x, y) {
@@ -1240,10 +1411,42 @@ const App = (() => {
   function hideContextMenu() {
     const menu = document.getElementById('ctx-menu');
     menu.classList.remove('visible');
+    contextMenuTarget = null;
+    contextMenuTargetId = null;
+    contextMenuTargetType = null;
   }
 
   function getContextMenuItems() {
     const section = currentSection;
+    const target = contextMenuTarget;
+    const incidentCard = target?.closest('.incident-card');
+    const planCard = target?.closest('.plan-card');
+
+    if (section === 'diary' && incidentCard) {
+      contextMenuTargetType = 'incident';
+      contextMenuTargetId = incidentCard.dataset.id;
+      return [
+        { type: 'header', label: 'Entrada del diario' },
+        { action: 'edit-incident', icon: 'pencil', label: 'Editar entrada' },
+        { action: 'delete-incident', icon: 'trash-2', label: 'Eliminar entrada', danger: true },
+        { type: 'sep' },
+        { action: 'add-incident', icon: 'plus-circle', label: 'Nueva entrada' },
+        { type: 'sep' },
+      ];
+    }
+
+    if (section === 'plans' && planCard) {
+      contextMenuTargetType = 'plan';
+      contextMenuTargetId = planCard.dataset.planId || planCard.dataset.planIdx;
+      return [
+        { type: 'header', label: 'Plano' },
+        { action: 'edit-plan', icon: 'pencil', label: 'Editar plano' },
+        { action: 'delete-plan', icon: 'trash-2', label: 'Eliminar plano', danger: true },
+        { type: 'sep' },
+        { action: 'plans-upload', icon: 'upload', label: 'Subir nuevo plano' },
+        { type: 'sep' },
+      ];
+    }
 
     const navItems = [
       { type: 'sep' },
@@ -1308,6 +1511,15 @@ const App = (() => {
           { action: 'view-gantt',      icon: 'gantt-chart',  label: 'Vista Gantt' },
           { action: 'view-list',       icon: 'list',         label: 'Vista lista' },
           { action: 'zoom-today',      icon: 'calendar',     label: 'Ir a hoy' },
+          ...navItems
+        ];
+
+      case 'plans':
+        return [
+          { type: 'header', label: 'Planos de Obra' },
+          { action: 'plans-upload', icon: 'upload', label: 'Subir plano' },
+          { type: 'sep' },
+          { action: 'view-all-plans', icon: 'layers', label: 'Ver todos los planos' },
           ...navItems
         ];
 
@@ -1457,6 +1669,34 @@ const App = (() => {
       case 'filter-resolved':
         document.getElementById('diary-filter').value = 'resolved';
         document.getElementById('diary-filter').dispatchEvent(new Event('change'));
+        break;
+      case 'edit-incident':
+        if (contextMenuTargetId && typeof DiaryModule !== 'undefined') {
+          DiaryModule.editIncident(parseInt(contextMenuTargetId));
+        }
+        break;
+      case 'delete-incident':
+        if (contextMenuTargetId && typeof DiaryModule !== 'undefined') {
+          DiaryModule.deleteIncident(parseInt(contextMenuTargetId));
+        }
+        break;
+
+      // Plans
+      case 'plans-upload':
+        document.getElementById('btn-upload-plan-section').click();
+        break;
+      case 'edit-plan':
+        if (contextMenuTargetId && typeof PlansModule !== 'undefined') {
+          PlansModule.editPlan(parseInt(contextMenuTargetId));
+        }
+        break;
+      case 'delete-plan':
+        if (contextMenuTargetId && typeof PlansModule !== 'undefined') {
+          PlansModule.deletePlan(parseInt(contextMenuTargetId));
+        }
+        break;
+      case 'view-all-plans':
+        navigateTo('plans');
         break;
 
       // Files
