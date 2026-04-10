@@ -45,6 +45,15 @@ const DiaryModule = (() => {
     document.getElementById('btn-add-evolution-empty').addEventListener('click', () => openIncidentForm(null, 'evolution'));
     document.getElementById('diary-filter').addEventListener('change', loadIncidents);
     document.getElementById('diary-type-filter').addEventListener('change', loadIncidents);
+    const searchInput = document.getElementById('diary-search');
+    if (searchInput) {
+      searchInput.value = '';
+      let _debounce = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(_debounce);
+        _debounce = setTimeout(loadIncidents, 200);
+      });
+    }
   }
 
   async function loadIncidents() {
@@ -66,6 +75,17 @@ const DiaryModule = (() => {
 
     if (filter !== 'all') {
       incidents = incidents.filter(i => i.status === filter);
+    }
+
+    const searchEl = document.getElementById('diary-search');
+    const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    if (q) {
+      incidents = incidents.filter(i =>
+        (i.description || '').toLowerCase().includes(q) ||
+        (i.category || '').toLowerCase().includes(q) ||
+        (i.responsiblePerson || '').toLowerCase().includes(q) ||
+        (i.responsibleCompany || '').toLowerCase().includes(q)
+      );
     }
 
     renderFeed(incidents);

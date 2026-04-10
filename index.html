@@ -443,6 +443,9 @@
             <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista" data-i18n-attr="title" data-i18n="timeline_view_list"></button>
           </div>
           <button class="btn btn-outline btn-icon print-btn" id="btn-print-timeline" onclick="App.printSection('timeline')" title="Imprimir cronograma"><i data-lucide="printer"></i></button>
+          <button class="btn btn-outline" id="btn-export-csv-timeline" onclick="TimelineModule.exportCSV()" title="Exportar CSV">
+            <i data-lucide="download"></i> <span>CSV</span>
+          </button>
           <button class="btn btn-outline" id="btn-apply-template" title="Cargar plantilla base de cronograma" data-i18n-attr="title" data-i18n="timeline_apply_template">
             <i data-lucide="layout-template"></i> <span data-i18n="timeline_template">Plantilla</span>
           </button>
@@ -510,6 +513,10 @@
         <h2 data-i18n="diary_title">Diario de Obra</h2>
         <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('diary')" title="Imprimir"><i data-lucide="printer"></i></button>
         <div class="diary-actions">
+          <div class="filter-search diary-search-wrap">
+            <i data-lucide="search"></i>
+            <input type="text" id="diary-search" placeholder="Buscar en el diario…" autocomplete="off">
+          </div>
           <button class="btn btn-primary" id="btn-add-incident">
             <i data-lucide="alert-triangle"></i> <span data-i18n="diary_incident_button">Incidencia</span>
           </button>

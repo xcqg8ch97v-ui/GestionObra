@@ -2079,6 +2079,7 @@ const App = (() => {
 
     setupContextMenu();
     setupGlobalSearch();
+    setTimeout(() => checkProjectAlerts(currentProjectId), 800);
 
     safeIcons();
 
@@ -2259,6 +2260,71 @@ const App = (() => {
 
   function closeModal() {
     document.getElementById('modal-overlay').classList.remove('active');
+  }
+
+  // ========================================
+  // ALERTAS DEL PROYECTO
+  // ========================================
+
+  async function checkProjectAlerts(pid) {
+    if (!pid) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const in3days = new Date(today); in3days.setDate(today.getDate() + 3);
+    const in7days = new Date(today); in7days.setDate(today.getDate() + 7);
+
+    const [tasks, incidents] = await Promise.all([
+      DB.getAllForProject('tasks', pid),
+      DB.getAllForProject('incidents', pid)
+    ]);
+
+    const normal = tasks.filter(t => !t.systemTag);
+    const overdue = normal.filter(t => {
+      const end = t.endDate ? new Date(t.endDate) : null;
+      return end && end < today && (t.progress || 0) < 100;
+    });
+    const dueSoon = normal.filter(t => {
+      const end = t.endDate ? new Date(t.endDate) : null;
+      return end && end >= today && end <= in7days && (t.progress || 0) < 100;
+    });
+    const pendingIncidents = incidents.filter(i => i.entryType === 'incident' && i.status === 'pending');
+
+    if (overdue.length === 0 && dueSoon.length === 0 && pendingIncidents.length === 0) return;
+
+    const rows = [];
+    overdue.slice(0, 5).forEach(t => {
+      const days = Math.round((today - new Date(t.endDate)) / 86400000);
+      rows.push(`<div class="alert-row alert-row-danger">
+        <i data-lucide="clock" style="width:14px;height:14px;color:var(--error);flex-shrink:0"></i>
+        <span><strong>${escapeHTML(t.name)}</strong> — <span style="color:var(--error)">Vencida hace ${days}d</span></span>
+        <button class="btn btn-xs btn-outline" onclick="App.navigateTo('timeline');App.closeModal()">Ver</button>
+      </div>`);
+    });
+    dueSoon.slice(0, 5).forEach(t => {
+      const days = Math.round((new Date(t.endDate) - today) / 86400000);
+      rows.push(`<div class="alert-row alert-row-warn">
+        <i data-lucide="calendar-clock" style="width:14px;height:14px;color:var(--warning);flex-shrink:0"></i>
+        <span><strong>${escapeHTML(t.name)}</strong> — <span style="color:var(--warning)">Vence en ${days}d</span></span>
+        <button class="btn btn-xs btn-outline" onclick="App.navigateTo('timeline');App.closeModal()">Ver</button>
+      </div>`);
+    });
+    pendingIncidents.slice(0, 5).forEach(i => {
+      rows.push(`<div class="alert-row alert-row-warn">
+        <i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--warning);flex-shrink:0"></i>
+        <span><strong>${escapeHTML((i.description || i.category || 'Incidencia').slice(0, 60))}</strong> — <span style="color:var(--warning)">Pendiente</span></span>
+        <button class="btn btn-xs btn-outline" onclick="App.openIncident(${i.id});App.closeModal()">Ver</button>
+      </div>`);
+    });
+
+    const stats = [];
+    if (overdue.length) stats.push(`<span class="alert-stat danger">${overdue.length} vencida${overdue.length > 1 ? 's' : ''}</span>`);
+    if (dueSoon.length) stats.push(`<span class="alert-stat warn">${dueSoon.length} próxima${dueSoon.length > 1 ? 's' : ''}</span>`);
+    if (pendingIncidents.length) stats.push(`<span class="alert-stat warn">${pendingIncidents.length} incidencia${pendingIncidents.length > 1 ? 's' : ''} pendiente${pendingIncidents.length > 1 ? 's' : ''}</span>`);
+
+    const body = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${stats.join('')}</div>
+      <div class="alert-rows">${rows.join('')}</div>`;
+    const footer = `<button class="btn btn-primary" onclick="App.closeModal()">Entendido</button>`;
+    openModal('⚠️ Alertas del proyecto', body, footer, { size: 'sm' });
   }
 
   // ========================================

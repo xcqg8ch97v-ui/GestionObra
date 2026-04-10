@@ -822,6 +822,8 @@ const TimelineModule = (() => {
             <td class="tl-cell-name">
               <input class="tl-inline" type="text" value="${App.escapeHTML(task.name)}"
                 onchange="TimelineModule.inlineUpdate(${task.id},'name',this.value)">
+              ${task.photoIds && task.photoIds.length ? `<span class="tl-photo-badge" title="${task.photoIds.length} foto(s)"><i data-lucide="camera" style="width:11px;height:11px"></i>${task.photoIds.length}</span>` : ''}
+              ${task.notes ? `<span class="tl-notes-badge" title="${App.escapeHTML(task.notes)}"><i data-lucide="file-text" style="width:11px;height:11px"></i></span>` : ''}
             </td>
             <td>
               <select class="tl-inline tl-inline-select" onchange="TimelineModule.inlineUpdate(${task.id},'category',this.value)">
@@ -1052,6 +1054,20 @@ const TimelineModule = (() => {
                style="width:100%;accent-color:var(--cyan)">
       </div>
       <div class="form-group">
+        <label>Notas</label>
+        <textarea id="task-notes" rows="2" style="resize:vertical" placeholder="Observaciones, materiales, instrucciones…">${isEdit ? App.escapeHTML(task.notes || '') : ''}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Fotos de avance</label>
+        <div class="task-photos-preview" id="task-photos-preview">
+          ${isEdit && task.photoIds && task.photoIds.length ? task.photoIds.map(id => `<div class="task-photo-thumb" data-photo-id="${id}"><img src="" data-load-id="${id}"><button type="button" class="task-photo-remove" data-photo-id="${id}">&times;</button></div>`).join('') : ''}
+        </div>
+        <label class="btn btn-outline btn-sm task-photo-add-btn">
+          <i data-lucide="camera"></i> Añadir foto
+          <input type="file" id="task-photo-input" accept="image/*" multiple hidden>
+        </label>
+      </div>
+      <div class="form-group">
         <label>Dependencias (tareas que deben completarse antes)</label>
         <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--sp-sm);">
           ${allTasks.filter(item => !isEdit || item.id !== task.id).length > 0
@@ -1081,6 +1097,38 @@ const TimelineModule = (() => {
 
     App.openModal(title, body, footer);
 
+    // Load existing photo thumbnails
+    if (isEdit && task.photoIds && task.photoIds.length) {
+      task.photoIds.forEach(async photoId => {
+        const file = await DB.getById('files', photoId);
+        if (!file) return;
+        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type || 'image/*' }) : null);
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const img = document.querySelector(`#task-photos-preview img[data-load-id="${photoId}"]`);
+        if (img) img.src = url;
+      });
+    }
+
+    // New photo preview
+    document.getElementById('task-photo-input')?.addEventListener('change', function() {
+      const preview = document.getElementById('task-photos-preview');
+      Array.from(this.files).forEach(file => {
+        const url = URL.createObjectURL(file);
+        const div = document.createElement('div');
+        div.className = 'task-photo-thumb task-photo-new';
+        div.innerHTML = `<img src="${url}"><button type="button" class="task-photo-remove">&times;</button>`;
+        div.querySelector('.task-photo-remove').addEventListener('click', () => div.remove());
+        preview.appendChild(div);
+      });
+    });
+
+    // Remove existing photo
+    document.getElementById('task-photos-preview')?.addEventListener('click', e => {
+      const btn = e.target.closest('.task-photo-remove');
+      if (btn) btn.closest('.task-photo-thumb').remove();
+    });
+
     document.getElementById('btn-save-task').addEventListener('click', async () => {
       const name = document.getElementById('task-name').value.trim();
       const startDate = document.getElementById('task-start').value;
@@ -1097,14 +1145,28 @@ const TimelineModule = (() => {
 
       const dependencies = Array.from(document.querySelectorAll('.dep-check:checked')).map(checkbox => parseInt(checkbox.value, 10));
 
+      // Handle photos
+      const existingPhotoIds = Array.from(document.querySelectorAll('#task-photos-preview .task-photo-thumb[data-photo-id]'))
+        .map(el => parseInt(el.dataset.photoId, 10)).filter(Boolean);
+      const newPhotoFiles = Array.from(document.getElementById('task-photo-input')?.files || []);
+      const newPhotoIds = [];
+      for (const file of newPhotoFiles) {
+        if (file.size > 10 * 1024 * 1024) { App.toast(`${file.name} supera 10MB`, 'warning'); continue; }
+        const buffer = await file.arrayBuffer();
+        const photoId = await DB.add('files', { projectId, name: file.name, type: file.type, size: file.size, data: buffer, createdAt: new Date().toISOString(), isTaskPhoto: true });
+        newPhotoIds.push(photoId);
+      }
+
       const data = {
         name,
         category: document.getElementById('task-category').value,
         responsible: document.getElementById('task-responsible').value.trim(),
+        notes: document.getElementById('task-notes').value.trim(),
         startDate,
         endDate,
         progress: parseInt(document.getElementById('task-progress').value, 10),
         dependencies,
+        photoIds: [...existingPhotoIds, ...newPhotoIds],
         updatedAt: new Date().toISOString()
       };
 
@@ -1186,9 +1248,38 @@ const TimelineModule = (() => {
     loadTasks();
   }
 
+  function exportCSV() {
+    if (!tasks.length) { App.toast('No hay tareas para exportar', 'warning'); return; }
+    const headers = ['Tarea', 'Fase', 'Responsable', 'Inicio', 'Fin', 'Duración (días)', 'Progreso (%)', 'Estado'];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const criticalIds = calculateCriticalPath(tasks);
+    const rows = tasks.filter(t => !t.systemTag).map(t => {
+      const state = getTaskState(t, today, criticalIds);
+      const dur = inclusiveDuration(t.startDate, t.endDate);
+      return [
+        `"${(t.name || '').replace(/"/g, '""')}"`,
+        `"${(t.category || '').replace(/"/g, '""')}"`,
+        `"${(t.responsible || '').replace(/"/g, '""')}"`,
+        t.startDate || '',
+        t.endDate || '',
+        dur,
+        t.progress || 0,
+        `"${state.label}"`
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'cronograma.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    App.toast('CSV exportado', 'success');
+  }
+
   function refresh() {
     loadTasks();
   }
 
-  return { init, editTask, deleteTask, inlineUpdate, refresh, applySuggestedTemplate, captureContextMenuTarget, openTaskFromContext };
+  return { init, editTask, deleteTask, inlineUpdate, refresh, exportCSV, applySuggestedTemplate, captureContextMenuTarget, openTaskFromContext };
 })();
