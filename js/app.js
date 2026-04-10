@@ -2261,6 +2261,187 @@ const App = (() => {
     document.getElementById('modal-overlay').classList.remove('active');
   }
 
+  // ========================================
+  // PRINT
+  // ========================================
+
+  async function printSection(section) {
+    const project = currentProjectId ? await DB.getById('projects', currentProjectId) : null;
+    const projectName = project ? escapeHTML(project.name) : 'Proyecto';
+    const date = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    let content = '';
+
+    if (section === 'timeline') {
+      content = await buildTimelinePrint(project, date);
+    } else {
+      const el = document.getElementById(`section-${section}`);
+      if (!el) return;
+      const title = el.querySelector('.panel-header h2')?.textContent || section;
+      const inner = el.cloneNode(true);
+      inner.querySelectorAll('.print-btn, .panel-header button, input[type=file], .empty-state').forEach(n => n.remove());
+      content = `<h2 class="print-section-title">${escapeHTML(title)}</h2>${inner.querySelector('.panel-header + *') ? inner.innerHTML : inner.innerHTML}`;
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="UTF-8">
+<title>${projectName} · ${section}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;padding:20px 28px}
+  .print-header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #FFD500;padding-bottom:10px;margin-bottom:20px}
+  .print-header h1{font-size:18px;font-weight:700}
+  .print-header .meta{font-size:11px;color:#666;text-align:right;line-height:1.6}
+  .print-section-title{font-size:15px;font-weight:600;margin-bottom:12px;color:#111}
+  /* Timeline table */
+  .print-table{width:100%;border-collapse:collapse;margin-top:4px}
+  .print-table th{background:#f5f5f5;font-weight:600;font-size:11px;padding:6px 8px;text-align:left;border:1px solid #ddd}
+  .print-table td{padding:5px 8px;border:1px solid #e5e5e5;vertical-align:middle;font-size:11px}
+  .print-table tr:nth-child(even) td{background:#fafafa}
+  .phase-row td{background:#f0f0f0!important;font-weight:600;font-size:11px;color:#555;letter-spacing:.04em;text-transform:uppercase}
+  .badge{display:inline-block;padding:2px 7px;border-radius:9px;font-size:10px;font-weight:600;white-space:nowrap}
+  .badge-completed{background:#dcfce7;color:#166534}
+  .badge-delayed{background:#fee2e2;color:#991b1b}
+  .badge-active{background:#dbeafe;color:#1e40af}
+  .badge-critical{background:#fed7aa;color:#9a3412}
+  .badge-normal{background:#f3f4f6;color:#374151}
+  .badge-milestone{background:#ede9fe;color:#5b21b6}
+  .progress-bar{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:60px}
+  .progress-fill{height:100%;background:#FFD500;border-radius:3px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid #eee}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:10px}
+  .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .print-summary{display:flex;gap:16px;margin-bottom:16px}
+  .print-stat{background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:8px 14px;text-align:center}
+  .print-stat strong{display:block;font-size:18px;font-weight:700;color:#111}
+  .print-stat span{font-size:10px;color:#666}
+  .print-footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;font-size:10px;color:#999;text-align:right}
+  /* Generic section print */
+  .panel-header{display:none}
+  .btn,.filter-select,.files-filter-bar,.tl-hide-completed,.timeline-actions,.plans-actions,.diary-actions,.files-actions,.participants-actions,.print-btn,.view-toggle,.timeline-summary{display:none!important}
+  .overview-grid{display:grid!important;grid-template-columns:repeat(3,1fr);gap:12px}
+  .overview-card{border:1px solid #ddd;border-radius:8px;padding:12px;break-inside:avoid}
+  @media print{@page{size:A4 landscape;margin:12mm 10mm}}
+</style>
+</head><body>
+<div class="print-header">
+  <div><h1>${projectName}</h1><div style="font-size:12px;color:#666;margin-top:2px">${escapeHTML(project?.client || '')}</div></div>
+  <div class="meta"><strong>Impreso el</strong> ${date}</div>
+</div>
+${content}
+<div class="print-footer">Gestión de Obra · ${projectName}</div>
+<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=1000,height=700');
+    if (win) { win.document.write(html); win.document.close(); }
+  }
+
+  async function buildTimelinePrint(project, date) {
+    if (!currentProjectId) return '<p>Sin datos</p>';
+    const tasks = await DB.getAllForProject('tasks', currentProjectId);
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const isoToDisplay = iso => {
+      if (!iso) return '—';
+      const [y,m,d] = iso.split('-');
+      return `${d}/${m}/${y}`;
+    };
+
+    const phases = {};
+    const PHASE_ORDER = ['Previo','Demolición','Estructura','Cerramientos','Instalaciones','Acabados','Urbanización','Entrega','Otros'];
+    tasks.filter(t => !t.systemTag).forEach(t => {
+      const ph = t.category || 'Otros';
+      if (!phases[ph]) phases[ph] = [];
+      phases[ph].push(t);
+    });
+
+    const getBadge = task => {
+      if (task.systemTag === 'project-deadline-milestone') return { cls: 'badge-milestone', label: 'Hito' };
+      const end = task.endDate ? new Date(task.endDate) : null;
+      const prog = task.progress || 0;
+      if (prog >= 100) return { cls: 'badge-completed', label: 'Completada' };
+      if (end && end < today && prog < 100) return { cls: 'badge-delayed', label: 'Retrasada' };
+      const start = task.startDate ? new Date(task.startDate) : null;
+      if (start && start <= today && end && end >= today) return { cls: 'badge-active', label: 'En ejecución' };
+      return { cls: 'badge-normal', label: 'Planificada' };
+    };
+
+    const milestones = tasks.filter(t => t.systemTag === 'project-deadline-milestone');
+    const normal = tasks.filter(t => !t.systemTag);
+    const total = normal.length;
+    const done = normal.filter(t => (t.progress || 0) >= 100).length;
+    const delayed = normal.filter(t => {
+      const end = t.endDate ? new Date(t.endDate) : null;
+      return end && end < today && (t.progress || 0) < 100;
+    }).length;
+    const active = normal.filter(t => {
+      const s = t.startDate ? new Date(t.startDate) : null;
+      const e = t.endDate ? new Date(t.endDate) : null;
+      return s && s <= today && e && e >= today;
+    }).length;
+    const avgProgress = total ? Math.round(normal.reduce((a,t) => a + (t.progress||0), 0) / total) : 0;
+
+    let rows = '';
+    const orderedPhases = PHASE_ORDER.filter(p => phases[p]).concat(Object.keys(phases).filter(p => !PHASE_ORDER.includes(p)));
+    for (const ph of orderedPhases) {
+      if (!phases[ph]) continue;
+      rows += `<tr class="phase-row"><td colspan="6">${escapeHTML(ph)}</td></tr>`;
+      for (const task of phases[ph]) {
+        const b = getBadge(task);
+        const variance = task.baselineEndDate && task.endDate && task.baselineEndDate !== task.endDate
+          ? (() => { const d = Math.round((new Date(task.endDate)-new Date(task.baselineEndDate))/(86400000)); return d > 0 ? `<span style="color:#dc2626">+${d}d</span>` : `<span style="color:#16a34a">${d}d</span>`; })()
+          : '—';
+        rows += `<tr>
+          <td>${escapeHTML(task.name)}</td>
+          <td>${isoToDisplay(task.startDate)}</td>
+          <td>${isoToDisplay(task.endDate)}</td>
+          <td>${escapeHTML(task.responsible || '—')}</td>
+          <td><span class="badge ${b.cls}">${b.label}</span></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div class="progress-bar"><div class="progress-fill" style="width:${task.progress||0}%"></div></div>
+              <span style="font-size:10px;white-space:nowrap">${task.progress||0}%</span>
+            </div>
+          </td>
+          <td style="font-size:10px;text-align:center">${variance}</td>
+        </tr>`;
+      }
+    }
+
+    if (milestones.length) {
+      rows += `<tr class="phase-row"><td colspan="6">Hitos</td></tr>`;
+      for (const m of milestones) {
+        rows += `<tr><td colspan="3">${escapeHTML(m.name)}</td><td>—</td><td><span class="badge badge-milestone">Hito</span></td><td colspan="2">${isoToDisplay(m.endDate)}</td></tr>`;
+      }
+    }
+
+    return `
+      <h2 class="print-section-title">Cronograma de Obra</h2>
+      <div class="print-summary">
+        <div class="print-stat"><strong>${total}</strong><span>Tareas</span></div>
+        <div class="print-stat"><strong>${done}</strong><span>Completadas</span></div>
+        <div class="print-stat"><strong>${active}</strong><span>En ejecución</span></div>
+        <div class="print-stat"><strong style="color:#dc2626">${delayed}</strong><span>Retrasadas</span></div>
+        <div class="print-stat"><strong>${avgProgress}%</strong><span>Avance medio</span></div>
+      </div>
+      <table class="print-table">
+        <thead><tr>
+          <th>Tarea</th><th>Inicio</th><th>Fin</th><th>Responsable</th><th>Estado</th><th>Progreso</th><th>Desv.</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#86efac"></span>Completada</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>En ejecución</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#fca5a5"></span>Retrasada</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#d1d5db"></span>Planificada</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#c4b5fd"></span>Hito</div>
+        <div class="legend-item" style="margin-left:auto;color:#666">Desv. = días respecto al plan inicial</div>
+      </div>`;
+  }
+
   // --- Toast Notifications ---
   function toast(message, type = 'info') {
     const container = document.getElementById('toast-container');
@@ -2818,6 +2999,7 @@ const App = (() => {
     openIncident,
     confirm,
     prompt,
+    printSection,
     t,
     setLanguage,
     translatePage,

@@ -4631,3 +4631,19 @@ body.is-resizing-timeline-label {
     margin: 0 var(--sp-sm);
   }
 }
+
+/* ========================================
+   PRINT BUTTON
+   ======================================== */
+.print-btn {
+  padding: 6px 8px !important;
+  min-width: 0;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.print-btn i { width: 15px; height: 15px; }
+.print-btn:hover { color: var(--text-primary); }
+
+@media print {
+  .print-btn, .topbar, .sidebar, .modal-overlay, #toast-container { display: none !important; }
+}

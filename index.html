@@ -154,6 +154,7 @@
     <section id="section-overview" class="content-section active">
       <div class="panel-header">
         <h2 data-i18n="overview_title">Resumen del Proyecto</h2>
+        <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('overview')" title="Imprimir"><i data-lucide="printer"></i></button>
         <button class="overview-report-btn" id="btn-generate-report" title="Generar informe PDF" data-i18n-attr="title" data-i18n="overview_report_button">
           <i data-lucide="file-text"></i> <span data-i18n="overview_report_button">Generar Informe PDF</span>
         </button>
@@ -441,6 +442,7 @@
             <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt" data-i18n-attr="title" data-i18n="timeline_view_gantt"></button>
             <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista" data-i18n-attr="title" data-i18n="timeline_view_list"></button>
           </div>
+          <button class="btn btn-outline btn-icon print-btn" id="btn-print-timeline" onclick="App.printSection('timeline')" title="Imprimir cronograma"><i data-lucide="printer"></i></button>
           <button class="btn btn-outline" id="btn-apply-template" title="Cargar plantilla base de cronograma" data-i18n-attr="title" data-i18n="timeline_apply_template">
             <i data-lucide="layout-template"></i> <span data-i18n="timeline_template">Plantilla</span>
           </button>
@@ -506,6 +508,7 @@
     <section id="section-diary" class="content-section">
       <div class="panel-header">
         <h2 data-i18n="diary_title">Diario de Obra</h2>
+        <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('diary')" title="Imprimir"><i data-lucide="printer"></i></button>
         <div class="diary-actions">
           <button class="btn btn-primary" id="btn-add-incident">
             <i data-lucide="alert-triangle"></i> <span data-i18n="diary_incident_button">Incidencia</span>
@@ -549,6 +552,7 @@
     <section id="section-plans" class="content-section">
       <div class="panel-header">
         <h2 data-i18n="plans_title">Planos de Obra</h2>
+        <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('plans')" title="Imprimir"><i data-lucide="printer"></i></button>
         <div class="plans-actions">
           <button class="btn btn-primary" id="btn-upload-plan-section">
             <i data-lucide="upload"></i> <span data-i18n="plans_upload">Subir Plano</span>
@@ -609,6 +613,7 @@
     <section id="section-files" class="content-section">
       <div class="panel-header">
           <h2 data-i18n="files_title">Documentos</h2>
+        <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('files')" title="Imprimir"><i data-lucide="printer"></i></button>
         <div class="files-actions">
           <button class="btn btn-primary" id="btn-upload-file">
             <i data-lucide="upload"></i> <span data-i18n="upload_file">Subir Documento</span>
@@ -650,6 +655,7 @@
     <section id="section-participants" class="content-section">
       <div class="panel-header">
           <h2 data-i18n="participants_title">Participantes</h2>
+        <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('participants')" title="Imprimir"><i data-lucide="printer"></i></button>
         <div class="participants-actions">
           <div class="filter-search">
             <i data-lucide="search"></i>
