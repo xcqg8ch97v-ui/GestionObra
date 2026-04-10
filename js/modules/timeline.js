@@ -887,7 +887,7 @@ const TimelineModule = (() => {
     if (!project) return;
 
     const existingTasks = tasks.filter(task => task.systemTag !== 'project-deadline-milestone');
-    if (existingTasks.length > 0 && !confirm('Ya hay tareas en el cronograma. ¿Quieres añadir igualmente la plantilla base?')) return;
+    if (existingTasks.length > 0 && !await App.confirm('Ya hay tareas en el cronograma. ¿Quieres añadir igualmente la plantilla base?', { danger: false, confirmLabel: App.t('accept') })) return;
 
     const startDate = toISODate(project.createdAt || new Date());
     const endDate = project.targetEndDate || addDays(startDate, 180);
@@ -939,7 +939,7 @@ const TimelineModule = (() => {
       App.toast('No hay tareas para guardar un plan inicial', 'warning');
       return;
     }
-    if (!confirm('¿Guardar la planificación actual como plan inicial de referencia? Luego podrás comparar retrasos o cambios contra este plan.')) return;
+    if (!await App.confirm('¿Guardar la planificación actual como plan inicial de referencia? Luego podrás comparar retrasos o cambios contra este plan.', { danger: false, confirmLabel: App.t('accept') })) return;
 
     for (const task of tasks) {
       const updatedTask = {
@@ -961,8 +961,7 @@ const TimelineModule = (() => {
     }
 
     const taskCount = tasks.length;
-    if (!confirm(`Vas a borrar ${taskCount} tarea(s) del cronograma. ¿Quieres continuar?`)) return;
-    if (!confirm('Esta acción eliminará todas las tareas y no se puede deshacer. ¿Confirmas el borrado total?')) return;
+    if (!await App.confirm(`Vas a borrar ${taskCount} tarea(s) del cronograma. Esta acción no se puede deshacer. ¿Confirmas el borrado total?`)) return;
 
     for (const task of tasks) {
       await DB.remove('tasks', task.id);
@@ -1181,7 +1180,7 @@ const TimelineModule = (() => {
   }
 
   async function deleteTask(id) {
-    if (!confirm('¿Eliminar esta tarea?')) return;
+    if (!await App.confirm('¿Eliminar esta tarea?')) return;
     await DB.remove('tasks', id);
     App.toast('Tarea eliminada', 'info');
     loadTasks();

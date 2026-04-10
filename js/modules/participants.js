@@ -212,7 +212,7 @@ const ParticipantsModule = (() => {
   }
 
   async function remove(id) {
-    if (!confirm(App.t('confirm_delete_participant'))) return;
+    if (!await App.confirm(App.t('confirm_delete_participant'))) return;
     await DB.remove('participants', id);
     App.toast(App.t('participant_deleted'), 'success');
     loadParticipants();

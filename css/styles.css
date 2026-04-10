@@ -4470,3 +4470,168 @@ body.is-resizing-timeline-label {
   height: 16px;
   accent-color: var(--primary);
 }
+
+/* ========================================
+   GLOBAL SEARCH
+   ======================================== */
+.global-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 360px;
+  margin: 0 var(--sp-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--sp-sm);
+  gap: var(--sp-sm);
+  transition: border-color 0.15s;
+}
+.global-search-wrap:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.15);
+}
+.global-search-wrap > i {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+#global-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 8px 0;
+}
+#global-search-input::placeholder {
+  color: var(--text-muted);
+}
+.global-search-results {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  z-index: 200;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.global-search-results.active {
+  display: block;
+}
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px var(--sp-md);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--bg-hover); }
+.search-result-item i { width: 15px; height: 15px; color: var(--cyan); flex-shrink: 0; }
+.search-result-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result-sub { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.search-no-results { padding: var(--sp-md); color: var(--text-muted); font-size: 13px; text-align: center; }
+
+/* ========================================
+   DRAG & DROP ZONES
+   ======================================== */
+.files-drop-zone,
+.plans-drop-zone {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.drop-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(6,182,212,0.12);
+  border: 2px dashed var(--cyan);
+  border-radius: var(--radius-lg);
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cyan);
+  pointer-events: none;
+}
+.drop-overlay i { width: 40px; height: 40px; }
+.files-drop-zone.drag-active .drop-overlay,
+.plans-drop-zone.drag-active .drop-overlay {
+  display: flex;
+}
+
+/* ========================================
+   SKELETON LOADER
+   ======================================== */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.overview-skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.skeleton-line {
+  height: 14px;
+  background: var(--border);
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.skeleton-title { height: 18px; width: 55%; }
+.skeleton-short { width: 35%; }
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-sm);
+}
+.skeleton-block {
+  height: 64px;
+  background: var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* ========================================
+   MODAL SMALL + BTN DANGER
+   ======================================== */
+.modal.modal-sm {
+  max-width: 420px;
+}
+.btn-danger {
+  background: var(--error);
+  color: #fff;
+  border-color: var(--error);
+}
+.btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+@media (max-width: 640px) {
+  .global-search-wrap {
+    max-width: 100%;
+    margin: 0 var(--sp-sm);
+  }
+}

@@ -412,7 +412,7 @@ const DiaryModule = (() => {
   }
 
   async function deleteIncident(id) {
-    if (!confirm(App.t('confirm_delete_diary_entry'))) return;
+    if (!await App.confirm(App.t('confirm_delete_diary_entry'))) return;
     await DB.remove('incidents', id);
     App.toast(App.t('diary_entry_deleted'), 'info');
     loadIncidents();

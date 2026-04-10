@@ -129,6 +129,11 @@
         <h1 id="section-title">Vista General</h1>
         <span class="topbar-project-name" id="topbar-project-name"></span>
       </div>
+      <div class="global-search-wrap" id="global-search-wrap">
+        <i data-lucide="search"></i>
+        <input type="text" id="global-search-input" autocomplete="off" data-i18n-attr="placeholder" data-i18n="search_placeholder" placeholder="Buscar en el proyecto…">
+        <div class="global-search-results" id="global-search-results"></div>
+      </div>
       <div class="topbar-actions">
         <button class="btn btn-outline topbar-projects-btn" id="btn-topbar-projects" title="Ver todas las obras" data-i18n-attr="title" data-i18n="view_projects">
           <i data-lucide="folders"></i>
@@ -551,7 +556,10 @@
         </div>
       </div>
       <div class="plans-categories" id="plans-categories"></div>
-      <div class="plans-gallery" id="plans-gallery"></div>
+      <div class="plans-drop-zone" id="plans-drop-zone">
+        <div class="plans-gallery" id="plans-gallery"></div>
+        <div class="drop-overlay" id="plans-drop-overlay"><i data-lucide="upload-cloud"></i><span data-i18n="drop_files_here">Suelta los archivos aquí</span></div>
+      </div>
       <div class="empty-state" id="plans-empty">
         <i data-lucide="map"></i>
         <p data-i18n="plans_empty_no_plans">No hay planos subidos</p>
@@ -631,7 +639,10 @@
           <span data-i18n="files_group_by_type">Agrupar por tipo</span>
         </label>
       </div>
-      <div class="files-list" id="files-list"></div>
+      <div class="files-drop-zone" id="files-drop-zone">
+        <div class="files-list" id="files-list"></div>
+        <div class="drop-overlay" id="files-drop-overlay"><i data-lucide="upload-cloud"></i><span data-i18n="drop_files_here">Suelta los archivos aquí</span></div>
+      </div>
       <div class="empty-state" id="files-empty">
         <i data-lucide="folder-open"></i>
         <p data-i18n="files_empty">No hay documentos subidos</p>

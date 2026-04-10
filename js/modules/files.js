@@ -91,6 +91,36 @@ const FilesModule = (() => {
     const newGroup = groupChk.cloneNode(true);
     groupChk.parentNode.replaceChild(newGroup, groupChk);
     newGroup.addEventListener('change', loadFiles);
+
+    // Drag & drop
+    const dropZone = document.getElementById('files-drop-zone');
+    const dropOverlay = document.getElementById('files-drop-overlay');
+    if (dropZone) {
+      let dragCounter = 0;
+      dropZone.addEventListener('dragenter', e => { e.preventDefault(); dragCounter++; dropZone.classList.add('drag-active'); });
+      dropZone.addEventListener('dragleave', () => { dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropZone.classList.remove('drag-active'); } });
+      dropZone.addEventListener('dragover', e => e.preventDefault());
+      dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropZone.classList.remove('drag-active');
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length) handleFileDrop(files);
+      });
+    }
+  }
+
+  async function handleFileDrop(files) {
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) {
+        App.toast(App.t('file_exceeds_size_limit', { name: file.name, size: '50MB' }), 'warning');
+        continue;
+      }
+      const buffer = await file.arrayBuffer();
+      await DB.add('files', { projectId, name: file.name, type: file.type, size: file.size, data: buffer, createdAt: new Date().toISOString() });
+    }
+    App.toast(files.length === 1 ? App.t('file_uploaded') : `${files.length} archivos subidos`, 'success');
+    loadFiles();
   }
 
   async function handleFileUpload(e) {
@@ -249,7 +279,7 @@ const FilesModule = (() => {
   }
 
   async function deleteFile(id) {
-    if (!confirm(App.t('confirm_delete_file'))) return;
+    if (!await App.confirm(App.t('confirm_delete_file'))) return;
     await DB.remove('files', id);
     App.toast(App.t('file_deleted'), 'info');
     loadFiles();

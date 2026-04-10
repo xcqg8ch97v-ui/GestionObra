@@ -921,8 +921,8 @@ const CanvasModule = (() => {
     });
 
     // Canvas actions
-    document.getElementById('btn-clear-canvas').addEventListener('click', () => {
-      if (confirm(App.t('confirm_clear_canvas'))) {
+    document.getElementById('btn-clear-canvas').addEventListener('click', async () => {
+      if (await App.confirm(App.t('confirm_clear_canvas'))) {
         canvas.clear();
         setCanvasBackgroundColor(getCanvasBackgroundColor(), false);
         drawGrid();
@@ -1392,10 +1392,10 @@ const CanvasModule = (() => {
     group.dirty = true;
   }
 
-  function editShapeText(group) {
+  async function editShapeText(group) {
     const { label } = getShapeParts(group);
     if (!label) return;
-    const nextText = prompt(App.t('shape_text_prompt'), label.text || '');
+    const nextText = await App.prompt(App.t('shape_text_prompt'), label.text || '');
     if (nextText === null) return;
     label.set('text', nextText.trim());
     group.addWithUpdate();
@@ -1877,9 +1877,9 @@ const CanvasModule = (() => {
     renderHTMLTable(table); selectTable(table.id);
   }
 
-  function tableDeleteSelected() {
+  async function tableDeleteSelected() {
     const table = getSelectedTableData(); if (!table) return;
-    if (!confirm(App.t('confirm_delete_table'))) return;
+    if (!await App.confirm(App.t('confirm_delete_table'))) return;
     const el = document.getElementById(table.id);
     if (el) el.remove();
     tables = tables.filter(t => t.id !== table.id);
@@ -2521,7 +2521,7 @@ const CanvasModule = (() => {
       if (action === 'download') {
         await downloadAttachedFile(target._attachedFileId, target._attachedFileName);
       } else if (action === 'rename') {
-        const newName = prompt(App.t('file_name_prompt'), target._attachedFileName || '');
+        const newName = await App.prompt(App.t('file_name_prompt'), target._attachedFileName || '');
         if (newName && newName.trim()) {
           const trimmed = newName.trim();
           target._attachedFileName = trimmed;
@@ -2802,7 +2802,7 @@ const CanvasModule = (() => {
       App.toast('Debe haber al menos una hoja', 'warning');
       return;
     }
-    if (!confirm('¿Eliminar esta hoja? Se perderá todo su contenido.')) return;
+    if (!await App.confirm('¿Eliminar esta hoja? Se perderá todo su contenido.')) return;
     // Remove from index
     const idx = sheets.findIndex(s => s.id === sheetId);
     sheets.splice(idx, 1);

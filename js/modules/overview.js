@@ -54,6 +54,22 @@ const OverviewModule = (() => {
   async function refresh() {
     if (!projectId) return;
 
+    const grid = document.getElementById('overview-grid');
+    if (grid && !grid.querySelector('.overview-card')) {
+      grid.innerHTML = Array(4).fill(0).map(() => `
+        <div class="overview-card overview-skeleton">
+          <div class="skeleton-line skeleton-title"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-short"></div>
+        </div>`).join('') +
+        `<div class="overview-card overview-card-wide overview-skeleton">
+          <div class="skeleton-line skeleton-title"></div>
+          <div class="skeleton-grid">
+            ${Array(4).fill('<div class="skeleton-block"></div>').join('')}
+          </div>
+        </div>`;
+    }
+
     const [project, tasks, budgets, incidents, suppliers, files] = await Promise.all([
       DB.getById('projects', projectId),
       DB.getAllForProject('tasks', projectId),

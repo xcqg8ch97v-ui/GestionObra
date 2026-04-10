@@ -209,7 +209,7 @@ const DashboardModule = (() => {
 
     // Botón para añadir gremio personalizado
     document.getElementById('btn-add-custom-trade').addEventListener('click', async () => {
-      const name = prompt(App.t('new_trade_name_prompt'));
+      const name = await App.prompt(App.t('new_trade_name_prompt'), '', { title: App.t('add_trade') });
       if (!name) return;
       const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
       if (exists) { App.toast(App.t('trade_already_exists'), 'warning'); return; }
@@ -258,7 +258,7 @@ const DashboardModule = (() => {
   }
 
   async function deleteSupplier(id) {
-    if (!confirm(App.t('confirm_delete_supplier'))) return;
+    if (!await App.confirm(App.t('confirm_delete_supplier'))) return;
     await DB.remove('suppliers', id);
     App.toast(App.t('supplier_deleted'), 'info');
     loadSuppliers();
@@ -382,7 +382,7 @@ const DashboardModule = (() => {
 
     // Botón para añadir categoría personalizada
     document.getElementById('btn-add-custom-budget-cat').addEventListener('click', async () => {
-      const name = prompt(App.t('new_category_name_prompt'));
+      const name = await App.prompt(App.t('new_category_name_prompt'), '', { title: App.t('add_category') });
       if (!name) return;
       const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
       if (exists) { App.toast(App.t('category_already_exists'), 'warning'); return; }
@@ -436,7 +436,7 @@ const DashboardModule = (() => {
   }
 
   async function deleteBudget(id) {
-    if (!confirm(App.t('confirm_delete_budget'))) return;
+    if (!await App.confirm(App.t('confirm_delete_budget'))) return;
     await DB.remove('budgets', id);
     App.toast(App.t('budget_deleted'), 'info');
     loadBudgets();

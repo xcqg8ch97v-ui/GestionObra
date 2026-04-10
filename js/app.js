@@ -473,7 +473,13 @@ const App = (() => {
       preview_not_available: 'Vista previa no disponible para este formato',
       annotations_saved_on_plan: 'Anotaciones guardadas en el plano',
       timeline_set_baseline: 'Guardar plan inicial',
-      overview_no_category: 'Sin categoría'
+      overview_no_category: 'Sin categoría',
+      confirm_action: 'Confirmar acción',
+      accept: 'Aceptar',
+      search_placeholder: 'Buscar en el proyecto…',
+      search_no_results: 'Sin resultados',
+      drop_files_here: 'Suelta los archivos aquí',
+      drag_drop_hint: 'Arrastra archivos aquí o haz clic para subir'
     },
     en: {
       section_overview: 'Overview',
@@ -886,7 +892,13 @@ const App = (() => {
       preview_not_available: 'Preview not available for this format',
       annotations_saved_on_plan: 'Annotations saved on plan',
       timeline_set_baseline: 'Save baseline',
-      overview_no_category: 'No category'
+      overview_no_category: 'No category',
+      confirm_action: 'Confirm action',
+      accept: 'Accept',
+      search_placeholder: 'Search in project…',
+      search_no_results: 'No results',
+      drop_files_here: 'Drop files here',
+      drag_drop_hint: 'Drag files here or click to upload'
     }
   };
 
@@ -977,6 +989,121 @@ const App = (() => {
 
   function safeIcons() {
     try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch(e) { console.warn('Lucide icons error:', e); }
+  }
+
+  // ========================================
+  // CONFIRM / PROMPT MODALES PROPIOS
+  // ========================================
+
+  function confirm(message, { title = null, confirmLabel = null, cancelLabel = null, danger = true } = {}) {
+    return new Promise(resolve => {
+      const confirmText = confirmLabel || t('delete');
+      const cancelText  = cancelLabel  || t('cancel');
+      const heading     = title || t('confirm_action');
+      const btnClass    = danger ? 'btn-danger' : 'btn-primary';
+      const body   = `<p style="margin:0;line-height:1.6">${escapeHTML(message)}</p>`;
+      const footer = `
+        <button class="btn btn-outline" id="_confirm-cancel">${escapeHTML(cancelText)}</button>
+        <button class="btn ${btnClass}" id="_confirm-ok">${escapeHTML(confirmText)}</button>`;
+      openModal(heading, body, footer, { size: 'sm' });
+      document.getElementById('_confirm-ok').addEventListener('click', () => { closeModal(); resolve(true); });
+      document.getElementById('_confirm-cancel').addEventListener('click', () => { closeModal(); resolve(false); });
+    });
+  }
+
+  function prompt(message, defaultValue = '', { title = null, placeholder = '', confirmLabel = null } = {}) {
+    return new Promise(resolve => {
+      const confirmText = confirmLabel || t('accept');
+      const heading     = title || message;
+      const body = `
+        <div class="form-group" style="margin:0">
+          ${title ? `<p style="margin:0 0 .75rem;line-height:1.5">${escapeHTML(message)}</p>` : ''}
+          <input type="text" id="_prompt-input" class="form-control" value="${escapeHTML(defaultValue)}"
+            placeholder="${escapeHTML(placeholder)}" style="width:100%">
+        </div>`;
+      const footer = `
+        <button class="btn btn-outline" id="_prompt-cancel">${escapeHTML(t('cancel'))}</button>
+        <button class="btn btn-primary" id="_prompt-ok">${escapeHTML(confirmText)}</button>`;
+      openModal(heading, body, footer, { size: 'sm' });
+      const input = document.getElementById('_prompt-input');
+      input.focus();
+      input.select();
+      const submit = () => { const v = input.value.trim(); closeModal(); resolve(v || null); };
+      document.getElementById('_prompt-ok').addEventListener('click', submit);
+      document.getElementById('_prompt-cancel').addEventListener('click', () => { closeModal(); resolve(null); });
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { closeModal(); resolve(null); } });
+    });
+  }
+
+  // ========================================
+  // BÚSQUEDA GLOBAL
+  // ========================================
+
+  let _searchDebounce = null;
+
+  function setupGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    const results = document.getElementById('global-search-results');
+    if (!input || !results) return;
+
+    input.addEventListener('input', () => {
+      clearTimeout(_searchDebounce);
+      const q = input.value.trim();
+      if (!q) { results.classList.remove('active'); results.innerHTML = ''; return; }
+      _searchDebounce = setTimeout(() => runGlobalSearch(q), 220);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { input.value = ''; results.classList.remove('active'); results.innerHTML = ''; input.blur(); }
+    });
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.global-search-wrap')) {
+        results.classList.remove('active');
+      }
+    });
+  }
+
+  async function runGlobalSearch(q) {
+    if (!currentProjectId) return;
+    const results = document.getElementById('global-search-results');
+    const lower = q.toLowerCase();
+    const hits = [];
+
+    const [tasks, incidents, suppliers, budgets, participants, files] = await Promise.all([
+      DB.getAllForProject('tasks', currentProjectId),
+      DB.getAllForProject('incidents', currentProjectId),
+      DB.getAllForProject('suppliers', currentProjectId),
+      DB.getAllForProject('budgets', currentProjectId),
+      DB.getAllForProject('participants', currentProjectId),
+      DB.getAllForProject('files', currentProjectId),
+    ]);
+
+    tasks.filter(r => (r.name||'').toLowerCase().includes(lower))
+      .slice(0,4).forEach(r => hits.push({ icon: 'gantt-chart', label: r.name, sub: t('section_timeline'), action: `App.navigateTo('timeline')` }));
+    incidents.filter(r => (r.description||'').toLowerCase().includes(lower) || (r.category||'').toLowerCase().includes(lower))
+      .slice(0,4).forEach(r => hits.push({ icon: 'clipboard-list', label: r.description ? r.description.slice(0,60) : r.category, sub: t('section_diary'), action: `App.openIncident(${r.id})` }));
+    suppliers.filter(r => (r.name||'').toLowerCase().includes(lower) || (r.trade||'').toLowerCase().includes(lower))
+      .slice(0,4).forEach(r => hits.push({ icon: 'bar-chart-3', label: r.name, sub: r.trade || t('section_dashboard'), action: `App.navigateTo('dashboard')` }));
+    budgets.filter(r => (r.description||'').toLowerCase().includes(lower) || (r.category||'').toLowerCase().includes(lower))
+      .slice(0,3).forEach(r => hits.push({ icon: 'calculator', label: r.description || r.category, sub: t('dashboard_budgets'), action: `App.navigateTo('dashboard')` }));
+    participants.filter(r => (r.name||'').toLowerCase().includes(lower) || (r.company||'').toLowerCase().includes(lower))
+      .slice(0,3).forEach(r => hits.push({ icon: 'contact', label: r.name, sub: r.role || t('section_participants'), action: `App.navigateTo('participants')` }));
+    files.filter(r => (r.name||'').toLowerCase().includes(lower))
+      .slice(0,3).forEach(r => hits.push({ icon: 'folder-open', label: r.name, sub: t('section_files'), action: `App.navigateTo('files')` }));
+
+    if (hits.length === 0) {
+      results.innerHTML = `<div class="search-no-results">${escapeHTML(t('search_no_results'))}</div>`;
+    } else {
+      results.innerHTML = hits.map(h => `
+        <button class="search-result-item" onclick="${h.action};document.getElementById('global-search-input').value='';document.getElementById('global-search-results').classList.remove('active')">
+          <i data-lucide="${h.icon}"></i>
+          <span class="search-result-label">${escapeHTML(h.label || '')}</span>
+          <span class="search-result-sub">${escapeHTML(h.sub || '')}</span>
+        </button>`).join('');
+    }
+    results.classList.add('active');
+    safeIcons();
   }
 
   async function init() {
@@ -1641,7 +1768,7 @@ const App = (() => {
   }
 
   async function deleteProject(id) {
-    if (!confirm(t('confirm_delete_project'))) return;
+    if (!await confirm(t('confirm_delete_project'))) return;
     await DB.remove('projects', id);
     toast(t('project_deleted'), 'info');
     loadProjectCards();
@@ -1951,6 +2078,7 @@ const App = (() => {
     }
 
     setupContextMenu();
+    setupGlobalSearch();
 
     safeIcons();
 
@@ -2114,11 +2242,13 @@ const App = (() => {
     });
   }
 
-  function openModal(title, bodyHTML, footerHTML) {
+  function openModal(title, bodyHTML, footerHTML, { size = '' } = {}) {
     const overlay = document.getElementById('modal-overlay');
+    const box = document.getElementById('modal');
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = bodyHTML;
     document.getElementById('modal-footer').innerHTML = footerHTML || '';
+    box.classList.toggle('modal-sm', size === 'sm');
     overlay.classList.add('active');
     lucide.createIcons();
 
@@ -2686,6 +2816,8 @@ const App = (() => {
     importProject,
     syncProjectDeadlineMilestone,
     openIncident,
+    confirm,
+    prompt,
     t,
     setLanguage,
     translatePage,

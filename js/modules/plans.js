@@ -78,12 +78,33 @@ const PlansModule = (() => {
     if (btnEmpty) btnEmpty.onclick = triggerUpload;
 
     setupViewer();
+
+    // Drag & drop
+    const dropZone = document.getElementById('plans-drop-zone');
+    if (dropZone) {
+      let dragCounter = 0;
+      dropZone.addEventListener('dragenter', e => { e.preventDefault(); dragCounter++; dropZone.classList.add('drag-active'); });
+      dropZone.addEventListener('dragleave', () => { dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropZone.classList.remove('drag-active'); } });
+      dropZone.addEventListener('dragover', e => e.preventDefault());
+      dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropZone.classList.remove('drag-active');
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+        if (files.length) {
+          const fakeEvent = { target: { files, value: '' } };
+          handleUpload(fakeEvent);
+        } else {
+          App.toast('Solo se permiten imágenes y PDFs', 'warning');
+        }
+      });
+    }
   }
 
   async function handleUpload(e) {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-    e.target.value = '';
+    if (e.target.value !== undefined) e.target.value = '';
 
     // Recargar categorías personalizadas
     await refreshPlanCategories();
@@ -113,7 +134,7 @@ const PlansModule = (() => {
 
     // Botón para añadir categoría personalizada
     document.getElementById('btn-add-custom-plan-cat').addEventListener('click', async () => {
-      const name = prompt(App.t('new_category_name_prompt'));
+      const name = await App.prompt(App.t('new_category_name_prompt'), '', { title: App.t('add_category') });
       if (!name) return;
       const exists = allCategories.some(c => c.label.toLowerCase() === name.trim().toLowerCase());
       if (exists) { App.toast(App.t('category_already_exists'), 'warning'); return; }
@@ -359,7 +380,7 @@ const PlansModule = (() => {
   }
 
   async function deletePlan(id) {
-    if (!confirm(App.t('confirm_delete_plan'))) return;
+    if (!await App.confirm(App.t('confirm_delete_plan'))) return;
     const plan = await DB.getById('plans', id);
     if (plan) {
       await DB.remove('files', plan.fileId);
@@ -810,9 +831,9 @@ const PlansModule = (() => {
     }
   }
 
-  function annoClear() {
+  async function annoClear() {
     if (!annoCanvas) return;
-    if (!confirm('¿Borrar todas las anotaciones?')) return;
+    if (!await App.confirm(App.t('plan_anno_clear_confirm') || '¿Borrar todas las anotaciones?')) return;
     pushHistory();
     const objs = annoCanvas.getObjects().slice();
     objs.forEach(o => annoCanvas.remove(o));
