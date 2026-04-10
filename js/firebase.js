@@ -247,16 +247,19 @@ const FirebaseSync = (() => {
       }
     }
 
-    // Push binary files to Storage (requiere plan Blaze - omitido si no disponible)
+    // Push binary files via Cloudinary
     try {
-      const files = await DB.getAll('files');
-      console.log(`[FB Push] files: ${files.length} archivos locales (solo metadatos, Storage no disponible en plan gratuito)`);
-      // Guardar solo metadatos en Firestore, sin binarios
-      for (const file of files) {
-        const { data, blob, ...meta } = file;
-        await fsSet('files', meta);
+      if (typeof CloudinarySync !== 'undefined') {
+        const { ok, fail } = await CloudinarySync.pushAllFiles();
+        console.log(`[FB Push] files: ${ok} subidos a Cloudinary, ${fail} errores`);
+      } else {
+        const files = await DB.getAll('files');
+        for (const file of files) {
+          const { data, blob, ...meta } = file;
+          await fsSet('files', meta);
+        }
+        console.log(`[FB Push] files: solo metadatos (Cloudinary no disponible)`);
       }
-      console.log(`[FB Push] files: metadatos subidos OK`);
     } catch(e) {
       console.error('[FB Push] Error en files:', e);
     }

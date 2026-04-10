@@ -144,7 +144,20 @@ const FilesModule = (() => {
         uploadedAt: new Date().toISOString()
       };
 
-      await DB.add('files', record);
+      const fileId = await DB.add('files', record);
+      // Auto-upload to Cloudinary if logged in
+      if (typeof CloudinarySync !== 'undefined' && typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+        CloudinarySync.uploadFile({ ...record, id: fileId }).then(async meta => {
+          const updated = { ...record, id: fileId, ...meta };
+          window._fbSyncSuppressed = true;
+          await DB.put('files', updated);
+          window._fbSyncSuppressed = false;
+          if (FirebaseSync.isEnabled()) {
+            const { data, blob: b, ...cleanMeta } = updated;
+            FirebaseSync.fsSet('files', cleanMeta);
+          }
+        }).catch(e => console.warn('[Cloudinary] Auto-upload failed:', e));
+      }
     }
 
     App.toast(App.t('files_uploaded_count', { count: files.length }), 'success');
@@ -241,7 +254,7 @@ const FilesModule = (() => {
         </div>
         <div class="file-info">
           <div class="file-name">${App.escapeHTML(f.name)}</div>
-          <div class="file-meta">${info.label} · ${sizeStr} · ${App.formatDate(f.uploadedAt)}</div>
+          <div class="file-meta">${info.label} · ${sizeStr} · ${App.formatDate(f.uploadedAt)}${f.cloudinaryUrl ? ' · <span style="color:var(--cyan);font-size:11px">☁ nube</span>' : ''}</div>
         </div>
         <div class="file-actions">
           <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="${App.t('download')}">
@@ -263,7 +276,17 @@ const FilesModule = (() => {
     }
 
     const binaryData = file.data || (file.blob instanceof Blob ? await file.blob.arrayBuffer() : null);
+
     if (!binaryData) {
+      // Fallback: use Cloudinary URL if available
+      if (file.cloudinaryUrl) {
+        const link = document.createElement('a');
+        link.href = file.cloudinaryUrl;
+        link.download = file.name;
+        link.target = '_blank';
+        link.click();
+        return;
+      }
       App.toast(App.t('file_content_unavailable'), 'error');
       return;
     }
