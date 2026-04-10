@@ -19,14 +19,14 @@
       <div class="logo" style="justify-content:center;">
         <img src="img/logo-abessis-white.png" alt="Abessis" class="logo-img" style="height:40px">
       </div>
-      <p class="project-selector-subtitle">Selecciona una obra o crea una nueva</p>
+      <p class="project-selector-subtitle" data-i18n="project_selector_subtitle">Selecciona una obra o crea una nueva</p>
     </div>
     <div class="project-selector-actions">
       <button class="btn btn-primary" id="btn-new-project">
-        <i data-lucide="plus"></i> Nueva Obra
+        <i data-lucide="plus"></i> <span data-i18n="new_project">Nueva Obra</span>
       </button>
       <button class="btn btn-outline" id="btn-import-project">
-        <i data-lucide="upload"></i> Importar Obra
+        <i data-lucide="upload"></i> <span data-i18n="import_project">Importar Obra</span>
       </button>
       <button class="btn btn-outline" id="btn-theme-selector" title="Cambiar tema">
         <i data-lucide="sun" class="theme-icon-light"></i>
@@ -36,8 +36,8 @@
     <div class="project-grid" id="project-grid"></div>
     <div class="empty-state" id="projects-empty" style="display:none">
       <i data-lucide="building-2"></i>
-      <p>No hay obras creadas</p>
-      <button class="btn btn-outline" id="btn-new-project-empty">Crear primera obra</button>
+      <p data-i18n="no_projects">No hay obras creadas</p>
+      <button class="btn btn-outline" id="btn-new-project-empty"><span data-i18n="create_first_project">Crear primera obra</span></button>
     </div>
   </div>
 
@@ -47,7 +47,7 @@
       <div class="logo">
         <img src="img/logo-abessis-white.png" alt="Abessis" class="logo-img">
       </div>
-      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Colapsar menú">
+      <button id="sidebar-toggle" class="sidebar-toggle" data-i18n-attr="aria-label" data-i18n="collapse_menu">
         <i data-lucide="panel-left-close"></i>
       </button>
     </div>
@@ -57,63 +57,63 @@
         <li>
           <a href="#overview" class="nav-link" data-section="overview">
             <i data-lucide="layout-dashboard"></i>
-            <span class="nav-text">Vista General</span>
+            <span class="nav-text" data-i18n="section_overview">Vista General</span>
           </a>
         </li>
         <li>
           <a href="#canvas" class="nav-link active" data-section="canvas">
             <i data-lucide="pen-tool"></i>
-            <span class="nav-text">Mesa de Trabajo</span>
+            <span class="nav-text" data-i18n="section_canvas">Mesa de Trabajo</span>
           </a>
         </li>
         <li>
           <a href="#dashboard" class="nav-link" data-section="dashboard">
             <i data-lucide="bar-chart-3"></i>
-            <span class="nav-text">Proveedores</span>
+            <span class="nav-text" data-i18n="section_dashboard">Proveedores</span>
           </a>
         </li>
         <li>
           <a href="#timeline" class="nav-link" data-section="timeline">
             <i data-lucide="gantt-chart"></i>
-            <span class="nav-text">Cronograma</span>
+            <span class="nav-text" data-i18n="section_timeline">Cronograma</span>
           </a>
         </li>
         <li>
           <a href="#diary" class="nav-link" data-section="diary">
             <i data-lucide="clipboard-list"></i>
-            <span class="nav-text">Diario</span>
+            <span class="nav-text" data-i18n="section_diary">Diario</span>
           </a>
         </li>
         <li>
           <a href="#plans" class="nav-link" data-section="plans">
             <i data-lucide="map"></i>
-            <span class="nav-text">Planos</span>
+            <span class="nav-text" data-i18n="section_plans">Planos</span>
           </a>
         </li>
         <li>
           <a href="#files" class="nav-link" data-section="files">
             <i data-lucide="folder-open"></i>
-            <span class="nav-text">Documentos</span>
+            <span class="nav-text" data-i18n="section_files">Documentos</span>
           </a>
         </li>
         <li>
           <a href="#participants" class="nav-link" data-section="participants">
             <i data-lucide="contact"></i>
-            <span class="nav-text">Participantes</span>
+            <span class="nav-text" data-i18n="section_participants">Participantes</span>
           </a>
         </li>
       </ul>
     </nav>
 
     <div class="sidebar-footer">
-      <button class="sidebar-theme-btn" id="btn-theme-toggle" title="Cambiar tema">
+      <button class="sidebar-theme-btn" id="btn-theme-toggle" title="Cambiar tema" data-i18n-attr="title" data-i18n="options">
         <i data-lucide="sun" class="theme-icon-light"></i>
         <i data-lucide="moon" class="theme-icon-dark"></i>
         <span class="nav-text theme-label">Modo Claro</span>
       </button>
-      <button class="sidebar-back-btn" id="btn-back-projects" title="Ver todas las obras">
+      <button class="sidebar-back-btn" id="btn-back-projects" title="Ver todas las obras" data-i18n-attr="title" data-i18n="view_projects">
         <i data-lucide="arrow-left"></i>
-        <span class="nav-text">Ver obras</span>
+        <span class="nav-text" data-i18n="view_projects">Ver obras</span>
       </button>
     </div>
   </aside>
@@ -130,17 +130,17 @@
         <span class="topbar-project-name" id="topbar-project-name"></span>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-outline topbar-projects-btn" id="btn-topbar-projects" title="Ver todas las obras">
+        <button class="btn btn-outline topbar-projects-btn" id="btn-topbar-projects" title="Ver todas las obras" data-i18n-attr="title" data-i18n="view_projects">
           <i data-lucide="folders"></i>
-          <span class="topbar-btn-text">Obras</span>
+          <span class="topbar-btn-text" data-i18n="view_projects">Obras</span>
         </button>
-        <button class="btn btn-outline topbar-projects-btn" id="btn-options" title="Opciones">
+        <button class="btn btn-outline topbar-projects-btn" id="btn-options" title="Opciones" data-i18n-attr="title" data-i18n="options">
           <i data-lucide="settings"></i>
-          <span class="topbar-btn-text">Opciones</span>
+          <span class="topbar-btn-text" data-i18n="options">Opciones</span>
         </button>
         <span class="connection-status" id="connection-status">
           <i data-lucide="wifi-off" class="status-icon offline"></i>
-          <span class="nav-text">Offline Ready</span>
+          <span class="nav-text" data-i18n="offline_ready">Offline Ready</span>
         </span>
       </div>
     </header>

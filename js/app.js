@@ -5,22 +5,157 @@
 
 const App = (() => {
   const sectionTitles = {
-    overview: 'Vista General',
-    canvas: 'Mesa de Trabajo',
-    dashboard: 'Proveedores y Presupuestos',
-    timeline: 'Cronograma de Obra',
-    diary: 'Diario de Obra',
-    plans: 'Planos de Obra',
-    files: 'Documentos de Obra',
-    participants: 'Participantes de la Obra'
+    overview: 'section_overview',
+    canvas: 'section_canvas',
+    dashboard: 'section_dashboard',
+    timeline: 'section_timeline',
+    diary: 'section_diary',
+    plans: 'section_plans',
+    files: 'section_files',
+    participants: 'section_participants'
   };
 
   let currentSection = 'overview';
   let currentProjectId = null;
   let currentProjectName = '';
+  let currentLanguage = 'es';
   let contextMenuTarget = null;
   let contextMenuTargetId = null;
   let contextMenuTargetType = null;
+
+  const SUPPORTED_LANGUAGES = ['es', 'en'];
+  const LANGUAGE_LABELS = { es: 'Español', en: 'English' };
+
+  const TRANSLATIONS = {
+    es: {
+      section_overview: 'Vista General',
+      section_canvas: 'Mesa de Trabajo',
+      section_dashboard: 'Proveedores y Presupuestos',
+      section_timeline: 'Cronograma de Obra',
+      section_diary: 'Diario de Obra',
+      section_plans: 'Planos de Obra',
+      section_files: 'Documentos de Obra',
+      section_participants: 'Participantes de la Obra',
+      project_selector_subtitle: 'Selecciona una obra o crea una nueva',
+      new_project: 'Nueva Obra',
+      import_project: 'Importar Obra',
+      create_first_project: 'Crear primera obra',
+      no_projects: 'No hay obras creadas',
+      collapse_menu: 'Colapsar menú',
+      view_projects: 'Ver obras',
+      options: 'Opciones',
+      theme_label_light: 'Modo Claro',
+      theme_label_dark: 'Modo Oscuro',
+      offline_ready: 'Offline Ready',
+      language_label: 'Idioma',
+      save_changes: 'Guardar cambios',
+      close: 'Cerrar',
+      project_options: 'Opciones del proyecto',
+      download_attachments: 'Descargar ZIP de adjuntos',
+      download_attachments_help: 'Descarga todos los documentos adjuntos del proyecto actual en un ZIP.',
+      suppliers_types: 'Tipos de proveedores',
+      plans_types: 'Tipos de planos',
+      incidents_types: 'Tipos de incidencias',
+      branding: 'Branding',
+      company_logo: 'Logo de la empresa',
+      remove_logo: 'Quitar logo',
+      color_primary: 'Color principal',
+      mode: 'Modo',
+      project: 'Proyecto',
+      import_project_action: 'Importar proyecto',
+      hide: 'Ocultar',
+      show: 'Mostrar',
+      delete: 'Eliminar',
+      add: 'Agregar',
+      no_categories_visible: 'No hay categorías visibles.',
+      no_categories_hidden: 'No hay categorías ocultas.',
+      select_language: 'Seleccionar idioma'
+    },
+    en: {
+      section_overview: 'Overview',
+      section_canvas: 'Workspace',
+      section_dashboard: 'Suppliers and Budgets',
+      section_timeline: 'Schedule',
+      section_diary: 'Work Diary',
+      section_plans: 'Blueprints',
+      section_files: 'Project Documents',
+      section_participants: 'Project Participants',
+      project_selector_subtitle: 'Select a project or create a new one',
+      new_project: 'New Project',
+      import_project: 'Import Project',
+      create_first_project: 'Create first project',
+      no_projects: 'No projects created',
+      collapse_menu: 'Collapse menu',
+      view_projects: 'View projects',
+      options: 'Settings',
+      theme_label_light: 'Light Mode',
+      theme_label_dark: 'Dark Mode',
+      offline_ready: 'Offline Ready',
+      language_label: 'Language',
+      save_changes: 'Save changes',
+      close: 'Close',
+      project_options: 'Project Settings',
+      download_attachments: 'Download attachments ZIP',
+      download_attachments_help: 'Download all attached documents from the current project in a ZIP.',
+      suppliers_types: 'Supplier types',
+      plans_types: 'Plan categories',
+      incidents_types: 'Incident types',
+      branding: 'Branding',
+      company_logo: 'Company logo',
+      remove_logo: 'Remove logo',
+      color_primary: 'Primary color',
+      mode: 'Mode',
+      project: 'Project',
+      import_project_action: 'Import project',
+      hide: 'Hide',
+      show: 'Show',
+      delete: 'Delete',
+      add: 'Add',
+      no_categories_visible: 'No visible categories.',
+      no_categories_hidden: 'No hidden categories.',
+      select_language: 'Select language'
+    }
+  };
+
+  function t(key, vars = {}) {
+    const text = (TRANSLATIONS[currentLanguage] && TRANSLATIONS[currentLanguage][key]) || TRANSLATIONS.es[key] || key;
+    return text.replace(/\{\{(\w+)\}\}/g, (_, name) => vars[name] || '');
+  }
+
+  function detectBrowserLanguage() {
+    const language = (navigator.languages && navigator.languages[0]) || navigator.language || 'es';
+    const normalized = language.toLowerCase();
+    return SUPPORTED_LANGUAGES.find(lang => normalized.startsWith(lang)) || 'es';
+  }
+
+  function loadLanguage() {
+    const saved = localStorage.getItem('abessis-lang');
+    currentLanguage = saved && SUPPORTED_LANGUAGES.includes(saved) ? saved : detectBrowserLanguage();
+    document.documentElement.lang = currentLanguage;
+  }
+
+  function setLanguage(lang) {
+    if (!SUPPORTED_LANGUAGES.includes(lang)) return;
+    currentLanguage = lang;
+    localStorage.setItem('abessis-lang', lang);
+    document.documentElement.lang = lang;
+    translatePage();
+  }
+
+  function translatePage() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      const attr = el.dataset.i18nAttr;
+      const value = t(key);
+      if (attr) {
+        el.setAttribute(attr, value);
+      } else {
+        el.textContent = value;
+      }
+    });
+    document.getElementById('section-title')?.textContent = t(sectionTitles[currentSection]);
+    updateThemeLabels(document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
+  }
 
   const DEFAULT_TRADE_CATEGORIES = [
     'Albañilería', 'Fontanería', 'Electricidad', 'Carpintería',
@@ -60,6 +195,7 @@ const App = (() => {
   async function init() {
     try {
       await DB.open();
+      loadLanguage();
       loadTheme();
       setupModal();
       setupProjectSelector();
@@ -67,6 +203,7 @@ const App = (() => {
       registerSW();
       safeIcons();
       showProjectSelector();
+      translatePage();
     } catch(e) {
       console.error('App init error:', e);
       document.getElementById('project-selector').style.display = 'flex';
@@ -172,7 +309,7 @@ const App = (() => {
 
   function updateThemeLabels(theme) {
     const labels = document.querySelectorAll('.theme-label');
-    labels.forEach(l => { l.textContent = theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'; });
+    labels.forEach(l => { l.textContent = theme === 'dark' ? t('theme_label_light') : t('theme_label_dark'); });
   }
 
   function setupThemeToggle() {
@@ -223,55 +360,65 @@ const App = (() => {
     const body = `
       <div class="options-panel">
         <div class="options-section">
-          <h3>Proyectos</h3>
-          <p>Descarga proyectos existentes o importa uno nuevo.</p>
+          <h3>${t('project')}</h3>
+          <p>${t('project_selector_subtitle') || 'Descarga proyectos existentes o importa uno nuevo.'}</p>
           <div class="options-panel-list">${projectRows}</div>
-          <button class="btn btn-outline" id="btn-options-import-project">Importar proyecto</button>
+          <button class="btn btn-outline" id="btn-options-import-project">${t('import_project_action')}</button>
         </div>
 
         <div class="options-section">
-          <h3>Archivos adjuntos</h3>
-          <p>Descarga todos los documentos adjuntos del proyecto actual en un ZIP.</p>
-          <button class="btn btn-outline" id="btn-options-download-attachments">Descargar ZIP de adjuntos</button>
+          <h3>${t('download_attachments')}</h3>
+          <p>${t('download_attachments_help')}</p>
+          <button class="btn btn-outline" id="btn-options-download-attachments">${t('download_attachments')}</button>
         </div>
 
         <div class="options-section">
-          <h3>Tipos de proveedores</h3>
-          <div class="options-subtitle">Oculta los gremios que no apliquen al proyecto.</div>
+          <h3>${t('suppliers_types')}</h3>
+          <div class="options-subtitle">${t('hide')} los gremios que no apliquen al proyecto.</div>
           <div id="options-trades-visible" class="options-type-list"></div>
           <div id="options-trades-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
-            <input type="text" id="options-new-trade" class="form-control" placeholder="Nuevo gremio" />
-            <button class="btn btn-primary btn-sm" id="btn-options-add-trade">Agregar</button>
+            <input type="text" id="options-new-trade" class="form-control" placeholder="${t('add')} ${t('suppliers_types').toLowerCase()}" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-trade">${t('add')}</button>
           </div>
         </div>
 
         <div class="options-section">
-          <h3>Tipos de planos</h3>
-          <div class="options-subtitle">Oculta categorías de planos por defecto en este proyecto.</div>
+          <h3>${t('plans_types')}</h3>
+          <div class="options-subtitle">${t('hide')} categorías de planos por defecto en este proyecto.</div>
           <div id="options-plans-visible" class="options-type-list"></div>
           <div id="options-plans-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
-            <input type="text" id="options-new-plan" class="form-control" placeholder="Nueva categoría de plano" />
-            <button class="btn btn-primary btn-sm" id="btn-options-add-plan">Agregar</button>
+            <input type="text" id="options-new-plan" class="form-control" placeholder="${t('add')} ${t('plans_types').toLowerCase()}" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-plan">${t('add')}</button>
           </div>
         </div>
 
         <div class="options-section">
-          <h3>Tipos de incidencias</h3>
-          <div class="options-subtitle">Oculta categorías de incidencias que no utilices.</div>
+          <h3>${t('incidents_types')}</h3>
+          <div class="options-subtitle">${t('hide')} categorías de incidencias que no utilices.</div>
           <div id="options-incidents-visible" class="options-type-list"></div>
           <div id="options-incidents-hidden" class="options-type-list options-hidden-list"></div>
           <div class="options-add-row">
-            <input type="text" id="options-new-incident" class="form-control" placeholder="Nueva categoría de incidencia" />
-            <button class="btn btn-primary btn-sm" id="btn-options-add-incident">Agregar</button>
+            <input type="text" id="options-new-incident" class="form-control" placeholder="${t('add')} ${t('incidents_types').toLowerCase()}" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-incident">${t('add')}</button>
           </div>
         </div>
 
         <div class="options-section">
-          <h3>Branding</h3>
+          <h3>${t('language_label')}</h3>
           <div class="form-group">
-            <label>Logo de la empresa</label>
+            <label>${t('select_language')}</label>
+            <select id="options-language" class="form-control">
+              ${SUPPORTED_LANGUAGES.map(lang => `<option value="${lang}" ${lang === currentLanguage ? 'selected' : ''}>${LANGUAGE_LABELS[lang]}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="options-section">
+          <h3>${t('branding')}</h3>
+          <div class="form-group">
+            <label>${t('company_logo')}</label>
             <div class="company-logo-preview" id="options-logo-preview" style="background-image:url(${project?.companyLogo || project?.clientPhoto || 'img/logo-abessis-white.png'})"></div>
             <input type="file" id="options-logo-input" accept="image/*" style="display:none">
             <div class="options-add-row">
@@ -297,11 +444,11 @@ const App = (() => {
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>
-      <button class="btn btn-primary" id="btn-options-save">Guardar cambios</button>
+      <button class="btn btn-outline" onclick="App.closeModal()">${t('close')}</button>
+      <button class="btn btn-primary" id="btn-options-save">${t('save_changes')}</button>
     `;
 
-    App.openModal('Opciones del proyecto', body, footer);
+    App.openModal(t('project_options'), body, footer);
 
     function renderTypeList(visibleItems, hiddenItems, visibleContainerId, hiddenContainerId, type) {
       const visibleContainer = document.getElementById(visibleContainerId);
@@ -312,17 +459,17 @@ const App = (() => {
         <div class="options-type-row">
           <span>${App.escapeHTML(item.label)}</span>
           <div class="options-row-actions">
-            ${item.source === 'default' ? `<button class="btn btn-outline btn-sm" data-action="hide" data-type="${type}" data-name="${App.escapeHTML(item.name)}">Ocultar</button>` : `<button class="btn btn-outline btn-sm btn-danger" data-action="remove" data-type="${type}" data-id="${item.id}">Eliminar</button>`}
+            ${item.source === 'default' ? `<button class="btn btn-outline btn-sm" data-action="hide" data-type="${type}" data-name="${App.escapeHTML(item.name)}">${t('hide')}</button>` : `<button class="btn btn-outline btn-sm btn-danger" data-action="remove" data-type="${type}" data-id="${item.id}">${t('delete')}</button>`}
           </div>
         </div>
-      `).join('') : '<div class="options-type-row"><em>No hay categorías visibles.</em></div>';
+      `).join('') : `<div class="options-type-row"><em>${t('no_categories_visible')}</em></div>`;
 
       hiddenContainer.innerHTML = hiddenItems.length ? hiddenItems.map(item => `
         <div class="options-type-row">
           <span>${App.escapeHTML(item.label)}</span>
-          <button class="btn btn-primary btn-sm" data-action="show" data-type="${type}" data-name="${App.escapeHTML(item.name)}">Mostrar</button>
+          <button class="btn btn-primary btn-sm" data-action="show" data-type="${type}" data-name="${App.escapeHTML(item.name)}">${t('show')}</button>
         </div>
-      `).join('') : '<div class="options-type-row"><em>No hay categorías ocultas.</em></div>';
+      `).join('') : `<div class="options-type-row"><em>${t('no_categories_hidden')}</em></div>`;
 
       visibleContainer.querySelectorAll('[data-action]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -437,6 +584,11 @@ const App = (() => {
       };
       reader.readAsDataURL(file);
       logoInput.value = '';
+    });
+
+    document.getElementById('options-language').addEventListener('change', async (e) => {
+      setLanguage(e.target.value);
+      await openOptionsPanel();
     });
 
     document.getElementById('btn-options-save').addEventListener('click', async () => {
@@ -1101,7 +1253,7 @@ const App = (() => {
     if (activeSection) activeSection.classList.add('active');
 
     // Update title
-    document.getElementById('section-title').textContent = sectionTitles[section];
+    document.getElementById('section-title').textContent = t(sectionTitles[section]);
 
     if (section === 'canvas') {
       setTimeout(() => CanvasModule.resize(), 100);
