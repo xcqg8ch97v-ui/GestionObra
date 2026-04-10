@@ -215,33 +215,12 @@ const FirebaseSync = (() => {
         }
       }
 
-      // Pull binary files from Storage
+      // Pull file metadata from Firestore (binarios no disponibles sin Storage)
       try {
-        const fileMetas = await storagePullAll();
-        for (const meta of fileMetas) {
-          if (!meta._localId || !meta.storagePath) continue;
-          const fileLocalId = parseInt(meta._localId, 10);
-          if (isNaN(fileLocalId)) continue;
-          const existing = await DB.getById('files', fileLocalId);
-          if (existing && existing.data) continue; // already have binary locally
-          try {
-            const ref = storage.ref(meta.storagePath);
-            const url = await ref.getDownloadURL();
-            const resp = await fetch(url);
-            const buffer = await resp.arrayBuffer();
-            const { _localId, _syncedAt, ...cleanMeta } = meta;
-            await DB.put('files', {
-              ...cleanMeta,
-              id: fileLocalId,
-              data: buffer
-            });
-          } catch(fe) {
-            console.warn(`[Firebase] Error downloading file ${meta.name}:`, fe);
-          }
-        }
-        console.log(`[Firebase] Pulled ${fileMetas.length} file records from Storage`);
+        const fileMetas = await fsPullAll('files');
+        console.log(`[FB Pull] files: ${fileMetas.length} metadatos en Firestore`);
       } catch(e) {
-        console.warn('[Firebase] Error pulling files:', e);
+        console.warn('[Firebase] Error pulling file metadata:', e);
       }
     } finally {
       window._fbSyncSuppressed = false;
@@ -268,14 +247,16 @@ const FirebaseSync = (() => {
       }
     }
 
-    // Push binary files to Storage
+    // Push binary files to Storage (requiere plan Blaze - omitido si no disponible)
     try {
       const files = await DB.getAll('files');
-      console.log(`[FB Push] files: ${files.length} archivos locales`);
+      console.log(`[FB Push] files: ${files.length} archivos locales (solo metadatos, Storage no disponible en plan gratuito)`);
+      // Guardar solo metadatos en Firestore, sin binarios
       for (const file of files) {
-        await storageSave(file);
+        const { data, blob, ...meta } = file;
+        await fsSet('files', meta);
       }
-      console.log(`[FB Push] files: subidos OK`);
+      console.log(`[FB Push] files: metadatos subidos OK`);
     } catch(e) {
       console.error('[FB Push] Error en files:', e);
     }
