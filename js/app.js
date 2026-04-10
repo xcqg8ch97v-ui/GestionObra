@@ -995,7 +995,7 @@ const App = (() => {
   // CONFIRM / PROMPT MODALES PROPIOS
   // ========================================
 
-  function confirm(message, { title = null, confirmLabel = null, cancelLabel = null, danger = true } = {}) {
+  function showConfirm(message, { title = null, confirmLabel = null, cancelLabel = null, danger = true } = {}) {
     return new Promise(resolve => {
       const confirmText = confirmLabel || t('delete');
       const cancelText  = cancelLabel  || t('cancel');
@@ -1011,7 +1011,7 @@ const App = (() => {
     });
   }
 
-  function prompt(message, defaultValue = '', { title = null, placeholder = '', confirmLabel = null } = {}) {
+  function showPrompt(message, defaultValue = '', { title = null, placeholder = '', confirmLabel = null } = {}) {
     return new Promise(resolve => {
       const confirmText = confirmLabel || t('accept');
       const heading     = title || message;
@@ -1768,7 +1768,7 @@ const App = (() => {
   }
 
   async function deleteProject(id) {
-    if (!await confirm(t('confirm_delete_project'))) return;
+    if (!await showConfirm(t('confirm_delete_project'))) return;
     await DB.remove('projects', id);
     toast(t('project_deleted'), 'info');
     loadProjectCards();
@@ -2266,6 +2266,11 @@ const App = (() => {
   // ========================================
 
   async function printSection(section) {
+    // Abrir ventana ANTES del await para no perder el user gesture en Safari
+    const win = window.open('', '_blank', 'width=1000,height=700');
+    if (!win) { toast('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes.', 'warning'); return; }
+    win.document.write('<html><body style="font-family:system-ui;padding:20px;color:#555">Cargando datos…</body></html>');
+
     const project = currentProjectId ? await DB.getById('projects', currentProjectId) : null;
     const projectName = project ? escapeHTML(project.name) : 'Proyecto';
     const date = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -2276,11 +2281,11 @@ const App = (() => {
       content = await buildTimelinePrint(project, date);
     } else {
       const el = document.getElementById(`section-${section}`);
-      if (!el) return;
+      if (!el) { win.close(); return; }
       const title = el.querySelector('.panel-header h2')?.textContent || section;
       const inner = el.cloneNode(true);
       inner.querySelectorAll('.print-btn, .panel-header button, input[type=file], .empty-state').forEach(n => n.remove());
-      content = `<h2 class="print-section-title">${escapeHTML(title)}</h2>${inner.querySelector('.panel-header + *') ? inner.innerHTML : inner.innerHTML}`;
+      content = `<h2 class="print-section-title">${escapeHTML(title)}</h2>${inner.innerHTML}`;
     }
 
     const html = `<!DOCTYPE html>
@@ -2334,8 +2339,9 @@ ${content}
 <script>window.onload=()=>{window.print();}<\/script>
 </body></html>`;
 
-    const win = window.open('', '_blank', 'width=1000,height=700');
-    if (win) { win.document.write(html); win.document.close(); }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
   }
 
   async function buildTimelinePrint(project, date) {
@@ -2997,8 +3003,8 @@ ${content}
     importProject,
     syncProjectDeadlineMilestone,
     openIncident,
-    confirm,
-    prompt,
+    confirm: showConfirm,
+    prompt: showPrompt,
     printSection,
     t,
     setLanguage,

@@ -4559,7 +4559,7 @@ body.is-resizing-timeline-label {
 .drop-overlay {
   display: none;
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background: rgba(6,182,212,0.10);
   border: 2px dashed var(--cyan);
   border-radius: var(--radius-lg);
