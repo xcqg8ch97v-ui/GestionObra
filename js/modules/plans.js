@@ -154,17 +154,6 @@ const PlansModule = (() => {
       loadPlans();
     });
   }
-            category,
-            projectId,
-            createdAt: new Date().toISOString()
-          });
-          count++;
-        }
-      }
-      App.toast(`${count} plano${count > 1 ? 's' : ''} subido${count > 1 ? 's' : ''}`, 'success');
-      loadPlans();
-    });
-  }
 
   async function loadPlans() {
     allPlans = await DB.getAllForProject('plans', projectId);

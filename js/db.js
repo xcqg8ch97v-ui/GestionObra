@@ -25,20 +25,6 @@ const DB = (() => {
         }
 
         // Proyectos / Obras
-          // --- Custom categories helpers ---
-
-          async function addCustomCategory(projectId, type, name) {
-            return add('custom_categories', { projectId, type, name });
-          }
-
-          async function getCustomCategories(projectId, type) {
-            const all = await getByIndex('custom_categories', 'projectId', projectId);
-            return all.filter(c => c.type === type);
-          }
-
-          async function removeCustomCategory(id) {
-            return remove('custom_categories', id);
-          }
         if (!database.objectStoreNames.contains('projects')) {
           const store = database.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
           store.createIndex('status', 'status', { unique: false });
@@ -140,6 +126,20 @@ const DB = (() => {
         reject(new Error('Error abriendo IndexedDB: ' + e.target.error));
       };
     });
+  }
+
+  // --- Custom categories helpers ---
+  async function addCustomCategory(projectId, type, name) {
+    return add('custom_categories', { projectId, type, name });
+  }
+
+  async function getCustomCategories(projectId, type) {
+    const all = await getByIndex('custom_categories', 'projectId', projectId);
+    return all.filter(c => c.type === type);
+  }
+
+  async function removeCustomCategory(id) {
+    return remove('custom_categories', id);
   }
 
   // --- CRUD Genérico ---
