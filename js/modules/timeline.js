@@ -4,6 +4,7 @@
    ======================================== */
 
 const TimelineModule = (() => {
+// Actualizado: 2026-04-10
   const DAY_WIDTH = 40;
   const LABEL_MIN_WIDTH = 140;
   const LABEL_MAX_WIDTH = 420;

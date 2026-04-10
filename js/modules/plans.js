@@ -4,6 +4,7 @@
    ======================================== */
 
 const PlansModule = (() => {
+// Actualizado: 2026-04-10
   let projectId = null;
   let allPlans = [];
   let activeCategory = '__all__';

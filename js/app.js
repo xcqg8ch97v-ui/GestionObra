@@ -5,6 +5,7 @@
    ======================================== */
 
 const App = (() => {
+// Actualizado: 2026-04-10
   const sectionTitles = {
     overview: 'section_overview',
     canvas: 'section_canvas',

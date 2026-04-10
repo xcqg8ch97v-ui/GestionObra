@@ -4,6 +4,7 @@
    ======================================== */
 
 const DashboardModule = (() => {
+// Actualizado: 2026-04-10
   const DEFAULT_TRADES = [
     'Albañilería', 'Fontanería', 'Electricidad', 'Carpintería',
     'Pintura', 'Cristalería', 'Climatización', 'Impermeabilización',

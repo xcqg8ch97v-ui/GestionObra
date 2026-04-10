@@ -4,6 +4,7 @@
    ======================================== */
 
 const ParticipantsModule = (() => {
+// Actualizado: 2026-04-10
   const ROLES = [
     'Director de Obra', 'Jefe de Obra', 'Arquitecto', 'Aparejador',
     'Encargado', 'Capataz', 'Coordinador de Seguridad', 'Project Manager',

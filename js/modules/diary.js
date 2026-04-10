@@ -4,6 +4,7 @@
    ======================================== */
 
 const DiaryModule = (() => {
+// Actualizado: 2026-04-10
   const ENTRY_TYPES = {
     incident: { label: 'Incidencia', class: 'badge-pending', icon: 'alert-triangle' },
     comment: { label: 'Comentario', class: 'badge-neutral', icon: 'message-square' },

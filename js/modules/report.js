@@ -4,6 +4,7 @@
    ======================================== */
 
 const ReportModule = (() => {
+// Actualizado: 2026-04-10
   const PHASES = [
     'Demolición', 'Estructura', 'Albañilería', 'Fontanería',
     'Electricidad', 'Carpintería', 'Pintura', 'Acabados',

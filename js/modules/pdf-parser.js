@@ -5,6 +5,7 @@
    ======================================== */
 
 const PdfParserModule = (() => {
+// Actualizado: 2026-04-10
 
   // ---- Text extraction via pdf.js ----
   async function extractText(arrayBuffer) {

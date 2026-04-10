@@ -118,6 +118,8 @@ body {
   line-height: 1.5;
   color: var(--text-primary);
   background: var(--bg-dark);
+}
+/* Actualizado: 2026-04-10 */
   display: flex;
 }
 

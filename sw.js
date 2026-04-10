@@ -49,6 +49,8 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
+// Actualizado: 2026-04-10
+
   // For CDN resources, try network first
   if (event.request.url.includes('unpkg.com') || 
       event.request.url.includes('cdnjs.cloudflare.com') ||

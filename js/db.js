@@ -4,6 +4,7 @@
    ======================================== */
 
 const DB = (() => {
+// Actualizado: 2026-04-10
   const DB_NAME = 'GestionObraDB';
   const DB_VERSION = 6; // bump para custom_categories
   let db = null;

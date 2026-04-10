@@ -4,6 +4,7 @@
    ======================================== */
 
 const OverviewModule = (() => {
+// Actualizado: 2026-04-10
   let projectId = null;
 
   function init(pid) {

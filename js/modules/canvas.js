@@ -4,6 +4,7 @@
    ======================================== */
 
 const CanvasModule = (() => {
+// Actualizado: 2026-04-10
   const DEFAULT_CANVAS_BACKGROUND = '#1a1a2e';
   const CANVAS_SERIALIZATION_KEYS = ['_isAttachedFile','_attachedFileId','_attachedFileName','_isImagePreview','_isShapeGroup','_shapeType','_shapeRole','_canvasNodeId','_isConnector','_connectorStartId','_connectorEndId','_connectorArrowMode','_isTextFrame','_textOwnerId'];
   let canvas = null;
