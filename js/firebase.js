@@ -215,10 +215,31 @@ const FirebaseSync = (() => {
         }
       }
 
-      // Pull file metadata from Firestore (binarios no disponibles sin Storage)
+      // Pull files: metadata from Firestore + binary from Cloudinary if available
       try {
         const fileMetas = await fsPullAll('files');
         console.log(`[FB Pull] files: ${fileMetas.length} metadatos en Firestore`);
+        for (const meta of fileMetas) {
+          const fileLocalId = parseInt(meta._localId ?? meta.id, 10);
+          if (isNaN(fileLocalId)) continue;
+          const existing = await DB.getById('files', fileLocalId);
+          if (existing && existing.data) continue; // ya tenemos el binario
+          const { _localId, _syncedAt, ...cleanMeta } = meta;
+          const toSave = { ...cleanMeta, id: fileLocalId };
+          // Download binary from Cloudinary if URL available
+          if (meta.cloudinaryUrl) {
+            try {
+              const resp = await fetch(meta.cloudinaryUrl);
+              if (resp.ok) {
+                toSave.data = await resp.arrayBuffer();
+                console.log(`[FB Pull] file descargado de Cloudinary: ${meta.name}`);
+              }
+            } catch(fe) {
+              console.warn(`[FB Pull] Error descargando ${meta.name} de Cloudinary:`, fe);
+            }
+          }
+          await DB.put('files', toSave);
+        }
       } catch(e) {
         console.warn('[Firebase] Error pulling file metadata:', e);
       }
