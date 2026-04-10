@@ -2660,7 +2660,7 @@ const App = (() => {
   // --- Service Worker ---
   function registerSW() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=15')
+      navigator.serviceWorker.register('sw.js?v=17')
         .then(reg => { reg.update(); console.log('Service Worker registrado'); })
         .catch(err => console.warn('SW registro fallido:', err));
     }
