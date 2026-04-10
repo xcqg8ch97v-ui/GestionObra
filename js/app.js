@@ -65,6 +65,77 @@ const App = (() => {
     lucide.createIcons();
   }
 
+  function applyProjectTheme(project) {
+    if (!project || !project.theme || !project.theme.primaryColor) {
+      document.documentElement.style.removeProperty('--cyan');
+      document.documentElement.style.removeProperty('--cyan-hover');
+      document.documentElement.style.removeProperty('--cyan-light');
+      document.documentElement.style.removeProperty('--primary');
+      document.documentElement.style.removeProperty('--primary-contrast');
+      return;
+    }
+
+    const primary = project.theme.primaryColor;
+    const contrast = project.theme.primaryContrast || getContrastColor(primary);
+    const hover = adjustColor(primary, -16);
+    const light = hexToRgba(primary, 0.14);
+
+    document.documentElement.style.setProperty('--cyan', primary);
+    document.documentElement.style.setProperty('--cyan-hover', hover);
+    document.documentElement.style.setProperty('--cyan-light', light);
+    document.documentElement.style.setProperty('--primary', primary);
+    document.documentElement.style.setProperty('--primary-contrast', contrast);
+  }
+
+  function applyProjectBranding(project) {
+    const logo = project?.companyLogo || project?.clientPhoto || 'img/logo-abessis-white.png';
+    const sidebarLogo = document.querySelector('.sidebar-header .logo-img');
+    if (sidebarLogo) {
+      sidebarLogo.src = logo;
+      sidebarLogo.alt = project && (project.companyLogo || project.clientPhoto) ? 'Logo de la compañía' : 'Abessis';
+    }
+  }
+
+  function hexToRgba(hex, alpha) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return `rgba(255, 213, 0, ${alpha})`;
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+  }
+
+  function hexToRgb(hex) {
+    const sanitized = hex.replace('#', '').trim();
+    if (sanitized.length === 3) {
+      return {
+        r: parseInt(sanitized[0] + sanitized[0], 16),
+        g: parseInt(sanitized[1] + sanitized[1], 16),
+        b: parseInt(sanitized[2] + sanitized[2], 16)
+      };
+    }
+    if (sanitized.length === 6) {
+      return {
+        r: parseInt(sanitized.slice(0, 2), 16),
+        g: parseInt(sanitized.slice(2, 4), 16),
+        b: parseInt(sanitized.slice(4, 6), 16)
+      };
+    }
+    return null;
+  }
+
+  function adjustColor(hex, amount) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const clamp = (value) => Math.max(0, Math.min(255, value));
+    return `#${[clamp(rgb.r + amount), clamp(rgb.g + amount), clamp(rgb.b + amount)]
+      .map(v => v.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  function getContrastColor(hex) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return '#000';
+    const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+    return brightness > 160 ? '#000' : '#FFF';
+  }
+
   function updateThemeLabels(theme) {
     const labels = document.querySelectorAll('.theme-label');
     labels.forEach(l => { l.textContent = theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'; });
@@ -87,6 +158,236 @@ const App = (() => {
     document.getElementById('btn-import-project')?.addEventListener('click', importProject);
     document.getElementById('btn-back-projects')?.addEventListener('click', showProjectSelector);
     document.getElementById('btn-topbar-projects')?.addEventListener('click', showProjectSelector);
+    document.getElementById('btn-options')?.addEventListener('click', openOptionsPanel);
+  }
+
+  async function openOptionsPanel() {
+    const project = currentProjectId ? await DB.getById('projects', currentProjectId) : null;
+    const projects = await DB.getAll('projects');
+    const customTrades = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'trade') : [];
+    const customPlans = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'plan') : [];
+    const customIncidents = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory') : [];
+
+    const projectRows = projects.map(p => `
+      <div class="options-project-row">
+        <div>
+          <strong>${App.escapeHTML(p.name)}</strong><br>
+          <small>${App.escapeHTML(p.client || 'Sin cliente')}</small>
+        </div>
+        <div class="options-row-actions">
+          <button class="btn btn-outline btn-sm" onclick="App.exportProject(${p.id})">Exportar</button>
+        </div>
+      </div>
+    `).join('');
+
+    const body = `
+      <div class="options-panel">
+        <div class="options-section">
+          <h3>Proyectos</h3>
+          <p>Descarga proyectos existentes o importa uno nuevo.</p>
+          <div class="options-panel-list">${projectRows}</div>
+          <button class="btn btn-outline" id="btn-options-import-project">Importar proyecto</button>
+        </div>
+
+        <div class="options-section">
+          <h3>Archivos adjuntos</h3>
+          <p>Descarga todos los documentos adjuntos del proyecto actual en un ZIP.</p>
+          <button class="btn btn-outline" id="btn-options-download-attachments">Descargar ZIP de adjuntos</button>
+        </div>
+
+        <div class="options-section">
+          <h3>Tipos de proveedores</h3>
+          <div id="options-trades-list" class="options-type-list"></div>
+          <div class="options-add-row">
+            <input type="text" id="options-new-trade" class="form-control" placeholder="Nuevo gremio" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-trade">Agregar</button>
+          </div>
+        </div>
+
+        <div class="options-section">
+          <h3>Tipos de planos</h3>
+          <div id="options-plans-list" class="options-type-list"></div>
+          <div class="options-add-row">
+            <input type="text" id="options-new-plan" class="form-control" placeholder="Nueva categoría de plano" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-plan">Agregar</button>
+          </div>
+        </div>
+
+        <div class="options-section">
+          <h3>Tipos de incidencias</h3>
+          <div id="options-incidents-list" class="options-type-list"></div>
+          <div class="options-add-row">
+            <input type="text" id="options-new-incident" class="form-control" placeholder="Nueva categoría de incidencia" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-incident">Agregar</button>
+          </div>
+        </div>
+
+        <div class="options-section">
+          <h3>Branding</h3>
+          <div class="form-group">
+            <label>Logo de la empresa</label>
+            <div class="company-logo-preview" id="options-logo-preview" style="background-image:url(${project?.companyLogo || project?.clientPhoto || 'img/logo-abessis-white.png'})"></div>
+            <input type="file" id="options-logo-input" accept="image/*" style="display:none">
+            <div class="options-add-row">
+              <button class="btn btn-outline btn-sm" id="btn-options-logo-upload">Elegir logo</button>
+              <button class="btn btn-outline btn-sm" id="btn-options-logo-remove">Quitar logo</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Color principal</label>
+              <input type="color" id="options-theme-color" value="${project?.theme?.primaryColor || '#ffd500'}">
+            </div>
+            <div class="form-group">
+              <label>Modo</label>
+              <select id="options-theme-mode" class="form-control">
+                <option value="dark" ${!(project?.theme?.mode === 'light') ? 'selected' : ''}>Oscuro</option>
+                <option value="light" ${project?.theme?.mode === 'light' ? 'selected' : ''}>Claro</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>
+      <button class="btn btn-primary" id="btn-options-save">Guardar cambios</button>
+    `;
+
+    App.openModal('Opciones del proyecto', body, footer);
+
+    function renderTypeList(items, containerId, type) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = items.map(item => `
+        <div class="options-type-row">
+          <span>${App.escapeHTML(item.name)}</span>
+          <button class="btn btn-outline btn-sm btn-danger" data-type="${type}" data-id="${item.id}">Eliminar</button>
+        </div>
+      `).join('');
+      container.querySelectorAll('.btn-danger').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id);
+          await DB.removeCustomCategory(id);
+          openOptionsPanel();
+        });
+      });
+    }
+
+    renderTypeList(customTrades, 'options-trades-list', 'trade');
+    renderTypeList(customPlans, 'options-plans-list', 'plan');
+    renderTypeList(customIncidents, 'options-incidents-list', 'incidentCategory');
+
+    document.getElementById('btn-options-import-project').addEventListener('click', importProject);
+    document.getElementById('btn-options-download-attachments').addEventListener('click', downloadAttachmentsZip);
+
+    document.getElementById('btn-options-add-trade').addEventListener('click', async () => {
+      const name = document.getElementById('options-new-trade').value.trim();
+      if (!name) return;
+      await DB.addCustomCategory(currentProjectId, 'trade', name);
+      document.getElementById('options-new-trade').value = '';
+      openOptionsPanel();
+    });
+
+    document.getElementById('btn-options-add-plan').addEventListener('click', async () => {
+      const name = document.getElementById('options-new-plan').value.trim();
+      if (!name) return;
+      await DB.addCustomCategory(currentProjectId, 'plan', name);
+      document.getElementById('options-new-plan').value = '';
+      openOptionsPanel();
+    });
+
+    document.getElementById('btn-options-add-incident').addEventListener('click', async () => {
+      const name = document.getElementById('options-new-incident').value.trim();
+      if (!name) return;
+      await DB.addCustomCategory(currentProjectId, 'incidentCategory', name);
+      document.getElementById('options-new-incident').value = '';
+      openOptionsPanel();
+    });
+
+    const logoInput = document.getElementById('options-logo-input');
+    const logoPreview = document.getElementById('options-logo-preview');
+    let logoData = project?.companyLogo || project?.clientPhoto || null;
+
+    document.getElementById('btn-options-logo-upload').addEventListener('click', () => logoInput.click());
+    document.getElementById('btn-options-logo-remove').addEventListener('click', () => {
+      logoData = null;
+      logoPreview.style.backgroundImage = '';
+    });
+
+    logoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        logoData = ev.target.result;
+        logoPreview.style.backgroundImage = `url(${logoData})`;
+      };
+      reader.readAsDataURL(file);
+      logoInput.value = '';
+    });
+
+    document.getElementById('btn-options-save').addEventListener('click', async () => {
+      if (!currentProjectId) {
+        App.toast('No hay proyecto abierto', 'warning');
+        return;
+      }
+      const color = document.getElementById('options-theme-color').value;
+      const mode = document.getElementById('options-theme-mode').value;
+      const proj = await DB.getById('projects', currentProjectId);
+      if (!proj) return;
+      proj.companyLogo = logoData;
+      proj.theme = proj.theme || {};
+      proj.theme.primaryColor = color;
+      proj.theme.mode = mode;
+      await DB.put('projects', proj);
+      if (mode === 'light') {
+        localStorage.setItem('abessis-theme', 'light');
+      } else {
+        localStorage.setItem('abessis-theme', 'dark');
+      }
+      applyTheme(mode);
+      applyProjectTheme(proj);
+      applyProjectBranding(proj);
+      App.toast('Opciones guardadas', 'success');
+      openOptionsPanel();
+    });
+
+    async function downloadAttachmentsZip() {
+      if (typeof JSZip === 'undefined') {
+        App.toast('JSZip no está disponible', 'error');
+        return;
+      }
+      const files = await DB.getAllForProject('files', currentProjectId);
+      if (!files.length) {
+        App.toast('No hay archivos adjuntos en este proyecto', 'warning');
+        return;
+      }
+      const zip = new JSZip();
+      for (const file of files) {
+        let content = null;
+        if (file.data instanceof ArrayBuffer) {
+          content = file.data;
+        } else if (file.blob instanceof Blob) {
+          content = await file.blob.arrayBuffer();
+        } else if (file.data) {
+          content = file.data;
+        }
+        if (!content) continue;
+        zip.file(file.name, content);
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project?.name || 'adjuntos'}-archivos.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      App.toast('ZIP de adjuntos generado', 'success');
+    }
   }
 
   async function showProjectSelector() {
@@ -565,6 +866,9 @@ const App = (() => {
 
     currentProjectId = id;
     currentProjectName = project.name;
+
+    applyProjectBranding(project);
+    applyProjectTheme(project);
 
     // Hide selector, show app
     document.getElementById('project-selector').style.display = 'none';

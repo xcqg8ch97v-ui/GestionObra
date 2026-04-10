@@ -2548,6 +2548,70 @@ input:focus, select:focus, textarea:focus {
   border-top: 1px solid var(--border);
 }
 
+.options-panel {
+  display: grid;
+  gap: var(--sp-lg);
+}
+
+.options-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-md);
+}
+
+.options-section h3 {
+  margin-bottom: var(--sp-sm);
+  font-size: 1rem;
+}
+
+.options-panel-list,
+.options-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: var(--sp-md);
+}
+
+.options-project-row,
+.options-type-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.options-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.options-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: var(--sp-sm);
+}
+
+.company-logo-preview {
+  width: 100%;
+  min-height: 100px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-sm);
+}
+
 /* --- Form --- */
 .form-group {
   margin-bottom: var(--sp-md);

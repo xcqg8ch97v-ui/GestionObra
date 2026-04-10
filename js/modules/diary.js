@@ -16,15 +16,21 @@ const DiaryModule = (() => {
     resolved: { label: 'Resuelto', class: 'badge-positive' }
   };
 
-  const CATEGORIES = [
+  const DEFAULT_CATEGORIES = [
     'Estructural', 'Fontanería', 'Electricidad', 'Acabados',
     'Seguridad', 'Material', 'Comunicación', 'Plazo', 'Otros'
   ];
 
   let projectId = null;
+  let customIncidentCategories = [];
 
-  function init(pid) {
+  function getIncidentCategories() {
+    return DEFAULT_CATEGORIES.concat(customIncidentCategories.map(c => c.name));
+  }
+
+  async function init(pid) {
     projectId = pid;
+    customIncidentCategories = await DB.getCustomCategories(projectId, 'incidentCategory');
     setupButtons();
     loadIncidents();
   }
@@ -245,7 +251,7 @@ const DiaryModule = (() => {
         <div class="form-group incident-only-field">
           <label>Categoría</label>
           <select id="inc-category">
-            ${CATEGORIES.map(c => `<option value="${c}" ${isEdit && incident.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${getIncidentCategories().map(c => `<option value="${App.escapeHTML(c)}" ${isEdit && incident.category === c ? 'selected' : ''}>${App.escapeHTML(c)}</option>`).join('')}
           </select>
         </div>
       </div>
