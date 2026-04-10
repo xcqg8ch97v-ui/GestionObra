@@ -1,4 +1,4 @@
-// ...líneas eliminadas, no deben estar fuera del objeto ni del scope...
+
 /* ========================================
    App.js - Navegación y Utilidades
    Gestión de Obra PWA
