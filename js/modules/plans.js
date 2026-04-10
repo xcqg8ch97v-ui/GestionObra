@@ -10,7 +10,7 @@ const PlansModule = (() => {
   let viewerIndex = -1;
   let viewerZoom = 1;
 
-  const PLAN_CATEGORIES = [
+  const DEFAULT_PLAN_CATEGORIES = [
     { key: 'situacion',      label: 'Situación / Emplazamiento', icon: 'map-pin',      keywords: ['situac', 'emplazamiento', 'ubicac', 'topogr', 'catastro'] },
     { key: 'plantas',        label: 'Plantas',                   icon: 'layers',       keywords: ['planta', 'distribuc', 'layout'] },
     { key: 'alzados',        label: 'Alzados',                   icon: 'rectangle-vertical', keywords: ['alzado', 'fachada', 'elevaci'] },
@@ -30,19 +30,31 @@ const PlansModule = (() => {
     { key: 'otros',          label: 'Otros',                     icon: 'file',         keywords: [] },
   ];
 
+  let customPlanCategories = [];
+
+  function getAllPlanCategories() {
+    return DEFAULT_PLAN_CATEGORIES.concat(customPlanCategories);
+  }
+
   function guessCategory(name) {
     const lower = (name || '').toLowerCase();
-    for (const cat of PLAN_CATEGORIES) {
+    for (const cat of getAllPlanCategories()) {
       if (cat.key === 'otros') continue;
-      for (const kw of cat.keywords) {
+      for (const kw of cat.keywords || []) {
         if (lower.includes(kw)) return cat.key;
       }
     }
     return 'otros';
   }
 
-  function init(pid) {
+  async function init(pid) {
     projectId = pid;
+    customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
+      key: 'custom_' + c.id,
+      label: c.name,
+      icon: 'tag',
+      keywords: []
+    }));
     setupButtons();
     loadPlans();
   }
@@ -64,14 +76,26 @@ const PlansModule = (() => {
     if (!files.length) return;
     e.target.value = '';
 
+    // Recargar categorías personalizadas
+    customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
+      key: 'custom_' + c.id,
+      label: c.name,
+      icon: 'tag',
+      keywords: []
+    }));
+    const allCategories = getAllPlanCategories();
+
     // Build category selector modal
     const guessed = files.length === 1 ? guessCategory(files[0].name) : (activeCategory !== '__all__' ? activeCategory : 'otros');
     const body = `
       <div class="form-group">
         <label>Categoría para ${files.length > 1 ? 'los ' + files.length + ' planos' : '<b>' + App.escapeHTML(files[0].name) + '</b>'}</label>
-        <select id="plan-upload-category" class="form-control">
-          ${PLAN_CATEGORIES.map(c => `<option value="${c.key}" ${c.key === guessed ? 'selected' : ''}>${c.label}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="plan-upload-category" class="form-control">
+            ${allCategories.map(c => `<option value="${c.key}" ${c.key === guessed ? 'selected' : ''}>${c.label}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-plan-cat" title="Añadir categoría"><i data-lucide="plus"></i></button>
+        </div>
       </div>
       <div style="margin-top:.5rem;color:var(--text-muted);font-size:.85rem">
         ${files.length > 1 ? 'Se aplicará la misma categoría a todos los planos. Puedes cambiarla luego individualmente.' : 'Puedes cambiar la categoría más tarde desde el botón editar.'}
@@ -82,6 +106,26 @@ const PlansModule = (() => {
       <button class="btn btn-primary" id="btn-confirm-upload"><i data-lucide="upload"></i> Subir</button>`;
 
     App.openModal('Subir Plano', body, footer);
+
+    // Botón para añadir categoría personalizada
+    document.getElementById('btn-add-custom-plan-cat').addEventListener('click', async () => {
+      const name = prompt('Nombre de la nueva categoría:');
+      if (!name) return;
+      const exists = allCategories.some(c => c.label.toLowerCase() === name.trim().toLowerCase());
+      if (exists) { App.toast('Esa categoría ya existe', 'warning'); return; }
+      await DB.addCustomCategory(projectId, 'plan', name.trim());
+      customPlanCategories = (await DB.getCustomCategories(projectId, 'plan')).map(c => ({
+        key: 'custom_' + c.id,
+        label: c.name,
+        icon: 'tag',
+        keywords: []
+      }));
+      const newAllCategories = getAllPlanCategories();
+      const select = document.getElementById('plan-upload-category');
+      select.innerHTML = newAllCategories.map(c => `<option value="${c.key}">${c.label}</option>`).join('');
+      select.value = 'custom_' + customPlanCategories[customPlanCategories.length - 1].id;
+      App.toast('Categoría añadida', 'success');
+    });
 
     document.getElementById('btn-confirm-upload').addEventListener('click', async () => {
       const category = document.getElementById('plan-upload-category').value;
@@ -98,6 +142,18 @@ const PlansModule = (() => {
           await DB.add('plans', {
             fileId: saved.id,
             name: file.name.replace(/\.[^.]+$/, ''),
+            category,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            projectId
+          });
+          count++;
+        }
+      }
+      App.toast(`${count} plano(s) subido(s)`, 'success');
+      loadPlans();
+    });
+  }
             category,
             projectId,
             createdAt: new Date().toISOString()
@@ -132,7 +188,7 @@ const PlansModule = (() => {
       <i data-lucide="layers"></i> Todos <span class="plans-cat-count">${counts['__all__']}</span>
     </button>`;
 
-    for (const cat of PLAN_CATEGORIES) {
+    for (const cat of getAllPlanCategories()) {
       if (!counts[cat.key]) continue;
       html += `<button class="plans-cat-btn ${activeCategory === cat.key ? 'active' : ''}" data-cat="${cat.key}">
         <i data-lucide="${cat.icon}"></i> ${cat.label} <span class="plans-cat-count">${counts[cat.key]}</span>
@@ -186,7 +242,7 @@ const PlansModule = (() => {
       thumbHTML = `<div class="plan-thumb-pdf"><i data-lucide="image"></i></div>`;
     }
 
-    const catObj = PLAN_CATEGORIES.find(c => c.key === plan.category) || PLAN_CATEGORIES[PLAN_CATEGORIES.length - 1];
+    const catObj = getAllPlanCategories().find(c => c.key === plan.category) || DEFAULT_PLAN_CATEGORIES[DEFAULT_PLAN_CATEGORIES.length - 1];
 
     return `
       <div class="plan-card" data-plan-idx="${idx}">

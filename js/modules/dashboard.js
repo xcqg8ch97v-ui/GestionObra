@@ -4,17 +4,19 @@
    ======================================== */
 
 const DashboardModule = (() => {
-  const TRADES = [
+  const DEFAULT_TRADES = [
     'Albañilería', 'Fontanería', 'Electricidad', 'Carpintería',
     'Pintura', 'Cristalería', 'Climatización', 'Impermeabilización',
     'Estructura', 'Cimentación', 'Paisajismo', 'Seguridad', 'Otros'
   ];
+  let customTrades = [];
 
   const SUPPLIER_STATUSES = ['Activo', 'Pendiente', 'Inactivo'];
   let projectId = null;
 
-  function init(pid) {
+  async function init(pid) {
     projectId = pid;
+    customTrades = await DB.getCustomCategories(projectId, 'trade');
     setupSubTabs();
     setupButtons();
     setupBC3Import();
@@ -57,14 +59,18 @@ const DashboardModule = (() => {
   let supplierFilterTrade = '__all__';
   let supplierSearchQuery = '';
 
-  function setupSupplierFilters() {
+  async function setupSupplierFilters() {
     const searchInput = document.getElementById('supplier-search');
     const tradeSelect = document.getElementById('supplier-trade-filter');
     if (!searchInput || !tradeSelect) return;
 
+    // Recargar customTrades por si se añadió alguno nuevo
+    customTrades = await DB.getCustomCategories(projectId, 'trade');
+    const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
+
     // Populate trade filter options
     tradeSelect.innerHTML = '<option value="__all__">Todos los gremios</option>' +
-      TRADES.map(t => `<option value="${t}">${t}</option>`).join('');
+      allTrades.map(t => `<option value="${t}">${t}</option>`).join('');
 
     searchInput.addEventListener('input', (e) => {
       supplierSearchQuery = e.target.value.trim().toLowerCase();
@@ -139,9 +145,13 @@ const DashboardModule = (() => {
     lucide.createIcons();
   }
 
-  function openSupplierForm(supplier = null) {
+  async function openSupplierForm(supplier = null) {
     const isEdit = !!supplier;
     const title = isEdit ? 'Editar Proveedor' : 'Nuevo Proveedor';
+
+    // Recargar customTrades por si se añadió alguno nuevo
+    customTrades = await DB.getCustomCategories(projectId, 'trade');
+    const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
 
     const body = `
       <div class="form-group">
@@ -151,9 +161,12 @@ const DashboardModule = (() => {
       <div class="form-row">
         <div class="form-group">
           <label>Gremio *</label>
-          <select id="sup-trade">
-            ${TRADES.map(t => `<option value="${t}" ${isEdit && supplier.trade === t ? 'selected' : ''}>${t}</option>`).join('')}
-          </select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="sup-trade">
+              ${allTrades.map(t => `<option value="${t}" ${isEdit && supplier.trade === t ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-trade" title="Añadir gremio"><i data-lucide="plus"></i></button>
+          </div>
         </div>
         <div class="form-group">
           <label>Estado</label>
@@ -190,6 +203,21 @@ const DashboardModule = (() => {
     `;
 
     App.openModal(title, body, footer);
+
+    // Botón para añadir gremio personalizado
+    document.getElementById('btn-add-custom-trade').addEventListener('click', async () => {
+      const name = prompt('Nombre del nuevo gremio:');
+      if (!name) return;
+      const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
+      if (exists) { App.toast('Ese gremio ya existe', 'warning'); return; }
+      await DB.addCustomCategory(projectId, 'trade', name.trim());
+      customTrades = await DB.getCustomCategories(projectId, 'trade');
+      const newAllTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
+      const select = document.getElementById('sup-trade');
+      select.innerHTML = newAllTrades.map(t => `<option value="${t}">${t}</option>`).join('');
+      select.value = name.trim();
+      App.toast('Gremio añadido', 'success');
+    });
 
     document.getElementById('btn-save-supplier').addEventListener('click', async () => {
       const name = document.getElementById('sup-name').value.trim();
@@ -303,14 +331,21 @@ const DashboardModule = (() => {
     const isEdit = !!budget;
     const title = isEdit ? 'Editar Partida' : 'Nueva Partida';
 
+    // Recargar customTrades por si se añadió alguno nuevo
+    customTrades = await DB.getCustomCategories(projectId, 'trade');
+    const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
+
     const suppliers = await DB.getAllForProject('suppliers', projectId);
 
     const body = `
       <div class="form-group">
         <label>Partida / Categoría *</label>
-        <select id="bud-category">
-          ${TRADES.map(t => `<option value="${t}" ${isEdit && budget.category === t ? 'selected' : ''}>${t}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="bud-category">
+            ${allTrades.map(t => `<option value="${t}" ${isEdit && budget.category === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-xs btn-outline" id="btn-add-custom-budget-cat" title="Añadir categoría"><i data-lucide="plus"></i></button>
+        </div>
       </div>
       <div class="form-group">
         <label>Descripción</label>
@@ -347,6 +382,21 @@ const DashboardModule = (() => {
     `;
 
     App.openModal(title, body, footer);
+
+    // Botón para añadir categoría personalizada
+    document.getElementById('btn-add-custom-budget-cat').addEventListener('click', async () => {
+      const name = prompt('Nombre de la nueva categoría:');
+      if (!name) return;
+      const exists = allTrades.some(t => t.toLowerCase() === name.trim().toLowerCase());
+      if (exists) { App.toast('Esa categoría ya existe', 'warning'); return; }
+      await DB.addCustomCategory(projectId, 'trade', name.trim());
+      customTrades = await DB.getCustomCategories(projectId, 'trade');
+      const newAllTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
+      const select = document.getElementById('bud-category');
+      select.innerHTML = newAllTrades.map(t => `<option value="${t}">${t}</option>`).join('');
+      select.value = name.trim();
+      App.toast('Categoría añadida', 'success');
+    });
 
     document.getElementById('btn-save-budget').addEventListener('click', async () => {
       const estimated = parseFloat(document.getElementById('bud-estimated').value);

@@ -5,7 +5,7 @@
 
 const DB = (() => {
   const DB_NAME = 'GestionObraDB';
-  const DB_VERSION = 5;
+  const DB_VERSION = 6; // bump para custom_categories
   let db = null;
 
   function open() {
@@ -17,7 +17,28 @@ const DB = (() => {
       request.onupgradeneeded = (e) => {
         const database = e.target.result;
 
+        // Categorías personalizadas por proyecto
+        if (!database.objectStoreNames.contains('custom_categories')) {
+          const store = database.createObjectStore('custom_categories', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('projectId', 'projectId', { unique: false });
+          store.createIndex('type', 'type', { unique: false });
+        }
+
         // Proyectos / Obras
+          // --- Custom categories helpers ---
+
+          async function addCustomCategory(projectId, type, name) {
+            return add('custom_categories', { projectId, type, name });
+          }
+
+          async function getCustomCategories(projectId, type) {
+            const all = await getByIndex('custom_categories', 'projectId', projectId);
+            return all.filter(c => c.type === type);
+          }
+
+          async function removeCustomCategory(id) {
+            return remove('custom_categories', id);
+          }
         if (!database.objectStoreNames.contains('projects')) {
           const store = database.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
           store.createIndex('status', 'status', { unique: false });
@@ -280,6 +301,9 @@ const DB = (() => {
     getCanvasState,
     saveSheetIndex,
     getSheetIndex,
-    deleteCanvasSheet
+    deleteCanvasSheet,
+    addCustomCategory,
+    getCustomCategories,
+    removeCustomCategory
   };
 })();
