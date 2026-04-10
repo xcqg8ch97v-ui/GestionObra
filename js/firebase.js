@@ -184,7 +184,7 @@ const FirebaseSync = (() => {
   // ── Full project pull (first load / device sync) ──
   async function pullAllToLocal() {
     if (!currentUser) return;
-    console.log('[Firebase] Pulling all data from Firestore…');
+    console.log('[FB Pull] UID:', currentUser.uid);
 
     // Suppress sync hooks during pull to avoid write-back loop
     window._fbSyncSuppressed = true;
@@ -209,7 +209,7 @@ const FirebaseSync = (() => {
               await window.DB.put(store, toSave);
             }
           }
-          console.log(`[Firebase] Pulled ${records.length} records from ${store}`);
+          console.log(`[FB Pull] ${store}: ${records.length} documentos en Firestore`);
         } catch(e) {
           console.warn(`[Firebase] Error pulling ${store}:`, e);
         }
@@ -252,33 +252,35 @@ const FirebaseSync = (() => {
 
   // ── Push all local data to Firebase (first sync) ──
   async function pushAllToFirebase() {
-    if (!currentUser) return;
-    console.log('[Firebase] Pushing all local data to Firestore…');
+    if (!currentUser) { console.warn('[FB Push] No user logged in'); return; }
+    console.log('[FB Push] UID:', currentUser.uid);
 
     for (const store of FIRESTORE_STORES) {
       try {
         const records = await window.DB.getAll(store);
+        console.log(`[FB Push] ${store}: ${records.length} registros locales`);
         for (const record of records) {
           await fsSet(store, record);
         }
-        console.log(`[Firebase] Pushed ${records.length} records from ${store}`);
+        console.log(`[FB Push] ${store}: subidos OK`);
       } catch(e) {
-        console.warn(`[Firebase] Error pushing ${store}:`, e);
+        console.error(`[FB Push] Error en ${store}:`, e);
       }
     }
 
     // Push binary files to Storage
     try {
       const files = await window.DB.getAll('files');
+      console.log(`[FB Push] files: ${files.length} archivos locales`);
       for (const file of files) {
         await storageSave(file);
       }
-      console.log(`[Firebase] Pushed ${files.length} files to Storage`);
+      console.log(`[FB Push] files: subidos OK`);
     } catch(e) {
-      console.warn('[Firebase] Error pushing files:', e);
+      console.error('[FB Push] Error en files:', e);
     }
 
-    console.log('[Firebase] Push complete.');
+    console.log('[FB Push] ✅ Completado');
   }
 
   // ── Helpers ─────────────────────────────
