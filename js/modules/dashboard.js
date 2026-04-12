@@ -1065,45 +1065,15 @@ const DashboardModule = (() => {
     return { concepts, decompositions, texts };
   }
 
-  function collectLeafPartidas(code, decompositions, concepts) {
-    const normKey = normCode(code);
-    const children = decompositions[normKey] || decompositions[code];
-    if (!children || children.length === 0) return [];
-    const result = [];
-    for (const child of children) {
-      const concept = findConcept(concepts, child.code);
-      if (!concept) continue;
-      const childDecomp = decompositions[normCode(child.code)] || decompositions[child.code];
-      // If child decomposes into 1 auxiliary (A_), treat the child itself as the leaf
-      const isSingleAux = childDecomp && childDecomp.length === 1 && childDecomp[0].code.startsWith('A_');
-      if (childDecomp && !isSingleAux) {
-        // Sub-chapter: recurse
-        result.push(...collectLeafPartidas(child.code, decompositions, concepts));
-      } else {
-        // Leaf partida (or product wrapping a single auxiliary)
-        const qty = child.yield || 1;
-        const total = Math.round(concept.price * qty * 100) / 100;
-        result.push({
-          code: child.code,
-          summary: concept.summary || child.code,
-          unit: concept.unit || '',
-          unitPrice: concept.price,
-          quantity: qty,
-          totalCost: total
-        });
-      }
-    }
-    return result;
-  }
 
-  function buildBC3Tree(parsed) {
-    const { concepts, decompositions, texts } = parsed;
-    // Find root: concept marked with ## suffix
+  // Nueva función: construir árbol completo de capítulos/partidas/subpartidas
+  function buildBC3FullTree(parsed) {
+    const { concepts, decompositions } = parsed;
+    // Buscar raíz
     let rootCode = null;
     for (const [code, c] of Object.entries(concepts)) {
       if (c.isRoot) { rootCode = code; break; }
     }
-    // Fallback: parent that is not a child of anything
     if (!rootCode) {
       const allChildren = new Set();
       for (const children of Object.values(decompositions)) {
@@ -1113,25 +1083,42 @@ const DashboardModule = (() => {
         if (!allChildren.has(code)) { rootCode = code; break; }
       }
     }
-    // Decomposition keys don't have # suffix — normalize
-    const rootDecompKey = normCode(rootCode || '');
-    const rootChildren = decompositions[rootDecompKey] || decompositions[rootCode] || [];
-    const chapters = [];
-    for (const rc of rootChildren) {
-      const ch = findConcept(concepts, rc.code);
-      if (!ch) continue;
-      const partidas = collectLeafPartidas(rc.code, decompositions, concepts);
-      const trade = matchTrade(ch.summary || '');
-      chapters.push({
-        code: rc.code,
-        name: ch.summary || rc.code,
-        trade,
-        partidas,
-        totalCost: partidas.reduce((s, p) => s + p.totalCost, 0)
-      });
+
+    // Recursivo: construye árbol
+    function buildNode(code, parentQty = 1) {
+      const concept = findConcept(concepts, code);
+      if (!concept) return null;
+      const children = decompositions[normCode(code)] || decompositions[code];
+      const node = {
+        code,
+        name: concept.summary || code,
+        summary: concept.summary || code,
+        unit: concept.unit || '',
+        unitPrice: concept.price,
+        quantity: parentQty,
+        totalCost: Math.round((concept.price * parentQty) * 100) / 100,
+        type: concept.isChapter ? 'chapter' : 'partida',
+        children: []
+      };
+      if (children && children.length) {
+        node.children = children.map(child => buildNode(child.code, child.yield || 1)).filter(Boolean);
+        // Si tiene hijos, recalcula el coste total sumando hijos
+        node.totalCost = node.children.reduce((s, c) => s + c.totalCost, 0);
+        // Si es capítulo, fuerza type
+        if (concept.isChapter) node.type = 'chapter';
+        else node.type = 'partida';
+      }
+      return node;
     }
+
+    // Raíz puede tener varios capítulos
+    const rootChildren = decompositions[normCode(rootCode)] || decompositions[rootCode] || [];
+    const chapters = rootChildren.map(rc => buildNode(rc.code, rc.yield || 1)).filter(Boolean);
     return { rootCode, rootName: findConcept(concepts, rootCode || '')?.summary || '', chapters };
   }
+
+  // Reemplaza el buildBC3Tree por el nuevo árbol completo
+  const buildBC3Tree = buildBC3FullTree;
 
   function setupBC3Import() {
     const fileInput = document.getElementById('bc3-file-input');
