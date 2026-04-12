@@ -2453,6 +2453,8 @@ const App = (() => {
 
     if (section === 'timeline') {
       content = await buildTimelinePrint(project, date);
+    } else if (section === 'dashboard') {
+      content = await buildBudgetsPrint(project, date);
     } else {
       const el = document.getElementById(`section-${section}`);
       if (!el) { win.close(); return; }
@@ -2496,6 +2498,12 @@ const App = (() => {
   .print-stat strong{display:block;font-size:18px;font-weight:700;color:#111}
   .print-stat span{font-size:10px;color:#666}
   .print-footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;font-size:10px;color:#999;text-align:right}
+  /* Budget print */
+  .bud-section-title{font-size:13px;font-weight:700;margin:18px 0 6px;padding:4px 8px;background:#f5f5f5;border-left:3px solid #FFD500;color:#111}
+  .bud-positive{color:#166534;font-weight:600}
+  .bud-negative{color:#991b1b;font-weight:600}
+  .bud-neutral{color:#555}
+  .bud-total-row td{font-weight:700;background:#fafafa;border-top:2px solid #ddd}
   /* Generic section print */
   .panel-header{display:none}
   .btn,.filter-select,.files-filter-bar,.tl-hide-completed,.timeline-actions,.plans-actions,.diary-actions,.files-actions,.participants-actions,.print-btn,.view-toggle,.timeline-summary{display:none!important}
@@ -2516,6 +2524,103 @@ ${content}
     win.document.open();
     win.document.write(html);
     win.document.close();
+  }
+
+  async function buildBudgetsPrint(project, date) {
+    if (!currentProjectId) return '<p>Sin datos</p>';
+    const [budgets, suppliers] = await Promise.all([
+      DB.getAllForProject('budgets', currentProjectId),
+      DB.getAllForProject('suppliers', currentProjectId)
+    ]);
+
+    const supplierMap = {};
+    suppliers.forEach(s => { supplierMap[s.id] = s.name; });
+
+    const fmt = v => formatCurrency(v);
+    const savClass = v => v > 0 ? 'bud-positive' : v < 0 ? 'bud-negative' : 'bud-neutral';
+    const savSign = v => v > 0 ? '+' : '';
+
+    const totalEst  = budgets.reduce((s, b) => s + (b.estimatedCost || 0), 0);
+    const totalReal = budgets.reduce((s, b) => s + (b.realCost || 0), 0);
+    const totalSav  = totalEst - totalReal;
+    const totalPct  = totalEst > 0 ? ((totalSav / totalEst) * 100).toFixed(1) : 0;
+
+    // Agrupar por categoría
+    const byCategory = {};
+    budgets.forEach(b => {
+      if (!byCategory[b.category]) byCategory[b.category] = [];
+      byCategory[b.category].push(b);
+    });
+
+    // Resumen ejecutivo
+    const summaryCards = `
+      <div class="print-summary">
+        <div class="print-stat"><strong>${budgets.length}</strong><span>Partidas</span></div>
+        <div class="print-stat"><strong>${Object.keys(byCategory).length}</strong><span>Gremios</span></div>
+        <div class="print-stat"><strong>${fmt(totalEst)}</strong><span>Previsto total</span></div>
+        <div class="print-stat"><strong>${fmt(totalReal)}</strong><span>Coste real</span></div>
+        <div class="print-stat"><strong class="${savClass(totalSav)}">${savSign(totalSav)}${fmt(totalSav)}</strong><span>Desviación (${savSign(totalSav)}${totalPct}%)</span></div>
+        <div class="print-stat"><strong>${suppliers.length}</strong><span>Proveedores</span></div>
+      </div>`;
+
+    // Tabla por gremio
+    let tableHTML = '';
+    for (const [cat, entries] of Object.entries(byCategory).sort(([a],[b]) => a.localeCompare(b))) {
+      const catEst  = entries.reduce((s, b) => s + (b.estimatedCost || 0), 0);
+      const catReal = entries.reduce((s, b) => s + (b.realCost || 0), 0);
+      const catSav  = catEst - catReal;
+      const catPct  = catEst > 0 ? ((catSav / catEst) * 100).toFixed(1) : 0;
+
+      tableHTML += `<div class="bud-section-title">${escapeHTML(cat)}</div>
+      <table class="print-table">
+        <thead><tr>
+          <th>Descripción</th><th>Proveedor(es)</th><th style="text-align:right">Previsto</th><th style="text-align:right">Real</th><th style="text-align:right">Margen</th><th style="text-align:right">Desviación</th>
+        </tr></thead>
+        <tbody>`;
+
+      entries.forEach(b => {
+        const sups = (b.supplierIds && b.supplierIds.length)
+          ? b.supplierIds.map(id => supplierMap[id] || '').filter(Boolean).join(', ')
+          : (supplierMap[b.supplierId] || '—');
+        const sav = (b.estimatedCost || 0) - (b.realCost || 0);
+        const pct = b.estimatedCost > 0 ? ((sav / b.estimatedCost) * 100).toFixed(1) : 0;
+        tableHTML += `<tr>
+          <td>${escapeHTML(b.description || b.category)}</td>
+          <td style="color:#555">${escapeHTML(sups)}</td>
+          <td style="text-align:right">${fmt(b.estimatedCost)}</td>
+          <td style="text-align:right">${fmt(b.realCost)}</td>
+          <td style="text-align:right">${b.profitMargin || 0}%</td>
+          <td style="text-align:right" class="${savClass(sav)}">${savSign(sav)}${fmt(sav)} (${savSign(sav)}${pct}%)</td>
+        </tr>`;
+      });
+
+      tableHTML += `</tbody>
+        <tfoot><tr class="bud-total-row">
+          <td colspan="2"><strong>Total ${escapeHTML(cat)}</strong> (${entries.length} partida${entries.length !== 1 ? 's' : ''})</td>
+          <td style="text-align:right">${fmt(catEst)}</td>
+          <td style="text-align:right">${fmt(catReal)}</td>
+          <td></td>
+          <td style="text-align:right" class="${savClass(catSav)}">${savSign(catSav)}${fmt(catSav)} (${savSign(catSav)}${catPct}%)</td>
+        </tr></tfoot>
+      </table>`;
+    }
+
+    // Fila total global
+    tableHTML += `
+      <table class="print-table" style="margin-top:16px;border-top:3px solid #FFD500">
+        <tbody><tr class="bud-total-row">
+          <td colspan="2"><strong>TOTAL PRESUPUESTO</strong> (${budgets.length} partidas · ${Object.keys(byCategory).length} gremios)</td>
+          <td style="text-align:right">${fmt(totalEst)}</td>
+          <td style="text-align:right">${fmt(totalReal)}</td>
+          <td></td>
+          <td style="text-align:right" class="${savClass(totalSav)}">${savSign(totalSav)}${fmt(totalSav)} (${savSign(totalSav)}${totalPct}%)</td>
+        </tr></tbody>
+      </table>`;
+
+    return `
+      <h2 class="print-section-title">Partidas Presupuestarias</h2>
+      ${summaryCards}
+      ${tableHTML}`;
   }
 
   async function buildTimelinePrint(project, date) {
