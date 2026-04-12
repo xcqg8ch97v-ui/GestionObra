@@ -1,3 +1,34 @@
+  // =============================
+  // VISUALIZACIÓN JERÁRQUICA BC3
+  // =============================
+  async function showBC3Tree() {
+    // Obtiene todos los nodos del proyecto
+    const items = await DB.getByIndex('bc3items', 'projectId', projectId);
+    // Construye árbol padre-hijo
+    const byParent = {};
+    items.forEach(item => {
+      if (!byParent[item.parentId]) byParent[item.parentId] = [];
+      byParent[item.parentId].push(item);
+    });
+    // Render recursivo
+    function renderTree(parentId, nivel = 0) {
+      const nodes = byParent[parentId] || [];
+      if (!nodes.length) return '';
+      return '<ul style="margin-left:' + (nivel*18) + 'px">' + nodes.map(n => `
+        <li>
+          <span style="font-weight:${n.type==='chapter'?'bold':'normal'}">${App.escapeHTML(n.code)} - ${App.escapeHTML(n.name)}</span>
+          ${n.unit ? `<span style='color:var(--text-muted)'> [${n.quantity} ${n.unit} x ${n.unitPrice}€ = <b>${App.formatCurrency(n.totalCost)}</b>]</span>` : ''}
+          ${renderTree(n.id, nivel+1)}
+        </li>
+      `).join('') + '</ul>';
+    }
+    const html = `
+      <div style="max-height:60vh;overflow:auto;padding:8px 0">
+        ${renderTree(null)}
+      </div>
+    `;
+    App.openModal('Estructura Presupuesto BC3', html, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
+  }
 /* ========================================
    Dashboard Module - Proveedores y Presupuestos
    CRUD + Comparador Visual
@@ -1000,7 +1031,8 @@ const DashboardModule = (() => {
           const code = rawCode;
           const unit = (fields[1] || '').trim();
           const summary = (fields[2] || '').trim();
-          const priceField = (fields[3] || '').trim();
+          // CAMBIO: el precio está en fields[4] (no en fields[3])
+          const priceField = (fields[4] || '').trim();
           const prices = priceField ? priceField.split('\\').map(p => parseFloat(p) || 0) : [0];
           concepts[code] = { code, unit, summary, price: prices[0] || 0, isRoot, isChapter };
           break;
@@ -1237,6 +1269,7 @@ const DashboardModule = (() => {
     deleteSupplier,
     editBudget,
     deleteBudget,
-    refresh: () => { loadSuppliers(); loadBudgets(); }
+    refresh: () => { loadSuppliers(); loadBudgets(); },
+    showBC3Tree
   };
 })();
