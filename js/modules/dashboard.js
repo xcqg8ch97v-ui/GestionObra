@@ -81,6 +81,14 @@ const DashboardModule = (() => {
     document.getElementById('btn-add-supplier-empty').addEventListener('click', () => openSupplierForm());
     document.getElementById('btn-add-budget').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-add-budget-empty').addEventListener('click', () => openBudgetForm());
+    document.getElementById('btn-view-bc3')?.addEventListener('click', () => showBC3Tree());
+    checkBC3Button();
+  }
+
+  async function checkBC3Button() {
+    const items = await DB.getByIndex('bc3items', 'projectId', projectId);
+    const btn = document.getElementById('btn-view-bc3');
+    if (btn) btn.style.display = items.length > 0 ? '' : 'none';
   }
 
   // ========================================
@@ -1251,6 +1259,7 @@ const DashboardModule = (() => {
     }
     App.closeModal();
     App.toast(`Importados ${count} elementos de ${chapters.length} capítulos`, 'success');
+    checkBC3Button();
     loadBudgets();
   }
 
@@ -1260,7 +1269,7 @@ const DashboardModule = (() => {
     deleteSupplier,
     editBudget,
     deleteBudget,
-    refresh: () => { loadSuppliers(); loadBudgets(); },
-    showBC3Tree
+    showBC3Tree,
+    refresh: () => { loadSuppliers(); loadBudgets(); }
   };
 })();
