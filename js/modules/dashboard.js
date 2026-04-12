@@ -1,34 +1,3 @@
-  // =============================
-  // VISUALIZACIÓN JERÁRQUICA BC3
-  // =============================
-  async function showBC3Tree() {
-    // Obtiene todos los nodos del proyecto
-    const items = await DB.getByIndex('bc3items', 'projectId', projectId);
-    // Construye árbol padre-hijo
-    const byParent = {};
-    items.forEach(item => {
-      if (!byParent[item.parentId]) byParent[item.parentId] = [];
-      byParent[item.parentId].push(item);
-    });
-    // Render recursivo
-    function renderTree(parentId, nivel = 0) {
-      const nodes = byParent[parentId] || [];
-      if (!nodes.length) return '';
-      return '<ul style="margin-left:' + (nivel*18) + 'px">' + nodes.map(n => `
-        <li>
-          <span style="font-weight:${n.type==='chapter'?'bold':'normal'}">${App.escapeHTML(n.code)} - ${App.escapeHTML(n.name)}</span>
-          ${n.unit ? `<span style='color:var(--text-muted)'> [${n.quantity} ${n.unit} x ${n.unitPrice}€ = <b>${App.formatCurrency(n.totalCost)}</b>]</span>` : ''}
-          ${renderTree(n.id, nivel+1)}
-        </li>
-      `).join('') + '</ul>';
-    }
-    const html = `
-      <div style="max-height:60vh;overflow:auto;padding:8px 0">
-        ${renderTree(null)}
-      </div>
-    `;
-    App.openModal('Estructura Presupuesto BC3', html, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
-  }
 /* ========================================
    Dashboard Module - Proveedores y Presupuestos
    CRUD + Comparador Visual
@@ -89,6 +58,35 @@ const DashboardModule = (() => {
     const items = await DB.getByIndex('bc3items', 'projectId', projectId);
     const btn = document.getElementById('btn-view-bc3');
     if (btn) btn.style.display = items.length > 0 ? '' : 'none';
+  }
+
+  // =============================
+  // VISUALIZACIÓN JERÁRQUICA BC3
+  // =============================
+  async function showBC3Tree() {
+    const items = await DB.getByIndex('bc3items', 'projectId', projectId);
+    const byParent = {};
+    items.forEach(item => {
+      const key = item.parentId ?? null;
+      if (!byParent[key]) byParent[key] = [];
+      byParent[key].push(item);
+    });
+    function renderTree(parentId, nivel = 0) {
+      const nodes = byParent[parentId] || [];
+      if (!nodes.length) return '';
+      return '<ul style="margin-left:' + (nivel * 18) + 'px;list-style:none;padding:0">' +
+        nodes.map(n => `
+          <li style="padding:3px 0">
+            <span style="font-weight:${n.type === 'chapter' ? '700' : '400'};color:${n.type === 'chapter' ? 'var(--text-primary)' : 'var(--text-secondary)'}">
+              ${App.escapeHTML(n.name || n.code)}
+            </span>
+            ${n.unit ? `<span style="color:var(--text-muted);font-size:12px"> · ${n.quantity} ${App.escapeHTML(n.unit)} × ${(n.unitPrice||0).toFixed(2)}€ = <b>${App.formatCurrency(n.totalCost)}</b></span>` : (n.totalCost ? `<span style="color:var(--text-muted);font-size:12px"> · <b>${App.formatCurrency(n.totalCost)}</b></span>` : '')}
+            ${renderTree(n.id, nivel + 1)}
+          </li>`).join('') + '</ul>';
+    }
+    if (!items.length) { App.toast('No hay datos BC3 importados', 'warning'); return; }
+    const html = `<div style="max-height:65vh;overflow:auto;padding:4px 0">${renderTree(null)}</div>`;
+    App.openModal('Estructura Presupuesto BC3', html, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
   }
 
   // ========================================
