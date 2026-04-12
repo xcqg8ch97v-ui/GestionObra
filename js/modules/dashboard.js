@@ -374,7 +374,7 @@ const DashboardModule = (() => {
           <td style="padding:10px 12px">${App.formatCurrency(totalEstimated)}</td>
           <td style="padding:10px 12px">${App.formatCurrency(totalReal)}</td>
           <td></td>
-          <td style="padding:10px 12px"><span class="badge ${devClass}">${devSign}${App.formatCurrency(totalSaving)} (${devSign}${totalSavPct}%)</span></td>
+          <td style="padding:10px 12px"><span class="badge ${devClass}">${devSign}${App.formatCurrency(totalSaving)}</span></td>
           <td></td>
         </tr>`;
     }
@@ -397,8 +397,8 @@ const DashboardModule = (() => {
           <td>${App.escapeHTML(supplierNames)}</td>
           <td>${App.formatCurrency(b.estimatedCost)}</td>
           <td>${App.formatCurrency(b.realCost)}</td>
-          <td><span class="badge badge-positive">${margin}% <small>(${App.formatCurrency(profitAmount)})</small></span></td>
-          <td><span class="badge ${devClass}">${devSign}${App.formatCurrency(saving)} (${devSign}${savingPct}%)</span></td>
+          <td><span class="badge badge-positive">${margin}%</span></td>
+          <td><span class="badge ${devClass}">${devSign}${App.formatCurrency(saving)}</span></td>
           <td>
             <div class="action-btns">
               <button class="action-btn" onclick="DashboardModule.editBudget(${b.id})" title="${App.t('edit')}">
@@ -462,7 +462,7 @@ const DashboardModule = (() => {
         </div>
         <div class="form-group">
           <label>${App.t('actual_cost')} (€)</label>
-          <input type="number" id="bud-real" min="0" step="0.01" value="${isEdit ? budget.realCost : '0'}">
+          <input type="number" id="bud-real" min="0" step="0.01" value="${isEdit ? (budget.realCost ?? 0) : '0'}">
         </div>
       </div>
       <div class="form-group">
@@ -509,7 +509,7 @@ const DashboardModule = (() => {
         supplierId: checkedSuppliers[0] || null,
         supplierIds: checkedSuppliers,
         estimatedCost: estimated,
-        realCost: parseFloat(document.getElementById('bud-real').value) || 0,
+        realCost: parseFloat(document.getElementById('bud-real').value.replace(',', '.')) || 0,
         profitMargin: parseFloat(document.getElementById('bud-profit-margin').value) || 0,
         updatedAt: new Date().toISOString()
       };
