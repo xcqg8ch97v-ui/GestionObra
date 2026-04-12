@@ -1031,8 +1031,14 @@ const DashboardModule = (() => {
           const code = rawCode;
           const unit = (fields[1] || '').trim();
           const summary = (fields[2] || '').trim();
-          // CAMBIO: el precio está en fields[4] (no en fields[3])
-          const priceField = (fields[4] || '').trim();
+          // BC3 estándar: precio en fields[3]; Presto puede poner fecha en fields[3] y precio en fields[4]
+          // Detectar automáticamente: si fields[3] no parsea como número, usar fields[4]
+          const f3 = (fields[3] || '').trim();
+          const f4 = (fields[4] || '').trim();
+          const price3 = parseFloat(f3.split('\\')[0]) || 0;
+          const price4 = parseFloat(f4.split('\\')[0]) || 0;
+          // Si f3 parece una fecha (contiene '/') o es 0 y f4 tiene valor, usar f4
+          const priceField = (f3.includes('/') || (price3 === 0 && price4 > 0)) ? f4 : f3;
           const prices = priceField ? priceField.split('\\').map(p => parseFloat(p) || 0) : [0];
           concepts[code] = { code, unit, summary, price: prices[0] || 0, isRoot, isChapter };
           break;
@@ -1149,8 +1155,20 @@ const DashboardModule = (() => {
     });
   }
 
+  // Cuenta hojas (nodos sin hijos) recursivamente
+  function countLeaves(node) {
+    if (!node.children || node.children.length === 0) return 1;
+    return node.children.reduce((s, c) => s + countLeaves(c), 0);
+  }
+
+  // Devuelve array plano de nodos hoja recursivamente
+  function collectLeaves(node) {
+    if (!node.children || node.children.length === 0) return [node];
+    return node.children.flatMap(c => collectLeaves(c));
+  }
+
   function showBC3Preview(tree) {
-    const totalPartidas = tree.chapters.reduce((s, ch) => s + ch.partidas.length, 0);
+    const totalPartidas = tree.chapters.reduce((s, ch) => s + countLeaves(ch), 0);
     const totalCost = tree.chapters.reduce((s, ch) => s + ch.totalCost, 0);
 
     let body = `
@@ -1161,21 +1179,21 @@ const DashboardModule = (() => {
       <div style="max-height:400px;overflow-y:auto">`;
 
     for (const ch of tree.chapters) {
+      const leaves = collectLeaves(ch);
       body += `
         <div style="margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
             <input type="checkbox" class="bc3-ch-check" data-chapter="${App.escapeHTML(ch.code)}" checked>
             <strong>${App.escapeHTML(ch.name)}</strong>
-            <span class="badge badge-neutral" style="margin-left:auto">${App.escapeHTML(ch.trade)}</span>
-            <small>${ch.partidas.length} uds &middot; ${App.formatCurrency(ch.totalCost)}</small>
+            <small style="margin-left:auto">${leaves.length} partidas &middot; ${App.formatCurrency(ch.totalCost)}</small>
           </div>
           <div style="padding-left:24px;font-size:0.85em">
-            ${ch.partidas.slice(0, 8).map(p => `
+            ${leaves.slice(0, 8).map(p => `
               <div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-muted)">
-                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px">${App.escapeHTML(p.summary)}</span>
-                <span style="white-space:nowrap">${p.quantity} ${App.escapeHTML(p.unit)} &times; ${p.unitPrice.toFixed(2)}\u20AC = <strong>${App.formatCurrency(p.totalCost)}</strong></span>
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px">${App.escapeHTML(p.summary || p.name)}</span>
+                <span style="white-space:nowrap">${p.quantity} ${App.escapeHTML(p.unit)} &times; ${(p.unitPrice||0).toFixed(2)}\u20AC = <strong>${App.formatCurrency(p.totalCost)}</strong></span>
               </div>`).join('')}
-            ${ch.partidas.length > 8 ? `<div style="color:var(--text-muted);font-style:italic">...y ${ch.partidas.length - 8} más</div>` : ''}
+            ${leaves.length > 8 ? `<div style="color:var(--text-muted);font-style:italic">...y ${leaves.length - 8} más</div>` : ''}
           </div>
         </div>`;
     }
@@ -1198,55 +1216,41 @@ const DashboardModule = (() => {
     });
   }
 
-  // --- Nueva importación jerárquica BC3 ---
   async function executeBC3Import(chapters) {
     let count = 0;
-    // Limpia items previos del proyecto
     await DB.clearStore('bc3items');
 
-    // Utilidad recursiva para guardar árbol
-    async function saveNode(node, parentId, type) {
+    // Recursivo: guarda el nodo y todos sus hijos con el tipo correcto
+    async function saveNode(node, parentId) {
+      const isLeaf = !node.children || node.children.length === 0;
+      const type = node.type || (isLeaf ? 'partida' : 'chapter');
       const id = await DB.add('bc3items', {
         projectId,
         parentId,
         code: node.code,
         name: node.name || node.summary || '',
-        summary: node.summary || '',
+        summary: node.summary || node.name || '',
         unit: node.unit || '',
         unitPrice: node.unitPrice || 0,
         quantity: node.quantity || 1,
         totalCost: node.totalCost || 0,
-        type, // 'chapter', 'partida', 'subpartida'
+        type,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
       count++;
-      // Subnodos
       if (node.children && node.children.length) {
         for (const child of node.children) {
-          await saveNode(child, id, child.type);
+          await saveNode(child, id);
         }
       }
     }
 
-    // Adaptar capítulos y partidas a estructura jerárquica
     for (const ch of chapters) {
-      // Capítulo
-      const chapterNode = {
-        code: ch.code,
-        name: ch.name,
-        summary: ch.name,
-        type: 'chapter',
-        children: ch.partidas.map(p => ({
-          ...p,
-          type: 'partida',
-          children: p.subpartidas ? p.subpartidas.map(s => ({ ...s, type: 'subpartida', children: [] })) : []
-        }))
-      };
-      await saveNode(chapterNode, null, 'chapter');
+      await saveNode(ch, null);
     }
     App.closeModal();
-    App.toast(`Importados ${count} elementos jerárquicos de ${chapters.length} capítulos`, 'success');
+    App.toast(`Importados ${count} elementos de ${chapters.length} capítulos`, 'success');
     loadBudgets();
   }
 
