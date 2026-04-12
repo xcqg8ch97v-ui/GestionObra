@@ -2366,6 +2366,7 @@ const App = (() => {
 
   async function checkProjectAlerts(pid) {
     if (!pid) return;
+    if (localStorage.getItem(`alerts-dismissed-${pid}`) === 'true') return;
     const today = new Date(); today.setHours(0,0,0,0);
     const in3days = new Date(today); in3days.setDate(today.getDate() + 3);
     const in7days = new Date(today); in7days.setDate(today.getDate() + 7);
@@ -2420,8 +2421,17 @@ const App = (() => {
 
     const body = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${stats.join('')}</div>
-      <div class="alert-rows">${rows.join('')}</div>`;
-    const footer = `<button class="btn btn-primary" onclick="App.closeModal()">Entendido</button>`;
+      <div class="alert-rows">${rows.join('')}</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:var(--text-muted);cursor:pointer">
+        <input type="checkbox" id="chk-dismiss-alerts" style="width:15px;height:15px;cursor:pointer">
+        No volver a mostrar alertas para esta obra
+      </label>`;
+    const footer = `<button class="btn btn-primary" onclick="
+      if(document.getElementById('chk-dismiss-alerts')?.checked){
+        localStorage.setItem('alerts-dismissed-${pid}','true');
+      }
+      App.closeModal();
+    ">Entendido</button>`;
     openModal('⚠️ Alertas del proyecto', body, footer, { size: 'sm' });
   }
 
