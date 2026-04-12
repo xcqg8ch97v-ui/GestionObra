@@ -413,14 +413,15 @@ const OverviewModule = (() => {
         <div class="overview-card-detail">${completedTasks} de ${totalTasks} tareas completadas</div>
       </div>
 
-      <div class="overview-card">
+      <div class="overview-card" style="cursor:pointer" onclick="App.navigateTo('dashboard')" title="Ir a partidas presupuestarias">
         <div class="overview-card-header">
           <i data-lucide="wallet"></i>
           <span>Presupuesto</span>
         </div>
-        <div class="overview-card-value">${App.formatCurrency(totalReal)}</div>
+        <div class="overview-card-value">${App.formatCurrency(totalEstimated)}</div>
         <div class="overview-card-detail">
-          Previsto: ${App.formatCurrency(totalEstimated)}<br>
+          Previsto total &middot; ${budgets.length} partida${budgets.length !== 1 ? 's' : ''}<br>
+          Real: ${App.formatCurrency(totalReal)}<br>
           Desviación: <span style="color:${budgetDeviation > 0 ? 'var(--red)' : budgetDeviation < 0 ? 'var(--green)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
         </div>
       </div>

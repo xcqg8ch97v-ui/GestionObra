@@ -330,6 +330,26 @@ const DashboardModule = (() => {
     const supplierMap = {};
     suppliers.forEach(s => supplierMap[s.id] = s.name);
 
+    const totalEstimated = budgets.reduce((s, b) => s + (b.estimatedCost || 0), 0);
+    const totalReal      = budgets.reduce((s, b) => s + (b.realCost      || 0), 0);
+    const totalDeviation = totalReal - totalEstimated;
+    const totalDevPct    = totalEstimated > 0 ? ((totalDeviation / totalEstimated) * 100).toFixed(1) : 0;
+    const devClass       = totalDeviation > 0 ? 'badge-negative' : totalDeviation < 0 ? 'badge-positive' : 'badge-neutral';
+    const devSign        = totalDeviation > 0 ? '+' : '';
+
+    const tfoot = document.getElementById('budgets-tfoot');
+    if (tfoot) {
+      tfoot.innerHTML = `
+        <tr style="font-weight:700;background:var(--bg-secondary);border-top:2px solid var(--border)">
+          <td colspan="2" style="padding:10px 12px">TOTAL (${budgets.length} partidas)</td>
+          <td style="padding:10px 12px">${App.formatCurrency(totalEstimated)}</td>
+          <td style="padding:10px 12px">${App.formatCurrency(totalReal)}</td>
+          <td></td>
+          <td style="padding:10px 12px"><span class="badge ${devClass}">${devSign}${App.formatCurrency(totalDeviation)} (${devSign}${totalDevPct}%)</span></td>
+          <td></td>
+        </tr>`;
+    }
+
     tbody.innerHTML = budgets.map(b => {
       const deviation = b.realCost - b.estimatedCost;
       const deviationPct = b.estimatedCost > 0 ? ((deviation / b.estimatedCost) * 100).toFixed(1) : 0;
