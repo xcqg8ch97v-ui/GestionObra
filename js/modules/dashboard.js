@@ -643,13 +643,14 @@ const DashboardModule = (() => {
     const maxCost = Math.max(...sorted.map(b => Math.max(b.estimatedCost || 0, b.realCost || 0)), 1);
 
     // Header with back button
+    const supplierCount = new Set(sorted.flatMap(b => b.supplierIds && b.supplierIds.length ? b.supplierIds : (b.supplierId ? [b.supplierId] : []))).size;
     headerEl.innerHTML = `
       <button class="comp-back-btn" id="comp-back-btn">
         <i data-lucide="arrow-left" style="width:16px;height:16px"></i>
-        ${App.t('compare_back_to_trades')}
+        Volver a gremios
       </button>
       <h3>${App.escapeHTML(comparatorTrade)}</h3>
-      <span class="comp-detail-count">${App.t('comparative_summary', { count: sorted.length, suppliers: new Set(sorted.map(b => b.supplierId).filter(Boolean)).size })}</span>
+      <span class="comp-detail-count">${sorted.length} partida${sorted.length !== 1 ? 's' : ''} · ${supplierCount} proveedor${supplierCount !== 1 ? 'es' : ''}</span>
     `;
 
     document.getElementById('comp-back-btn').addEventListener('click', () => {
