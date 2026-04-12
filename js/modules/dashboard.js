@@ -1268,9 +1268,28 @@ const DashboardModule = (() => {
       if (existing) {
         await DB.put('budgets', { ...existing, estimatedCost: ch.totalCost, updatedAt: new Date().toISOString() });
       } else {
-        // Buscar gremio más parecido por nombre del capítulo
-        const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
-        const trade = guessTradeFromName(name) || allTrades[allTrades.length - 1];
+        // Detectar gremio por palabras clave del nombre del capítulo
+        const nameLower = name.toLowerCase();
+        const tradeKeywords = {
+          'Albañilería':       ['albañil','mamposter','tabiq','solado','paviment','revoc','enfoscado','enlucid'],
+          'Fontanería':        ['fontaner','saneamiento','agua','tubería','sanitario','inodoro','grifo','plomer'],
+          'Electricidad':      ['electric','iluminac','instalac eléc','cuadro','cable','enchufe','luz'],
+          'Carpintería':       ['carpinter','puerta','ventana','madera','armario','tarima','parquet'],
+          'Pintura':           ['pintura','barniz','lacado','revestimiento'],
+          'Cristalería':       ['cristal','vidrio','mampara','espejo'],
+          'Climatización':     ['climati','ventilac','calefacc','aire acondicion','hvac','aerotermia'],
+          'Impermeabilización':['impermeab','cubierta','tejado','azotea'],
+          'Estructura':        ['estructura','hormigón','forjado','pilar','viga','cimentación','acero'],
+          'Cimentación':       ['cimentac','zapata','pilote','excavac'],
+          'Paisajismo':        ['jardín','paisaj','riego','césped','árbol'],
+          'Seguridad':         ['seguridad','alarma','cámara','videovigilancia']
+        };
+        let trade = 'Otros';
+        outer: for (const [t, kws] of Object.entries(tradeKeywords)) {
+          for (const kw of kws) {
+            if (nameLower.includes(kw)) { trade = t; break outer; }
+          }
+        }
         await DB.add('budgets', {
           projectId,
           category: trade,
