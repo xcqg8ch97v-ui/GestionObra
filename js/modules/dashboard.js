@@ -82,7 +82,6 @@ const DashboardModule = (() => {
     document.getElementById('btn-add-budget').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-add-budget-empty').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-view-bc3')?.addEventListener('click', () => showBC3Tree());
-    document.getElementById('budget-filter-category')?.addEventListener('change', () => applyBudgetFilter());
     checkBC3Button();
   }
 
@@ -325,6 +324,11 @@ const DashboardModule = (() => {
       `<option value="${App.escapeHTML(c)}">${c === '__all__' ? 'Todos los gremios' : App.escapeHTML(c)}</option>`
     ).join('');
     if (cats.includes(current)) sel.value = current;
+    // Conectar evento si aún no está conectado
+    if (!sel.dataset.bound) {
+      sel.addEventListener('change', () => applyBudgetFilter());
+      sel.dataset.bound = 'true';
+    }
   }
 
   function applyBudgetFilter() {
@@ -381,11 +385,14 @@ const DashboardModule = (() => {
       const devSign = deviation > 0 ? '+' : '';
       const margin = b.profitMargin || 0;
       const profitAmount = b.estimatedCost > 0 ? (b.estimatedCost * margin / 100) : 0;
+      const supplierNames = (b.supplierIds && b.supplierIds.length > 0)
+        ? b.supplierIds.map(id => supplierMap[id] || '').filter(Boolean).join(', ')
+        : (supplierMap[b.supplierId] || '—');
 
       return `
         <tr>
           <td><strong>${App.escapeHTML(b.category)}</strong><br><small style="color:var(--text-muted)">${App.escapeHTML(b.description || '')}</small></td>
-          <td>${App.escapeHTML(supplierMap[b.supplierId] || '-')}</td>
+          <td>${App.escapeHTML(supplierNames)}</td>
           <td>${App.formatCurrency(b.estimatedCost)}</td>
           <td>${App.formatCurrency(b.realCost)}</td>
           <td><span class="badge badge-positive">${margin}% <small>(${App.formatCurrency(profitAmount)})</small></span></td>
@@ -416,6 +423,9 @@ const DashboardModule = (() => {
     const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
 
     const suppliers = await DB.getAllForProject('suppliers', projectId);
+    const selectedSupplierIds = isEdit
+      ? (budget.supplierIds || (budget.supplierId ? [budget.supplierId] : []))
+      : [];
 
     const body = `
       <div class="form-group">
@@ -432,11 +442,16 @@ const DashboardModule = (() => {
         <input type="text" id="bud-description" value="${isEdit ? App.escapeHTML(budget.description || '') : ''}" placeholder="${App.t('budget_description_placeholder')}">
       </div>
       <div class="form-group">
-        <label>${App.t('supplier')}</label>
-        <select id="bud-supplier">
-          <option value="">${App.t('unassigned')}</option>
-          ${suppliers.map(s => `<option value="${s.id}" ${isEdit && budget.supplierId === s.id ? 'selected' : ''}>${App.escapeHTML(s.name)} (${App.escapeHTML(s.trade)})</option>`).join('')}
-        </select>
+        <label>Proveedores</label>
+        ${suppliers.length === 0
+          ? `<p style="color:var(--text-muted);font-size:13px">No hay proveedores. <a href="#" onclick="App.navigateTo('dashboard');App.closeModal()">Añadir proveedor</a></p>`
+          : `<div style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto;padding:6px;border:1px solid var(--border);border-radius:6px">
+              ${suppliers.map(s => `
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+                  <input type="checkbox" class="bud-supplier-check" value="${s.id}" ${selectedSupplierIds.includes(s.id) ? 'checked' : ''}>
+                  ${App.escapeHTML(s.name)} <span style="color:var(--text-muted)">(${App.escapeHTML(s.trade)})</span>
+                </label>`).join('')}
+            </div>`}
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -485,10 +500,12 @@ const DashboardModule = (() => {
         return;
       }
 
+      const checkedSuppliers = [...document.querySelectorAll('.bud-supplier-check:checked')].map(cb => parseInt(cb.value));
       const data = {
         category: document.getElementById('bud-category').value,
         description: document.getElementById('bud-description').value.trim(),
-        supplierId: parseInt(document.getElementById('bud-supplier').value) || null,
+        supplierId: checkedSuppliers[0] || null,
+        supplierIds: checkedSuppliers,
         estimatedCost: estimated,
         realCost: parseFloat(document.getElementById('bud-real').value) || 0,
         profitMargin: parseFloat(document.getElementById('bud-profit-margin').value) || 0,
@@ -579,15 +596,15 @@ const DashboardModule = (() => {
         <button class="comp-trade-card ${isActive ? 'active' : ''}" data-trade="${App.escapeHTML(cat)}">
           <div class="comp-trade-card-title">${App.escapeHTML(cat)}</div>
           <div class="comp-trade-card-stats">
-            <span>${App.t('budget_item_count', { count })}</span>
-            <span>${App.t('supplier_count', { count: supplierCount })}</span>
+            <span>${count} partida${count !== 1 ? 's' : ''}</span>
+            <span>${supplierCount} proveedor${supplierCount !== 1 ? 'es' : ''}</span>
           </div>
           <div class="comp-trade-card-range">
-            ${count > 1 
-              ? `<span class="comp-range-label">${App.t('range_label')}</span> ${App.formatCurrency(minEst)} — ${App.formatCurrency(maxEst)}`
+            ${count > 1
+              ? `<span class="comp-range-label">Rango:</span> ${App.formatCurrency(minEst)} — ${App.formatCurrency(maxEst)}`
               : App.formatCurrency(totalEst)}
           </div>
-          ${spread > 0 ? `<div class="comp-trade-card-spread">${App.t('potential_savings')}: <strong>${App.formatCurrency(spread)}</strong></div>` : ''}
+          ${spread > 0 ? `<div class="comp-trade-card-spread">Ahorro potencial: <strong>${App.formatCurrency(spread)}</strong></div>` : ''}
         </button>`;
     }).join('');
 
