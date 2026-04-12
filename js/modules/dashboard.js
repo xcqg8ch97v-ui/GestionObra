@@ -445,11 +445,11 @@ const DashboardModule = (() => {
         <label>Proveedores</label>
         ${suppliers.length === 0
           ? `<p style="color:var(--text-muted);font-size:13px">No hay proveedores. <a href="#" onclick="App.navigateTo('dashboard');App.closeModal()">Añadir proveedor</a></p>`
-          : `<div style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto;padding:6px;border:1px solid var(--border);border-radius:6px">
+          : `<div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary)">
               ${suppliers.map(s => `
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-                  <input type="checkbox" class="bud-supplier-check" value="${s.id}" ${selectedSupplierIds.includes(s.id) ? 'checked' : ''}>
-                  ${App.escapeHTML(s.name)} <span style="color:var(--text-muted)">(${App.escapeHTML(s.trade)})</span>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
+                  <input type="checkbox" class="bud-supplier-check" value="${s.id}" ${selectedSupplierIds.includes(s.id) ? 'checked' : ''} style="width:15px;height:15px;flex-shrink:0;cursor:pointer">
+                  <span style="flex:1"><strong>${App.escapeHTML(s.name)}</strong> <span style="color:var(--text-muted);font-size:11px">${App.escapeHTML(s.trade)}</span></span>
                 </label>`).join('')}
             </div>`}
       </div>
