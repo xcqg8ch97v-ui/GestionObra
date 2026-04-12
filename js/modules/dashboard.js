@@ -358,10 +358,11 @@ const DashboardModule = (() => {
 
     const totalEstimated = budgets.reduce((s, b) => s + (b.estimatedCost || 0), 0);
     const totalReal      = budgets.reduce((s, b) => s + (b.realCost      || 0), 0);
-    const totalDeviation = totalReal - totalEstimated;
-    const totalDevPct    = totalEstimated > 0 ? ((totalDeviation / totalEstimated) * 100).toFixed(1) : 0;
-    const devClass       = totalDeviation > 0 ? 'badge-negative' : totalDeviation < 0 ? 'badge-positive' : 'badge-neutral';
-    const devSign        = totalDeviation > 0 ? '+' : '';
+    // Ahorro = previsto - real (positivo = gastamos menos de lo previsto)
+    const totalSaving    = totalEstimated - totalReal;
+    const totalSavPct    = totalEstimated > 0 ? Math.abs((totalSaving / totalEstimated) * 100).toFixed(1) : 0;
+    const devClass       = totalSaving > 0 ? 'badge-positive' : totalSaving < 0 ? 'badge-negative' : 'badge-neutral';
+    const devSign        = totalSaving > 0 ? '+' : '';
 
     const tfoot = document.getElementById('budgets-tfoot');
     if (tfoot) {
@@ -373,16 +374,17 @@ const DashboardModule = (() => {
           <td style="padding:10px 12px">${App.formatCurrency(totalEstimated)}</td>
           <td style="padding:10px 12px">${App.formatCurrency(totalReal)}</td>
           <td></td>
-          <td style="padding:10px 12px"><span class="badge ${devClass}">${devSign}${App.formatCurrency(totalDeviation)} (${devSign}${totalDevPct}%)</span></td>
+          <td style="padding:10px 12px"><span class="badge ${devClass}">${devSign}${App.formatCurrency(totalSaving)} (${devSign}${totalSavPct}%)</span></td>
           <td></td>
         </tr>`;
     }
 
     tbody.innerHTML = budgets.map(b => {
-      const deviation = b.realCost - b.estimatedCost;
-      const deviationPct = b.estimatedCost > 0 ? ((deviation / b.estimatedCost) * 100).toFixed(1) : 0;
-      const devClass = deviation > 0 ? 'badge-negative' : deviation < 0 ? 'badge-positive' : 'badge-neutral';
-      const devSign = deviation > 0 ? '+' : '';
+      // Ahorro = previsto - real (positivo = gastamos menos de lo previsto)
+      const saving = (b.estimatedCost || 0) - (b.realCost || 0);
+      const savingPct = b.estimatedCost > 0 ? Math.abs((saving / b.estimatedCost) * 100).toFixed(1) : 0;
+      const devClass = saving > 0 ? 'badge-positive' : saving < 0 ? 'badge-negative' : 'badge-neutral';
+      const devSign = saving > 0 ? '+' : '';
       const margin = b.profitMargin || 0;
       const profitAmount = b.estimatedCost > 0 ? (b.estimatedCost * margin / 100) : 0;
       const supplierNames = (b.supplierIds && b.supplierIds.length > 0)
@@ -396,7 +398,7 @@ const DashboardModule = (() => {
           <td>${App.formatCurrency(b.estimatedCost)}</td>
           <td>${App.formatCurrency(b.realCost)}</td>
           <td><span class="badge badge-positive">${margin}% <small>(${App.formatCurrency(profitAmount)})</small></span></td>
-          <td><span class="badge ${devClass}">${devSign}${App.formatCurrency(deviation)} (${devSign}${deviationPct}%)</span></td>
+          <td><span class="badge ${devClass}">${devSign}${App.formatCurrency(saving)} (${devSign}${savingPct}%)</span></td>
           <td>
             <div class="action-btns">
               <button class="action-btn" onclick="DashboardModule.editBudget(${b.id})" title="${App.t('edit')}">

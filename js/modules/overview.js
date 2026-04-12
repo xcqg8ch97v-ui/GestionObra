@@ -322,7 +322,8 @@ const OverviewModule = (() => {
     const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     const totalEstimated = budgets.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
     const totalReal = budgets.reduce((sum, item) => sum + (item.realCost || 0), 0);
-    const budgetDeviation = totalEstimated > 0 ? Math.round(((totalReal - totalEstimated) / totalEstimated) * 100) : 0;
+    // Positivo = ahorramos (previsto > real), negativo = nos pasamos
+    const budgetDeviation = totalEstimated > 0 ? Math.round(((totalEstimated - totalReal) / totalEstimated) * 100) : 0;
     const diaryEntries = incidents.length;
     const deliverySummary = buildDeliverySummary(project);
 
@@ -422,7 +423,7 @@ const OverviewModule = (() => {
         <div class="overview-card-detail">
           Previsto total &middot; ${budgets.length} partida${budgets.length !== 1 ? 's' : ''}<br>
           Real: ${App.formatCurrency(totalReal)}<br>
-          Desviación: <span style="color:${budgetDeviation > 0 ? 'var(--red)' : budgetDeviation < 0 ? 'var(--green)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
+          Desviación: <span style="color:${budgetDeviation > 0 ? 'var(--green)' : budgetDeviation < 0 ? 'var(--red)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
         </div>
       </div>
 
