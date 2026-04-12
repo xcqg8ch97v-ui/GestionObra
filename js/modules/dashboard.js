@@ -82,6 +82,7 @@ const DashboardModule = (() => {
     document.getElementById('btn-add-budget').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-add-budget-empty').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-view-bc3')?.addEventListener('click', () => showBC3Tree());
+    document.getElementById('budget-filter-category')?.addEventListener('change', () => applyBudgetFilter());
     checkBC3Button();
   }
 
@@ -307,12 +308,33 @@ const DashboardModule = (() => {
   // BUDGETS
   // ========================================
 
+  let _allBudgets = [];
+
   async function loadBudgets() {
-    const budgets = await DB.getAllForProject('budgets', projectId);
-    renderBudgets(budgets);
+    _allBudgets = await DB.getAllForProject('budgets', projectId);
+    populateBudgetCategoryFilter(_allBudgets);
+    applyBudgetFilter();
   }
 
-  async function renderBudgets(budgets) {
+  function populateBudgetCategoryFilter(budgets) {
+    const sel = document.getElementById('budget-filter-category');
+    if (!sel) return;
+    const cats = ['__all__', ...new Set(budgets.map(b => b.category).filter(Boolean).sort())];
+    const current = sel.value;
+    sel.innerHTML = cats.map(c =>
+      `<option value="${App.escapeHTML(c)}">${c === '__all__' ? 'Todos los gremios' : App.escapeHTML(c)}</option>`
+    ).join('');
+    if (cats.includes(current)) sel.value = current;
+  }
+
+  function applyBudgetFilter() {
+    const sel = document.getElementById('budget-filter-category');
+    const cat = sel ? sel.value : '__all__';
+    const filtered = cat === '__all__' ? _allBudgets : _allBudgets.filter(b => b.category === cat);
+    renderBudgets(filtered, cat === '__all__' ? null : cat);
+  }
+
+  async function renderBudgets(budgets, filterLabel = null) {
     const tbody = document.getElementById('budgets-tbody');
     const emptyState = document.getElementById('budgets-empty');
     const table = document.getElementById('budgets-table');
@@ -339,9 +361,11 @@ const DashboardModule = (() => {
 
     const tfoot = document.getElementById('budgets-tfoot');
     if (tfoot) {
+      const label = filterLabel ? `TOTAL — ${filterLabel}` : 'TOTAL';
       tfoot.innerHTML = `
         <tr style="font-weight:700;background:var(--bg-secondary);border-top:2px solid var(--border)">
-          <td colspan="2" style="padding:10px 12px">TOTAL (${budgets.length} partidas)</td>
+          <td colspan="2" style="padding:10px 12px">${label} (${budgets.length} partida${budgets.length !== 1 ? 's' : ''})</td>`;
+      tfoot.innerHTML += `
           <td style="padding:10px 12px">${App.formatCurrency(totalEstimated)}</td>
           <td style="padding:10px 12px">${App.formatCurrency(totalReal)}</td>
           <td></td>
