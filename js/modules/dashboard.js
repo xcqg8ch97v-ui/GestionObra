@@ -1257,8 +1257,38 @@ const DashboardModule = (() => {
     for (const ch of chapters) {
       await saveNode(ch, null);
     }
+
+    // Crear/actualizar entradas en budgets por cada capítulo
+    const existingBudgets = await DB.getAllForProject('budgets', projectId);
+    let budgetsCreated = 0;
+    for (const ch of chapters) {
+      const name = (ch.name || ch.code || '').slice(0, 60);
+      // Si ya existe una partida con el mismo nombre de capítulo BC3, actualizar importe
+      const existing = existingBudgets.find(b => b.bc3Code === ch.code);
+      if (existing) {
+        await DB.put('budgets', { ...existing, estimatedCost: ch.totalCost, updatedAt: new Date().toISOString() });
+      } else {
+        // Buscar gremio más parecido por nombre del capítulo
+        const allTrades = DEFAULT_TRADES.concat(customTrades.map(c => c.name));
+        const trade = guessTradeFromName(name) || allTrades[allTrades.length - 1];
+        await DB.add('budgets', {
+          projectId,
+          category: trade,
+          description: name,
+          bc3Code: ch.code,
+          estimatedCost: Math.round(ch.totalCost * 100) / 100,
+          realCost: 0,
+          profitMargin: 0,
+          supplierId: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        budgetsCreated++;
+      }
+    }
+
     App.closeModal();
-    App.toast(`Importados ${count} elementos de ${chapters.length} capítulos`, 'success');
+    App.toast(`BC3 importado: ${count} elementos · ${budgetsCreated} partidas presupuestarias creadas`, 'success');
     checkBC3Button();
     loadBudgets();
   }
