@@ -1179,26 +1179,55 @@ const DashboardModule = (() => {
     });
   }
 
+  // --- Nueva importación jerárquica BC3 ---
   async function executeBC3Import(chapters) {
     let count = 0;
-    for (const ch of chapters) {
-      for (const p of ch.partidas) {
-        await DB.add('budgets', {
-          category: ch.trade,
-          description: `${ch.name} \u2014 ${p.summary}${p.unit ? ' (' + p.quantity + ' ' + p.unit + ')' : ''}`,
-          supplierId: null,
-          estimatedCost: p.totalCost,
-          realCost: 0,
-          profitMargin: 0,
-          projectId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-        count++;
+    // Limpia items previos del proyecto
+    await DB.clearStore('bc3items');
+
+    // Utilidad recursiva para guardar árbol
+    async function saveNode(node, parentId, type) {
+      const id = await DB.add('bc3items', {
+        projectId,
+        parentId,
+        code: node.code,
+        name: node.name || node.summary || '',
+        summary: node.summary || '',
+        unit: node.unit || '',
+        unitPrice: node.unitPrice || 0,
+        quantity: node.quantity || 1,
+        totalCost: node.totalCost || 0,
+        type, // 'chapter', 'partida', 'subpartida'
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      count++;
+      // Subnodos
+      if (node.children && node.children.length) {
+        for (const child of node.children) {
+          await saveNode(child, id, child.type);
+        }
       }
     }
+
+    // Adaptar capítulos y partidas a estructura jerárquica
+    for (const ch of chapters) {
+      // Capítulo
+      const chapterNode = {
+        code: ch.code,
+        name: ch.name,
+        summary: ch.name,
+        type: 'chapter',
+        children: ch.partidas.map(p => ({
+          ...p,
+          type: 'partida',
+          children: p.subpartidas ? p.subpartidas.map(s => ({ ...s, type: 'subpartida', children: [] })) : []
+        }))
+      };
+      await saveNode(chapterNode, null, 'chapter');
+    }
     App.closeModal();
-    App.toast(`Importadas ${count} partidas de ${chapters.length} capítulos`, 'success');
+    App.toast(`Importados ${count} elementos jerárquicos de ${chapters.length} capítulos`, 'success');
     loadBudgets();
   }
 

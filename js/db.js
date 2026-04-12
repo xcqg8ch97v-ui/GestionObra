@@ -6,7 +6,7 @@
 const DB = (() => {
 // Actualizado: 2026-04-10
   const DB_NAME = 'GestionObraDB';
-  const DB_VERSION = 6; // bump para custom_categories
+  const DB_VERSION = 7; // bump para tabla bc3items
   let db = null;
 
   function open() {
@@ -19,6 +19,15 @@ const DB = (() => {
         const database = e.target.result;
         console.log('[DB] onupgradeneeded');
         // ...existing code...
+
+        // Nueva tabla para items jerárquicos de BC3/Presto
+        if (!database.objectStoreNames.contains('bc3items')) {
+          const store = database.createObjectStore('bc3items', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('projectId', 'projectId', { unique: false });
+          store.createIndex('parentId', 'parentId', { unique: false });
+          store.createIndex('code', 'code', { unique: false });
+          store.createIndex('type', 'type', { unique: false }); // chapter, partida, subpartida
+        }
         // Categorías personalizadas por proyecto
         if (!database.objectStoreNames.contains('custom_categories')) {
           const store = database.createObjectStore('custom_categories', { keyPath: 'id', autoIncrement: true });
