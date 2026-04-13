@@ -1443,9 +1443,9 @@ const App = (() => {
   // 3. Crea un Email Template con variables: {{from_name}}, {{reply_to}}, {{category}}, {{message}}, {{sent_at}}
   // 4. Copia el Public Key (Account → API Keys)
   // 5. Rellena los tres valores aquí:
-  const EMAILJS_PUBLIC_KEY  = 'TU_PUBLIC_KEY';
-  const EMAILJS_SERVICE_ID  = 'TU_SERVICE_ID';
-  const EMAILJS_TEMPLATE_ID = 'TU_TEMPLATE_ID';
+  const EMAILJS_PUBLIC_KEY  = '72i8EiLEecbfvd6Ql';
+  const EMAILJS_SERVICE_ID  = 'service_26yistd';
+  const EMAILJS_TEMPLATE_ID = 'template_xr9tuy9';
 
   function openFeedbackModal() {
     const body = `
@@ -1504,11 +1504,10 @@ const App = (() => {
 
         emailjs.init(EMAILJS_PUBLIC_KEY);
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          from_name: name,
-          reply_to:  email,
-          category,
+          name:    `${name} · ${category}`,
+          email,
           message,
-          sent_at:   new Date().toLocaleString('es-ES')
+          time:    new Date().toLocaleString('es-ES')
         });
 
         closeModal();
