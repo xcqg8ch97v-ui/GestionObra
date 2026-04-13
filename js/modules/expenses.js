@@ -23,13 +23,21 @@ const ExpensesModule = (() => {
   }
 
   function setupButtons() {
-    document.getElementById('btn-add-expense')?.addEventListener('click', () => openExpenseForm());
-    document.getElementById('btn-add-expense-empty')?.addEventListener('click', () => openExpenseForm());
-    document.getElementById('expense-filter-category')?.addEventListener('change', e => {
+    function cloneAndBind(id, event, handler) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const fresh = el.cloneNode(true);
+      el.parentNode.replaceChild(fresh, el);
+      fresh.addEventListener(event, handler);
+    }
+
+    cloneAndBind('btn-add-expense', 'click', () => openExpenseForm());
+    cloneAndBind('btn-add-expense-empty', 'click', () => openExpenseForm());
+    cloneAndBind('expense-filter-category', 'change', e => {
       _filterCategory = e.target.value;
       applyFilter();
     });
-    document.getElementById('expense-filter-month')?.addEventListener('change', e => {
+    cloneAndBind('expense-filter-month', 'change', e => {
       _filterMonth = e.target.value;
       applyFilter();
     });
@@ -48,18 +56,16 @@ const ExpensesModule = (() => {
     if (!catSel || !monSel) return;
 
     const cats = ['__all__', ...new Set(_allExpenses.map(e => e.category).filter(Boolean).sort())];
-    const curCat = catSel.value;
     catSel.innerHTML = cats.map(c =>
       `<option value="${App.escapeHTML(c)}">${c === '__all__' ? 'Todas las categorías' : App.escapeHTML(c)}</option>`
     ).join('');
-    if (cats.includes(curCat)) catSel.value = curCat;
+    catSel.value = cats.includes(_filterCategory) ? _filterCategory : '__all__';
 
     const months = ['__all__', ...new Set(_allExpenses.map(e => (e.date || '').slice(0, 7)).filter(Boolean).sort().reverse())];
-    const curMon = monSel.value;
     monSel.innerHTML = months.map(m =>
       `<option value="${m}">${m === '__all__' ? 'Todos los meses' : formatMonth(m)}</option>`
     ).join('');
-    if (months.includes(curMon)) monSel.value = curMon;
+    monSel.value = months.includes(_filterMonth) ? _filterMonth : '__all__';
   }
 
   function formatMonth(ym) {

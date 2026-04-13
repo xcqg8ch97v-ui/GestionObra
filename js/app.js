@@ -2282,6 +2282,8 @@ const App = (() => {
     if (section === 'overview') {
       OverviewModule.refresh();
     }
+
+    safeIcons();
   }
 
   function setupSidebar() {
