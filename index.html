@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=16">
+  <link rel="stylesheet" href="css/styles.css?v=17">
 </head>
 <body>
   <!-- Project Selector Screen -->
@@ -112,6 +112,12 @@
           <a href="#files" class="nav-link" data-section="files">
             <i data-lucide="folder-open"></i>
             <span class="nav-text" data-i18n="section_files">Documentos</span>
+          </a>
+        </li>
+        <li>
+          <a href="#expenses" class="nav-link" data-section="expenses">
+            <i data-lucide="receipt"></i>
+            <span class="nav-text">Gastos de Obra</span>
           </a>
         </li>
         <li>
@@ -693,6 +699,53 @@
       <input type="file" id="file-upload-input" multiple hidden>
     </section>
 
+    <section id="section-expenses" class="content-section">
+      <div class="panel-header">
+        <h2>Gastos de Obra</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="expense-filter-category" style="height:36px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:13px">
+            <option value="__all__">Todas las categorías</option>
+          </select>
+          <select id="expense-filter-month" style="height:36px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:13px">
+            <option value="__all__">Todos los meses</option>
+          </select>
+          <button class="btn btn-outline" onclick="App.printSection('expenses')" title="Exportar PDF"><i data-lucide="printer"></i></button>
+          <button class="btn btn-primary" id="btn-add-expense">
+            <i data-lucide="plus"></i> Nuevo Gasto
+          </button>
+        </div>
+      </div>
+
+      <!-- Resumen por categoría -->
+      <div id="expenses-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:0 var(--sp-lg) var(--sp-sm)"></div>
+
+      <!-- Tabla -->
+      <div class="table-container">
+        <table class="data-table" id="expenses-table" style="display:none">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Categoría</th>
+              <th>Descripción</th>
+              <th>Persona / Equipo</th>
+              <th style="text-align:right">Importe</th>
+              <th>Factura</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="expenses-tbody"></tbody>
+          <tfoot id="expenses-tfoot"></tfoot>
+        </table>
+        <div class="empty-state" id="expenses-empty">
+          <i data-lucide="receipt"></i>
+          <p>No hay gastos registrados</p>
+          <button class="btn btn-outline" id="btn-add-expense-empty">
+            <i data-lucide="plus"></i> Registrar primer gasto
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section id="section-participants" class="content-section">
       <div class="panel-header">
           <h2 data-i18n="participants_title">Participantes</h2>
@@ -777,18 +830,19 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="js/db.js?v=18"></script>
+  <script src="js/db.js?v=19"></script>
   <script src="js/cloudinary.js?v=18"></script>
   <script src="js/firebase.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/app.js?v=19"></script>
   <script src="js/modules/pdf-parser.js?v=16"></script>
   <script src="js/modules/canvas.js?v=16"></script>
   <script src="js/modules/dashboard.js?v=16"></script>
   <script src="js/modules/timeline.js?v=16"></script>
   <script src="js/modules/diary.js?v=16"></script>
-  <script src="js/modules/overview.js?v=16"></script>
+  <script src="js/modules/overview.js?v=17"></script>
   <script src="js/modules/plans.js?v=16"></script>
   <script src="js/modules/files.js?v=16"></script>
+  <script src="js/modules/expenses.js?v=1"></script>
   <script src="js/modules/participants.js?v=16"></script>
   <script src="js/modules/report.js?v=16"></script>
   <script>

@@ -6,7 +6,7 @@
 const DB = (() => {
 // Actualizado: 2026-04-10
   const DB_NAME = 'GestionObraDB';
-  const DB_VERSION = 7; // bump para tabla bc3items
+  const DB_VERSION = 8; // bump para tabla expenses
   let db = null;
 
   function open() {
@@ -116,6 +116,13 @@ const DB = (() => {
           const store = database.createObjectStore('plans', { keyPath: 'id', autoIncrement: true });
           store.createIndex('projectId', 'projectId', { unique: false });
           store.createIndex('category', 'category', { unique: false });
+        }
+        // Gastos propios de obra
+        if (!database.objectStoreNames.contains('expenses')) {
+          const store = database.createObjectStore('expenses', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('projectId', 'projectId', { unique: false });
+          store.createIndex('category', 'category', { unique: false });
+          store.createIndex('date', 'date', { unique: false });
         }
       };
 

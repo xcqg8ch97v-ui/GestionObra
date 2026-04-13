@@ -14,6 +14,7 @@ const App = (() => {
     diary: 'section_diary',
     plans: 'section_plans',
     files: 'section_files',
+    expenses: 'section_expenses',
     participants: 'section_participants'
   };
 
@@ -36,7 +37,8 @@ const App = (() => {
       section_timeline: 'Cronograma de Obra',
       section_diary: 'Diario de Obra',
       section_plans: 'Planos',
-      section_files: 'Documentos',
+      section_expenses: 'Gastos de Obra',
+      section_files: 'Documentos del Proyecto',
       section_participants: 'Participantes',
       project_selector_subtitle: 'Selecciona una obra o crea una nueva',
       new_project: 'Nueva Obra',
@@ -489,6 +491,7 @@ const App = (() => {
       section_diary: 'Work Diary',
       section_plans: 'Blueprints',
       section_files: 'Project Documents',
+      section_expenses: 'Site Expenses',
       section_participants: 'Project Participants',
       project_selector_subtitle: 'Select a project or create a new one',
       new_project: 'New Project',
@@ -1952,7 +1955,7 @@ const App = (() => {
 
     toast(t('exporting_project'), 'info');
 
-    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'participants', 'plans'];
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'participants', 'plans'];
     const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
     let incidents = [];
 
@@ -2018,7 +2021,7 @@ const App = (() => {
         const newProjectId = await DB.add('projects', projData);
 
         // Import each store with updated projectId
-        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'files', 'participants', 'plans'];
+        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'files', 'participants', 'plans'];
         const idMap = {}; // old ID -> new ID mapping for references
 
         for (const store of STORES) {
@@ -2167,6 +2170,7 @@ const App = (() => {
       ['OverviewModule', OverviewModule],
       ['PlansModule', typeof PlansModule !== 'undefined' ? PlansModule : null],
       ['FilesModule', FilesModule],
+      ['ExpensesModule', typeof ExpensesModule !== 'undefined' ? ExpensesModule : null],
       ['ParticipantsModule', typeof ParticipantsModule !== 'undefined' ? ParticipantsModule : null],
       ['ReportModule', typeof ReportModule !== 'undefined' ? ReportModule : null]
     ];
@@ -2455,6 +2459,8 @@ const App = (() => {
       content = await buildTimelinePrint(project, date);
     } else if (section === 'dashboard') {
       content = await buildBudgetsPrint(project, date);
+    } else if (section === 'expenses') {
+      content = await buildExpensesPrint(project, date);
     } else {
       const el = document.getElementById(`section-${section}`);
       if (!el) { win.close(); return; }
@@ -2524,6 +2530,68 @@ ${content}
     win.document.open();
     win.document.write(html);
     win.document.close();
+  }
+
+  async function buildExpensesPrint(project, date) {
+    if (!currentProjectId) return '<p>Sin datos</p>';
+    const expenses = await DB.getAllForProject('expenses', currentProjectId);
+    expenses.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    const fmt = v => formatCurrency(v);
+    const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+
+    const byCategory = {};
+    expenses.forEach(e => {
+      if (!byCategory[e.category]) byCategory[e.category] = { items: [], total: 0 };
+      byCategory[e.category].items.push(e);
+      byCategory[e.category].total += (e.amount || 0);
+    });
+
+    const summaryCards = `
+      <div class="print-summary">
+        <div class="print-stat"><strong>${expenses.length}</strong><span>Gastos</span></div>
+        <div class="print-stat"><strong>${Object.keys(byCategory).length}</strong><span>Categorías</span></div>
+        <div class="print-stat"><strong>${fmt(total)}</strong><span>Total gastos</span></div>
+      </div>`;
+
+    let tableHTML = '';
+    for (const [cat, { items, total: catTotal }] of Object.entries(byCategory).sort(([a],[b]) => a.localeCompare(b))) {
+      tableHTML += `<div class="bud-section-title">${escapeHTML(cat)}</div>
+      <table class="print-table">
+        <thead><tr>
+          <th>Fecha</th><th>Descripción</th><th>Persona / Equipo</th><th>Factura</th><th style="text-align:right">Importe</th>
+        </tr></thead>
+        <tbody>`;
+      items.forEach(e => {
+        const assignees = [e.person, e.team].filter(Boolean).join(' · ') || '—';
+        tableHTML += `<tr>
+          <td>${e.date || '—'}</td>
+          <td>${escapeHTML(e.description || '—')}</td>
+          <td style="color:#555">${escapeHTML(assignees)}</td>
+          <td style="color:#555">${escapeHTML(e.receipt || '—')}</td>
+          <td style="text-align:right;font-weight:600">${fmt(e.amount || 0)}</td>
+        </tr>`;
+      });
+      tableHTML += `</tbody>
+        <tfoot><tr class="bud-total-row">
+          <td colspan="4"><strong>Total ${escapeHTML(cat)}</strong></td>
+          <td style="text-align:right">${fmt(catTotal)}</td>
+        </tr></tfoot>
+      </table>`;
+    }
+
+    tableHTML += `
+      <table class="print-table" style="margin-top:16px;border-top:3px solid #FFD500">
+        <tbody><tr class="bud-total-row">
+          <td colspan="4"><strong>TOTAL GASTOS DE OBRA</strong> (${expenses.length} gastos)</td>
+          <td style="text-align:right">${fmt(total)}</td>
+        </tr></tbody>
+      </table>`;
+
+    return `
+      <h2 class="print-section-title">Gastos de Obra</h2>
+      ${summaryCards}
+      ${tableHTML}`;
   }
 
   async function buildBudgetsPrint(project, date) {

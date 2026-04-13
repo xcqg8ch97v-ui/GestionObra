@@ -70,16 +70,17 @@ const OverviewModule = (() => {
         </div>`;
     }
 
-    const [project, tasks, budgets, incidents, suppliers, files] = await Promise.all([
+    const [project, tasks, budgets, incidents, suppliers, files, expenses] = await Promise.all([
       DB.getById('projects', projectId),
       DB.getAllForProject('tasks', projectId),
       DB.getAllForProject('budgets', projectId),
       DB.getAllForProject('incidents', projectId),
       DB.getAllForProject('suppliers', projectId),
-      DB.getAllForProject('files', projectId)
+      DB.getAllForProject('files', projectId),
+      DB.getAllForProject('expenses', projectId)
     ]);
 
-    renderCards(project, tasks, budgets, incidents, suppliers, files);
+    renderCards(project, tasks, budgets, incidents, suppliers, files, expenses);
   }
 
   function startOfDay(value) {
@@ -313,7 +314,7 @@ const OverviewModule = (() => {
       .slice(0, 8);
   }
 
-  function renderCards(project, tasks, budgets, incidents, suppliers, files) {
+  function renderCards(project, tasks, budgets, incidents, suppliers, files, expenses = []) {
     const grid = document.getElementById('overview-grid');
     if (!grid) return;
 
@@ -322,8 +323,10 @@ const OverviewModule = (() => {
     const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     const totalEstimated = budgets.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
     const totalReal = budgets.reduce((sum, item) => sum + (item.realCost || 0), 0);
-    // Positivo = ahorramos (previsto > real), negativo = nos pasamos
-    const budgetDeviation = totalEstimated > 0 ? Math.round(((totalEstimated - totalReal) / totalEstimated) * 100) : 0;
+    const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalCostWithExpenses = totalReal + totalExpenses;
+    // Positivo = ahorramos (previsto > real+gastos), negativo = nos pasamos
+    const budgetDeviation = totalEstimated > 0 ? Math.round(((totalEstimated - totalCostWithExpenses) / totalEstimated) * 100) : 0;
     const diaryEntries = incidents.length;
     const deliverySummary = buildDeliverySummary(project);
 
@@ -421,9 +424,22 @@ const OverviewModule = (() => {
         </div>
         <div class="overview-card-value">${App.formatCurrency(totalEstimated)}</div>
         <div class="overview-card-detail">
-          Previsto total &middot; ${budgets.length} partida${budgets.length !== 1 ? 's' : ''}<br>
-          Real: ${App.formatCurrency(totalReal)}<br>
-          Desviación: <span style="color:${budgetDeviation > 0 ? 'var(--green)' : budgetDeviation < 0 ? 'var(--red)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
+          Previsto &middot; ${budgets.length} partida${budgets.length !== 1 ? 's' : ''}<br>
+          Coste obra: ${App.formatCurrency(totalReal)}<br>
+          Gastos propios: <span style="color:var(--amber)">${App.formatCurrency(totalExpenses)}</span><br>
+          Desviación neta: <span style="color:${budgetDeviation > 0 ? 'var(--green)' : budgetDeviation < 0 ? 'var(--red)' : 'var(--text-secondary)'}">${budgetDeviation > 0 ? '+' : ''}${budgetDeviation}%</span>
+        </div>
+      </div>
+
+      <div class="overview-card" style="cursor:pointer" onclick="App.navigateTo('expenses')" title="Ir a gastos de obra">
+        <div class="overview-card-header">
+          <i data-lucide="receipt"></i>
+          <span>Gastos Propios</span>
+        </div>
+        <div class="overview-card-value" style="color:var(--amber)">${App.formatCurrency(totalExpenses)}</div>
+        <div class="overview-card-detail">
+          ${expenses.length} gasto${expenses.length !== 1 ? 's' : ''} registrado${expenses.length !== 1 ? 's' : ''}<br>
+          Coste total con gastos: <strong>${App.formatCurrency(totalCostWithExpenses)}</strong>
         </div>
       </div>
 
