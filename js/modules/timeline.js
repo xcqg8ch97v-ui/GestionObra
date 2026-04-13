@@ -365,6 +365,16 @@ const TimelineModule = (() => {
     document.getElementById('btn-view-gantt').onclick = () => switchView('gantt');
     document.getElementById('btn-view-list').onclick = () => switchView('list');
 
+    document.getElementById('btn-tl-maximize')?.addEventListener('click', () => {
+      const section = document.getElementById('section-timeline');
+      section.classList.toggle('tl-maximized');
+    });
+
+    document.getElementById('btn-tl-help')?.addEventListener('click', () => {
+      const note = document.querySelector('.timeline-help-note');
+      if (note) note.classList.toggle('visible');
+    });
+
     const hideDoneCheck = document.getElementById('tl-hide-done');
     if (hideDoneCheck) {
       hideDoneCheck.onchange = (e) => {

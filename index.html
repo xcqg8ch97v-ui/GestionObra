@@ -470,6 +470,12 @@
             <button class="view-toggle-btn active" id="btn-view-gantt" title="Vista Gantt" data-i18n-attr="title" data-i18n="timeline_view_gantt"><i data-lucide="gantt-chart"></i><span class="view-toggle-label">Gantt</span></button>
             <button class="view-toggle-btn" id="btn-view-list" title="Vista Lista" data-i18n-attr="title" data-i18n="timeline_view_list"><i data-lucide="list"></i><span class="view-toggle-label">Lista</span></button>
           </div>
+          <button class="btn btn-outline btn-icon btn-tl-maximize" id="btn-tl-maximize" title="Maximizar Gantt / Restaurar vista">
+            <i data-lucide="chevrons-up-down"></i>
+          </button>
+          <button class="btn btn-outline btn-icon" id="btn-tl-help" title="Mostrar/ocultar nota de ayuda">
+            <i data-lucide="info"></i>
+          </button>
           <button class="btn btn-outline btn-icon print-btn" id="btn-print-timeline" onclick="App.printSection('timeline')" title="Imprimir cronograma"><i data-lucide="printer"></i></button>
           <button class="btn btn-outline" id="btn-export-csv-timeline" onclick="TimelineModule.exportCSV()" title="Exportar CSV">
             <i data-lucide="download"></i> <span>CSV</span>
