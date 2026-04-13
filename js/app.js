@@ -1932,6 +1932,9 @@ const App = (() => {
             <button class="action-btn" onclick="App.exportProject(${p.id})" title="${t('sidebar_export')}">
               <i data-lucide="download"></i>
             </button>
+            <button class="action-btn" onclick="App.duplicateProject(${p.id})" title="Duplicar proyecto">
+              <i data-lucide="copy"></i>
+            </button>
             <button class="action-btn" onclick="App.editProject(${p.id})" title="${t('sidebar_edit')}">
               <i data-lucide="pencil"></i>
             </button>
@@ -2087,6 +2090,44 @@ const App = (() => {
     await DB.remove('projects', id);
     toast(t('project_deleted'), 'info');
     loadProjectCards();
+  }
+
+  async function duplicateProject(id) {
+    const project = await DB.getById('projects', id);
+    if (!project) return;
+
+    const newName = await showPrompt('Nombre para la copia:', `${project.name} (copia)`);
+    if (!newName || !newName.trim()) return;
+
+    toast('Duplicando proyecto...', 'info');
+
+    try {
+      // Create new project record
+      const newProject = { ...project };
+      delete newProject.id;
+      newProject.name = newName.trim();
+      newProject.createdAt = new Date().toISOString();
+      newProject.updatedAt = new Date().toISOString();
+      const newId = await DB.add('projects', newProject);
+
+      // Duplicate all data stores
+      const stores = ['tasks', 'budgets', 'incidents', 'suppliers', 'participants', 'expenses'];
+      for (const store of stores) {
+        const items = await DB.getAllForProject(store, id);
+        for (const item of items) {
+          const newItem = { ...item };
+          delete newItem.id;
+          newItem.projectId = newId;
+          await DB.add(store, newItem);
+        }
+      }
+
+      toast(`Proyecto "${newName.trim()}" creado como copia`, 'success');
+      loadProjectCards();
+    } catch(e) {
+      console.error('Error duplicando proyecto:', e);
+      toast('Error al duplicar el proyecto', 'error');
+    }
   }
 
   // ========================================
@@ -3564,6 +3605,7 @@ ${content}
     enterProject,
     editProject,
     deleteProject,
+    duplicateProject,
     exportProject,
     importProject,
     syncProjectDeadlineMilestone,
