@@ -1445,7 +1445,7 @@ const App = (() => {
   // 5. Rellena los tres valores aquí:
   const EMAILJS_PUBLIC_KEY  = '72i8EiLEecbfvd6Ql';
   const EMAILJS_SERVICE_ID  = 'service_26yistd';
-  const EMAILJS_TEMPLATE_ID = 'template_xr9tuy9';
+  const EMAILJS_TEMPLATE_ID = 'xr9tuy9';
 
   function openFeedbackModal() {
     const body = `
