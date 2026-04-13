@@ -5,7 +5,36 @@
    ======================================== */
 
 const App = (() => {
-// Actualizado: 2026-04-10
+// Actualizado: 2026-04-13
+  const APP_VERSION = '1.4';
+
+  const CHANGELOG = [
+    {
+      version: '1.4',
+      date: '13 abril 2025',
+      title: 'Gastos de Obra',
+      items: [
+        '💸 Nueva sección <strong>Gastos de Obra</strong>: registra gastos propios (hotel, transporte, herramientas…) con categoría, fecha, persona o equipo y justificante.',
+        '📊 La Vista General ahora muestra el total de gastos propios y los incluye en el cálculo de desviación del presupuesto.',
+        '🔍 Filtra gastos por categoría y por mes desde la propia sección.',
+        '📄 El PDF del proyecto incluye un resumen detallado de gastos agrupado por categoría.',
+        '🔧 Corrección: el filtro "Todas las categorías" ya funciona correctamente.',
+        '🔧 Corrección: los iconos del menú lateral ya no desaparecen al cambiar de sección.'
+      ]
+    },
+    {
+      version: '1.3',
+      date: '10 abril 2025',
+      title: 'Gantt mejorado y Proveedores',
+      items: [
+        '📅 El diagrama de Gantt ahora tiene botón de <strong>maximizar</strong> para ver más espacio.',
+        '✅ Selección múltiple de proveedores por partida presupuestaria.',
+        '📋 El PDF del presupuesto muestra resumen por categoría con totales.',
+        '🔧 Corrección: el botón "Ver BC3" ya funciona correctamente.'
+      ]
+    }
+  ];
+
   const sectionTitles = {
     overview: 'section_overview',
     canvas: 'section_canvas',
@@ -1122,10 +1151,59 @@ const App = (() => {
       safeIcons();
       showProjectSelector();
       translatePage();
+      checkWhatsNew();
     } catch(e) {
       console.error('App init error:', e);
       document.getElementById('project-selector').style.display = 'flex';
     }
+  }
+
+  function checkWhatsNew() {
+    const seen = localStorage.getItem('abessis-seen-version');
+    if (seen === APP_VERSION) return;
+
+    const latest = CHANGELOG[0];
+    const isFirstTime = !seen;
+
+    const olderEntries = CHANGELOG.slice(1);
+    const olderHTML = olderEntries.length && !isFirstTime ? `
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-muted);user-select:none">Ver versiones anteriores</summary>
+        ${olderEntries.map(entry => `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${entry.date} · v${entry.version}</div>
+            <div style="font-weight:600;margin-bottom:6px">${escapeHTML(entry.title)}</div>
+            <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px">
+              ${entry.items.map(i => `<li style="font-size:13px;color:var(--text-secondary)">${i}</li>`).join('')}
+            </ul>
+          </div>`).join('')}
+      </details>` : '';
+
+    const body = `
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="background:var(--primary);color:#000;font-weight:700;font-size:11px;padding:3px 10px;border-radius:999px">v${latest.version}</span>
+          <span style="font-size:12px;color:var(--text-muted)">${latest.date}</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;margin-top:4px">${escapeHTML(latest.title)}</div>
+      </div>
+      <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px">
+        ${latest.items.map(i => `<li style="font-size:14px;line-height:1.5;color:var(--text-secondary)">${i}</li>`).join('')}
+      </ul>
+      ${olderHTML}`;
+
+    const footer = `
+      <button class="btn btn-primary" id="btn-whatsnew-close" style="min-width:120px">
+        <i data-lucide="check"></i> Entendido
+      </button>`;
+
+    openModal(isFirstTime ? '¡Bienvenido a Abessis!' : '🆕 Novedades de la actualización', body, footer);
+    safeIcons();
+
+    document.getElementById('btn-whatsnew-close').addEventListener('click', () => {
+      localStorage.setItem('abessis-seen-version', APP_VERSION);
+      closeModal();
+    });
   }
 
   function setupFirebaseAuth() {
