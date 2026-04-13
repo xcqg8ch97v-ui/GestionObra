@@ -1879,6 +1879,8 @@ const App = (() => {
     document.getElementById('project-selector').style.display = 'flex';
     document.getElementById('sidebar').style.display = 'none';
     document.getElementById('main-content').style.display = 'none';
+    const fb = document.getElementById('btn-feedback');
+    if (fb) fb.style.display = 'flex';
     await loadProjectCards();
     lucide.createIcons();
   }
@@ -2358,6 +2360,8 @@ const App = (() => {
     document.getElementById('project-selector').style.display = 'none';
     document.getElementById('sidebar').style.display = 'flex';
     document.getElementById('main-content').style.display = 'flex';
+    const fb = document.getElementById('btn-feedback');
+    if (fb) fb.style.display = 'none';
 
     // Update project name display
     document.getElementById('topbar-project-name').textContent = project.name;
