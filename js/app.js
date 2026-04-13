@@ -1019,8 +1019,19 @@ const App = (() => {
     'Seguridad', 'Material', 'Comunicación', 'Plazo', 'Otros'
   ];
 
-  function safeIcons() {
-    try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch(e) { console.warn('Lucide icons error:', e); }
+  function safeIcons(scope) {
+    try {
+      if (typeof lucide === 'undefined') return;
+      if (scope) {
+        scope.querySelectorAll('i[data-lucide]').forEach(el => {
+          const svg = el.nextElementSibling;
+          if (svg && svg.tagName === 'svg') svg.remove();
+        });
+        lucide.createIcons({ nameAttr: 'data-lucide', attrs: { 'stroke-width': 2 }, nodes: scope.querySelectorAll('[data-lucide]') });
+      } else {
+        lucide.createIcons();
+      }
+    } catch(e) { console.warn('Lucide icons error:', e); }
   }
 
   // ========================================
@@ -1437,6 +1448,9 @@ const App = (() => {
     const customIncidents = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory', 'add') : [];
     const hiddenIncidentEntries = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'incidentCategory', 'hide') : [];
     const hiddenIncidents = hiddenIncidentEntries.map(c => c.name);
+    const customExpenses = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'expenseCategory', 'add') : [];
+    const hiddenExpenseEntries = currentProjectId ? await DB.getCustomCategories(currentProjectId, 'expenseCategory', 'hide') : [];
+    const hiddenExpenses = hiddenExpenseEntries.map(c => c.name);
 
     const projectRows = projects.map(p => `
       <div class="options-project-row">
@@ -1495,6 +1509,17 @@ const App = (() => {
           <div class="options-add-row">
             <input type="text" id="options-new-incident" class="form-control" placeholder="${t('add')} ${t('incidents_types').toLowerCase()}" />
             <button class="btn btn-primary btn-sm" id="btn-options-add-incident">${t('add')}</button>
+          </div>
+        </div>
+
+        <div class="options-section">
+          <h3>Tipos de Gastos de Obra</h3>
+          <div class="options-subtitle">Oculta categorías que no uses o añade nuevas.</div>
+          <div id="options-expenses-visible" class="options-type-list"></div>
+          <div id="options-expenses-hidden" class="options-type-list options-hidden-list"></div>
+          <div class="options-add-row">
+            <input type="text" id="options-new-expense" class="form-control" placeholder="Nueva categoría de gasto" />
+            <button class="btn btn-primary btn-sm" id="btn-options-add-expense">Añadir</button>
           </div>
         </div>
 
@@ -1629,6 +1654,23 @@ const App = (() => {
     renderTypeList(tradeVisible, tradeHidden, 'options-trades-visible', 'options-trades-hidden', 'trade');
     renderTypeList(planVisible, planHidden, 'options-plans-visible', 'options-plans-hidden', 'plan');
     renderTypeList(incidentVisible, incidentHidden, 'options-incidents-visible', 'options-incidents-hidden', 'incidentCategory');
+
+    const DEFAULT_EXPENSE_CATS = typeof ExpensesModule !== 'undefined' ? ExpensesModule.getDefaultCategories() : [];
+    const expenseVisible = DEFAULT_EXPENSE_CATS.filter(n => !hiddenExpenses.includes(n)).map(name => ({ name, label: name, source: 'default' }))
+      .concat(customExpenses.filter(item => !hiddenExpenses.includes(item.name)).map(item => ({ id: item.id, name: item.name, label: item.name, source: 'custom' })));
+    const expenseHidden = hiddenExpenseEntries.map(entry => ({
+      id: entry.id, name: entry.name, label: entry.name,
+      source: DEFAULT_EXPENSE_CATS.includes(entry.name) ? 'default' : 'custom'
+    }));
+    renderTypeList(expenseVisible, expenseHidden, 'options-expenses-visible', 'options-expenses-hidden', 'expenseCategory');
+
+    document.getElementById('btn-options-add-expense').addEventListener('click', async () => {
+      const name = document.getElementById('options-new-expense').value.trim();
+      if (!name) return;
+      await DB.addCustomCategory(currentProjectId, 'expenseCategory', name);
+      document.getElementById('options-new-expense').value = '';
+      openOptionsPanel();
+    });
 
     document.getElementById('btn-options-import-project').addEventListener('click', importProject);
     document.getElementById('btn-options-download-attachments').addEventListener('click', downloadAttachmentsZip);
@@ -2361,7 +2403,7 @@ const App = (() => {
       OverviewModule.refresh();
     }
 
-    safeIcons();
+    safeIcons(document.getElementById('sidebar'));
   }
 
   function setupSidebar() {

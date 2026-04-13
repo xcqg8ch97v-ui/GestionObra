@@ -189,10 +189,20 @@ const ExpensesModule = (() => {
     return palette[cat] || '#94A3B8';
   }
 
+  async function getActiveCategories() {
+    if (!projectId) return EXPENSE_CATEGORIES;
+    const hidden = (await DB.getCustomCategories(projectId, 'expenseCategory', 'hide')).map(c => c.name);
+    const custom = await DB.getCustomCategories(projectId, 'expenseCategory', 'add');
+    const base = EXPENSE_CATEGORIES.filter(c => !hidden.includes(c));
+    const customVisible = custom.filter(c => !hidden.includes(c.name)).map(c => c.name);
+    return [...base, ...customVisible];
+  }
+
   async function openExpenseForm(expense = null) {
     const isEdit = !!expense;
     const title = isEdit ? 'Editar Gasto' : 'Nuevo Gasto';
     const today = new Date().toISOString().slice(0, 10);
+    const activeCategories = await getActiveCategories();
 
     const body = `
       <div class="form-row">
@@ -203,7 +213,7 @@ const ExpensesModule = (() => {
         <div class="form-group">
           <label>Categoría *</label>
           <select id="exp-category">
-            ${EXPENSE_CATEGORIES.map(c => `<option value="${c}" ${isEdit && expense.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${activeCategories.map(c => `<option value="${c}" ${isEdit && expense.category === c ? 'selected' : ''}>${c}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -305,5 +315,9 @@ const ExpensesModule = (() => {
     return DB.getAllForProject('expenses', pid);
   }
 
-  return { init, editExpense, deleteExpense, getTotalForProject, getAllForProject };
+  function getDefaultCategories() {
+    return EXPENSE_CATEGORIES;
+  }
+
+  return { init, editExpense, deleteExpense, getTotalForProject, getAllForProject, getDefaultCategories };
 })();
