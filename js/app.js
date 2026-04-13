@@ -1502,13 +1502,17 @@ const App = (() => {
           throw new Error('EmailJS no configurado');
         }
 
-        emailjs.init(EMAILJS_PUBLIC_KEY);
-        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          name:    `${name} · ${category}`,
-          email,
-          message,
-          time:    new Date().toLocaleString('es-ES')
-        });
+        await emailjs.send(
+          EMAILJS_SERVICE_ID,
+          EMAILJS_TEMPLATE_ID,
+          {
+            name:    `${name} · ${category}`,
+            email,
+            message,
+            time:    new Date().toLocaleString('es-ES')
+          },
+          { publicKey: EMAILJS_PUBLIC_KEY }
+        );
 
         closeModal();
         App.toast('¡Sugerencia enviada! Gracias por tu feedback 🙏', 'success');
