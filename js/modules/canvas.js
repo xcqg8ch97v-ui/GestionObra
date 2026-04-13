@@ -26,6 +26,10 @@ const CanvasModule = (() => {
   let initialized = false;
   let lastShapeClick = { time: 0, id: null };
 
+  // Internal clipboard for copy/paste
+  let _clipboard = null;
+  let _clipboardOffset = 0;
+
   // Store references for cleanup
   let keydownHandler = null;
   let undoHandler = null;
@@ -404,6 +408,172 @@ const CanvasModule = (() => {
     if (history.length > MAX_HISTORY) history.shift();
   }
 
+  function copySelection() {
+    const active = canvas.getActiveObject();
+    if (!active) return;
+    active.clone((cloned) => {
+      _clipboard = cloned;
+      _clipboardOffset = 0;
+    }, CANVAS_SERIALIZATION_KEYS);
+  }
+
+  function pasteClipboard() {
+    if (!_clipboard) return;
+    _clipboardOffset += 20;
+    const offset = _clipboardOffset;
+    _clipboard.clone((cloned) => {
+      canvas.discardActiveObject();
+      cloned.set({ left: cloned.left + offset, top: cloned.top + offset, evented: true });
+
+      if (cloned.type === 'activeSelection') {
+        cloned.canvas = canvas;
+        cloned.forEachObject(obj => {
+          obj._canvasNodeId = createCanvasNodeId();
+          canvas.add(obj);
+        });
+        cloned.setCoords();
+      } else {
+        cloned._canvasNodeId = createCanvasNodeId();
+        canvas.add(cloned);
+      }
+
+      canvas.setActiveObject(cloned);
+      canvas.requestRenderAll();
+      reattachFileHandlers();
+      saveHistory();
+    }, CANVAS_SERIALIZATION_KEYS);
+  }
+
+  async function pasteFromSystemClipboard() {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const url  = URL.createObjectURL(blob);
+          fabric.Image.fromURL(url, (img) => {
+            URL.revokeObjectURL(url);
+            const maxW = canvas.width * 0.6 / canvas.getZoom();
+            if (img.width > maxW) img.scaleToWidth(maxW);
+            const vt = canvas.viewportTransform;
+            img.set({
+              left: (-vt[4] + canvas.width / 2) / canvas.getZoom() - img.getScaledWidth() / 2,
+              top:  (-vt[5] + canvas.height / 2) / canvas.getZoom() - img.getScaledHeight() / 2,
+            });
+            canvas.add(img);
+            canvas.setActiveObject(img);
+            canvas.requestRenderAll();
+            saveHistory();
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      // System clipboard not accessible — fall back to internal clipboard
+      pasteClipboard();
+    }
+  }
+
+  function deleteSelection() {
+    const active = canvas.getActiveObjects();
+    if (!active.length) return;
+    active.forEach(obj => {
+      if (obj._isConnector) { canvas.remove(obj); return; }
+      removeConnectorsForObject(obj);
+      canvas.remove(obj);
+    });
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+    saveHistory();
+  }
+
+  function isEditingText() {
+    const active = canvas.getActiveObject();
+    return active && (active.isEditing || active.type === 'i-text' && active.isEditing);
+  }
+
+  function setupKeyboard() {
+    keydownHandler = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
+      if (isInput) return;
+
+      const isMod = e.metaKey || e.ctrlKey;
+
+      // Undo — Cmd/Ctrl+Z
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Copy — Cmd/Ctrl+C
+      if (isMod && e.key === 'c') {
+        if (isEditingText()) return;
+        e.preventDefault();
+        copySelection();
+        return;
+      }
+
+      // Cut — Cmd/Ctrl+X
+      if (isMod && e.key === 'x') {
+        if (isEditingText()) return;
+        e.preventDefault();
+        copySelection();
+        deleteSelection();
+        return;
+      }
+
+      // Paste — Cmd/Ctrl+V
+      if (isMod && e.key === 'v') {
+        e.preventDefault();
+        pasteFromSystemClipboard();
+        return;
+      }
+
+      // Duplicate — Cmd/Ctrl+D
+      if (isMod && e.key === 'd') {
+        e.preventDefault();
+        copySelection();
+        pasteClipboard();
+        return;
+      }
+
+      // Select all — Cmd/Ctrl+A
+      if (isMod && e.key === 'a') {
+        if (isEditingText()) return;
+        e.preventDefault();
+        const objs = canvas.getObjects().filter(o => !isGridObject(o));
+        if (!objs.length) return;
+        const sel = new fabric.ActiveSelection(objs, { canvas });
+        canvas.setActiveObject(sel);
+        canvas.requestRenderAll();
+        return;
+      }
+
+      // Delete / Backspace
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText()) {
+        e.preventDefault();
+        deleteSelection();
+        return;
+      }
+
+      // Arrow-key nudge (1px, or 10px with Shift)
+      const nudge = e.shiftKey ? 10 : 1;
+      const dirs = { ArrowLeft: [-nudge, 0], ArrowRight: [nudge, 0], ArrowUp: [0, -nudge], ArrowDown: [0, nudge] };
+      if (dirs[e.key] && !isEditingText()) {
+        e.preventDefault();
+        const active = canvas.getActiveObjects();
+        active.forEach(obj => obj.set({ left: obj.left + dirs[e.key][0], top: obj.top + dirs[e.key][1] }));
+        canvas.requestRenderAll();
+        if (active.length) saveHistory();
+      }
+    };
+
+    document.addEventListener('keydown', keydownHandler);
+  }
+
   function undo() {
     if (history.length === 0) return;
     historyLocked = true;
@@ -424,8 +594,8 @@ const CanvasModule = (() => {
       canvas = null;
     }
     // Remove old global event listeners
-    if (keydownHandler) document.removeEventListener('keydown', keydownHandler);
-    if (undoHandler) document.removeEventListener('keydown', undoHandler);
+    if (keydownHandler) { document.removeEventListener('keydown', keydownHandler); keydownHandler = null; }
+    if (undoHandler) { document.removeEventListener('keydown', undoHandler); undoHandler = null; }
     if (resizeObserver) resizeObserver.disconnect();
 
     // Clean up previous tables
@@ -436,6 +606,7 @@ const CanvasModule = (() => {
     historyLocked = false;
 
     setupCanvas();
+    setupKeyboard();
     if (!initialized) {
       setupToolbar();
       setupTextToolbar();
