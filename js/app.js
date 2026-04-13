@@ -1434,6 +1434,93 @@ const App = (() => {
     document.getElementById('btn-back-projects')?.addEventListener('click', showProjectSelector);
     document.getElementById('btn-topbar-projects')?.addEventListener('click', showProjectSelector);
     document.getElementById('btn-options')?.addEventListener('click', openOptionsPanel);
+    document.getElementById('btn-feedback')?.addEventListener('click', openFeedbackModal);
+  }
+
+  // ── EMAILJS CONFIG ─────────────────────────────
+  // 1. Regístrate en https://www.emailjs.com (gratis)
+  // 2. Crea un Email Service (Gmail) y copia el Service ID
+  // 3. Crea un Email Template con variables: {{from_name}}, {{reply_to}}, {{category}}, {{message}}, {{sent_at}}
+  // 4. Copia el Public Key (Account → API Keys)
+  // 5. Rellena los tres valores aquí:
+  const EMAILJS_PUBLIC_KEY  = 'TU_PUBLIC_KEY';
+  const EMAILJS_SERVICE_ID  = 'TU_SERVICE_ID';
+  const EMAILJS_TEMPLATE_ID = 'TU_TEMPLATE_ID';
+
+  function openFeedbackModal() {
+    const body = `
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;gap:10px">
+          <div class="form-group" style="flex:1;margin:0">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary)">Tu nombre (opcional)</label>
+            <input type="text" id="fb-name" class="form-control" placeholder="Ej: Juan García">
+          </div>
+          <div class="form-group" style="flex:1;margin:0">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary)">Tu email (opcional)</label>
+            <input type="email" id="fb-email" class="form-control" placeholder="Para responderte">
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:12px;font-weight:600;color:var(--text-secondary)">Tipo de sugerencia</label>
+          <select id="fb-category" class="form-control">
+            <option value="Nueva función">💡 Nueva función</option>
+            <option value="Mejora de algo existente">🔧 Mejora de algo existente</option>
+            <option value="Error o problema">🐛 Error o problema</option>
+            <option value="Otro">💬 Otro</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:12px;font-weight:600;color:var(--text-secondary)">Descripción *</label>
+          <textarea id="fb-message" class="form-control" rows="5" placeholder="Describe tu sugerencia con el mayor detalle posible…" style="resize:vertical"></textarea>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:0">Tu sugerencia se enviará directamente al equipo de Abessis.</p>
+      </div>`;
+
+    const footer = `
+      <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-feedback-send">
+        <i data-lucide="send"></i> Enviar sugerencia
+      </button>`;
+
+    openModal('💡 Buzón de Sugerencias', body, footer, 'sm');
+    safeIcons();
+
+    document.getElementById('btn-feedback-send').addEventListener('click', async () => {
+      const name     = document.getElementById('fb-name').value.trim() || 'Anónimo';
+      const email    = document.getElementById('fb-email').value.trim() || 'No indicado';
+      const category = document.getElementById('fb-category').value;
+      const message  = document.getElementById('fb-message').value.trim();
+
+      if (!message) { App.toast('Por favor escribe tu sugerencia', 'warning'); return; }
+
+      const btn = document.getElementById('btn-feedback-send');
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+
+      try {
+        if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'TU_PUBLIC_KEY') {
+          throw new Error('EmailJS no configurado');
+        }
+
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          from_name: name,
+          reply_to:  email,
+          category,
+          message,
+          sent_at:   new Date().toLocaleString('es-ES')
+        });
+
+        closeModal();
+        App.toast('¡Sugerencia enviada! Gracias por tu feedback 🙏', 'success');
+      } catch(e) {
+        console.error('EmailJS error:', e);
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="send"></i> Enviar sugerencia';
+        safeIcons();
+        App.toast('Error al enviar. Verifica la configuración de EmailJS.', 'error');
+      }
+    });
   }
 
   async function openOptionsPanel() {
