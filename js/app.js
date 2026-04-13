@@ -1513,11 +1513,13 @@ const App = (() => {
         closeModal();
         App.toast('¡Sugerencia enviada! Gracias por tu feedback 🙏', 'success');
       } catch(e) {
-        console.error('EmailJS error:', e);
+        console.error('EmailJS error completo:', e);
+        console.error('Status:', e.status, '| Text:', e.text, '| Message:', e.message);
+        const detail = e.text || e.message || JSON.stringify(e);
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="send"></i> Enviar sugerencia';
         safeIcons();
-        App.toast('Error al enviar. Verifica la configuración de EmailJS.', 'error');
+        App.toast('Error al enviar: ' + detail, 'error');
       }
     });
   }
