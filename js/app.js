@@ -2950,10 +2950,13 @@ ${content}
     });
 
     // Contar tipos de entradas del diario
+    console.log('[PDF] Total incidents loaded:', incidents.length);
+    console.log('[PDF] Sample incident:', incidents[0]);
     const incidentCount = incidents.filter(item => (item.entryType || 'incident') === 'incident').length;
     const commentCount = incidents.filter(item => (item.entryType || 'incident') === 'comment').length;
     const evolutionCount = incidents.filter(item => (item.entryType || 'incident') === 'evolution').length;
     const logbookCount = incidents.filter(item => (item.entryType || 'incident') === 'logbook').length;
+    console.log('[PDF] Counts:', { incidentCount, commentCount, evolutionCount, logbookCount });
 
     // Resumen ejecutivo
     const summaryCards = `
@@ -3038,6 +3041,8 @@ ${content}
       logbook: incidents.filter(item => (item.entryType || 'incident') === 'logbook')
     };
 
+    console.log('[PDF] incidentsByType:', incidentsByType);
+
     const typeLabels = {
       incident: 'Incidencias',
       comment: 'Comentarios',
@@ -3047,6 +3052,7 @@ ${content}
 
     let diaryTables = '';
     for (const [type, items] of Object.entries(incidentsByType)) {
+      console.log('[PDF] Processing type:', type, 'items:', items.length);
       if (items.length === 0) continue;
 
       const sortedItems = items.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
@@ -3078,6 +3084,8 @@ ${content}
           <tbody>${tableRows}</tbody>
         </table>`;
     }
+
+    console.log('[PDF] diaryTables HTML length:', diaryTables.length);
 
     return `
       <h2 class="print-section-title">Partidas Presupuestarias</h2>
