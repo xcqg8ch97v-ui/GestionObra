@@ -351,12 +351,15 @@ const ParticipantsModule = (() => {
           <div class="participant-card-header">
             <div class="participant-avatar" style="background:${avatarColor}">${App.escapeHTML(initials)}</div>
             <div class="participant-info">
-              <div class="participant-name">${App.escapeHTML(p.name || App.t('no_name'))}</div>
-              <div class="participant-role">${App.escapeHTML(p.role || '')}</div>
+              <div class="participant-name participant-editable" data-field="name" data-id="${p.id}">${App.escapeHTML(p.name || App.t('no_name'))}</div>
+              <div class="participant-role participant-editable" data-field="role" data-id="${p.id}">${App.escapeHTML(p.role || '')}</div>
             </div>
-            <span class="badge ${typeBadge} participant-type-badge">${typeLabel}</span>
+            <select class="badge ${typeBadge} participant-type-badge participant-editable" data-field="type" data-id="${p.id}" style="border:none;background:transparent;cursor:pointer;padding:0;font-size:10px;font-weight:600;white-space:nowrap">
+              <option value="internal" ${p.type === 'internal' ? 'selected' : ''}>${App.t('participant_type_internal')}</option>
+              <option value="external" ${p.type === 'external' ? 'selected' : ''}>${App.t('participant_type_external')}</option>
+            </select>
           </div>
-          ${p.company ? `<div class="participant-detail"><i data-lucide="building-2"></i>${App.escapeHTML(p.company)}</div>` : ''}
+          ${p.company ? `<div class="participant-detail"><i data-lucide="building-2"></i><span class="participant-editable" data-field="company" data-id="${p.id}">${App.escapeHTML(p.company)}</span></div>` : ''}
           ${p.phone ? `<div class="participant-detail participant-detail-link" onclick="ParticipantsModule.callPhone('${App.escapeHTML(p.phone)}')"><i data-lucide="phone"></i>${App.escapeHTML(p.phone)}</div>` : ''}
           ${p.email ? `<div class="participant-detail participant-detail-link" onclick="ParticipantsModule.sendEmail('${App.escapeHTML(p.email)}')"><i data-lucide="mail"></i>${App.escapeHTML(p.email)}</div>` : ''}
           ${p.notes ? `<div class="participant-notes">${App.escapeHTML(p.notes)}</div>` : ''}
@@ -373,6 +376,58 @@ const ParticipantsModule = (() => {
     }).join('');
 
     lucide.createIcons();
+
+    // Setup inline editing
+    grid.querySelectorAll('.participant-editable').forEach(el => {
+      if (el.tagName === 'SELECT') {
+        el.addEventListener('change', async (e) => {
+          const field = e.target.dataset.field;
+          const id = parseInt(e.target.dataset.id);
+          const value = e.target.value;
+          await saveInlineEdit(id, field, value, e.target);
+        });
+      } else {
+        el.setAttribute('contenteditable', 'true');
+        el.addEventListener('blur', async (e) => {
+          const field = e.target.dataset.field;
+          const id = parseInt(e.target.dataset.id);
+          const value = e.target.textContent.trim();
+          await saveInlineEdit(id, field, value, e.target);
+        });
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.target.blur();
+          }
+        });
+      }
+    });
+  }
+
+  async function saveInlineEdit(id, field, value, element) {
+    const participant = await DB.getById('participants', id);
+    if (!participant) return;
+
+    participant[field] = value;
+    participant.updatedAt = new Date().toISOString();
+
+    // Update type badge class if type changed
+    if (field === 'type' && element.tagName === 'SELECT') {
+      element.classList.remove('badge-active', 'badge-pending');
+      element.classList.add(value === 'internal' ? 'badge-active' : 'badge-pending');
+    }
+
+    // Update avatar if name changed
+    if (field === 'name') {
+      const avatar = element.closest('.participant-card').querySelector('.participant-avatar');
+      if (avatar) {
+        avatar.textContent = getInitials(value);
+        avatar.style.background = stringToColor(value || '');
+      }
+    }
+
+    await DB.put('participants', participant);
+    App.toast(App.t('participant_updated'), 'success');
   }
 
   function getInitials(name) {
