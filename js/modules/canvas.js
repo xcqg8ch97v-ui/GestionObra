@@ -31,7 +31,8 @@ const CanvasModule = (() => {
   let _clipboardOffset = 0;
 
   // Store references for cleanup
-  let keydownHandler = null;
+  let keyboardHandler = null;
+  let deleteHandler = null;
   let undoHandler = null;
   let resizeObserver = null;
 
@@ -503,7 +504,7 @@ const CanvasModule = (() => {
   }
 
   function setupKeyboard() {
-    keydownHandler = (e) => {
+    keyboardHandler = (e) => {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
       if (isInput) return;
@@ -580,7 +581,7 @@ const CanvasModule = (() => {
       }
     };
 
-    document.addEventListener('keydown', keydownHandler);
+    document.addEventListener('keydown', keyboardHandler);
   }
 
   function undo() {
@@ -603,7 +604,8 @@ const CanvasModule = (() => {
       canvas = null;
     }
     // Remove old global event listeners
-    if (keydownHandler) { document.removeEventListener('keydown', keydownHandler); keydownHandler = null; }
+    if (keyboardHandler) { document.removeEventListener('keydown', keyboardHandler); keyboardHandler = null; }
+    if (deleteHandler) { document.removeEventListener('keydown', deleteHandler); deleteHandler = null; }
     if (undoHandler) { document.removeEventListener('keydown', undoHandler); undoHandler = null; }
     if (resizeObserver) resizeObserver.disconnect();
 
@@ -970,7 +972,7 @@ const CanvasModule = (() => {
     });
 
     // Delete key
-    keydownHandler = (e) => {
+    deleteHandler = (e) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (document.activeElement.tagName === 'INPUT' || 
             document.activeElement.tagName === 'TEXTAREA' ||
@@ -988,7 +990,7 @@ const CanvasModule = (() => {
         }
       }
     };
-    document.addEventListener('keydown', keydownHandler);
+    document.addEventListener('keydown', deleteHandler);
 
     // Track history for undo
     canvas.on('object:added', () => saveHistory());
