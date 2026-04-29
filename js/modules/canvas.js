@@ -2846,6 +2846,24 @@ const CanvasModule = (() => {
     App.toast('Imagen exportada', 'success');
   }
 
+  function exportCanvasAsImage(fileName) {
+    const dataURL = canvas.toDataURL({
+      format: 'png',
+      quality: 1,
+      multiplier: 2
+    });
+    const link = document.createElement('a');
+    link.download = `${fileName.replace(/\.[^/.]+$/, '')}_anotado.png`;
+    link.href = dataURL;
+    link.click();
+    App.toast('Imagen exportada', 'success');
+  }
+
+  function isFileAttachedToCanvas(fileId) {
+    if (!canvas) return false;
+    return canvas.getObjects().some(obj => obj._isAttachedFile && obj._attachedFileId === fileId);
+  }
+
   function updateZoomDisplay() {
     document.getElementById('zoom-level').textContent = Math.round(canvas.getZoom() * 100) + '%';
   }
@@ -3016,5 +3034,10 @@ const CanvasModule = (() => {
     syncCanvasOverlays();
   }
 
-  return { init, resize };
+  return { 
+    init, 
+    resize,
+    exportCanvasAsImage,
+    isFileAttachedToCanvas
+  };
 })();

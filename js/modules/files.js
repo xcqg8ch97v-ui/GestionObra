@@ -261,7 +261,7 @@ const FilesModule = (() => {
           <button class="action-btn" onclick="FilesModule.previewFile(${f.id})" title="${App.t('preview')}">
             <i data-lucide="eye"></i>
           </button>
-          <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="${App.t('download')}">
+          <button class="action-btn" onclick="FilesModule.showDownloadMenu(${f.id}, '${App.escapeHTML(f.name)}', event)" title="${App.t('download')}">
             <i data-lucide="download"></i>
           </button>
           <button class="action-btn delete" onclick="FilesModule.deleteFile(${f.id})" title="${App.t('delete')}">
@@ -355,11 +355,60 @@ const FilesModule = (() => {
     loadFiles();
   }
 
+  function showDownloadMenu(id, fileName, event) {
+    if (event) event.stopPropagation();
+    
+    // Verificar si el archivo está adjunto al canvas
+    const isAttached = CanvasModule ? CanvasModule.isFileAttachedToCanvas(id) : false;
+    
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${event.clientX}px;top:${event.clientY}px;z-index:999;display:block;`;
+    
+    let menuHTML = `<div class="ctx-header">${App.escapeHTML(fileName)}</div>`;
+    menuHTML += `<button class="ctx-item" data-action="download-original"><i data-lucide="file" style="width:14px;height:14px"></i> ${App.t('download_original')}</button>`;
+    
+    if (isAttached) {
+      menuHTML += `<button class="ctx-item" data-action="download-annotated"><i data-lucide="image" style="width:14px;height:14px"></i> ${App.t('download_annotated')}</button>`;
+    }
+    
+    menu.innerHTML = menuHTML;
+    document.body.appendChild(menu);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    const closeMenu = () => {
+      menu.remove();
+      document.removeEventListener('mousedown', closeMenu);
+      document.removeEventListener('touchstart', closeMenu);
+    };
+    
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeMenu);
+      document.addEventListener('touchstart', closeMenu);
+    }, 10);
+    
+    menu.addEventListener('click', async (e) => {
+      const item = e.target.closest('[data-action]');
+      if (!item) return;
+      const action = item.dataset.action;
+      
+      if (action === 'download-original') {
+        await downloadFile(id);
+      } else if (action === 'download-annotated') {
+        if (CanvasModule) {
+          CanvasModule.exportCanvasAsImage(fileName);
+        }
+      }
+      
+      closeMenu();
+    });
+  }
+
   function formatFileSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  return { init, downloadFile, previewFile, deleteFile };
+  return { init, downloadFile, previewFile, deleteFile, showDownloadMenu };
 })();
