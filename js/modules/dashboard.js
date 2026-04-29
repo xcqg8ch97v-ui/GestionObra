@@ -1747,7 +1747,9 @@ const DashboardModule = (() => {
       if (valA > valB) return currentSortAsc ? 1 : -1;
       return 0;
     });
-    applyBudgetFilter(budgets);
+    // Actualizar _allBudgets con los budgets ordenados
+    _allBudgets = budgets;
+    applyBudgetFilter();
   }
 
   function scrollToCategory(catId) {
