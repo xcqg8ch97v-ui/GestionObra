@@ -3030,11 +3030,61 @@ ${content}
         <div class="print-stat"><strong>${logbookCount}</strong><span>Bitácoras</span></div>
       </div>`;
 
+    // Tablas detalladas por tipo de entrada del diario
+    const incidentsByType = {
+      incident: incidents.filter(item => (item.entryType || 'incident') === 'incident'),
+      comment: incidents.filter(item => (item.entryType || 'incident') === 'comment'),
+      evolution: incidents.filter(item => (item.entryType || 'incident') === 'evolution'),
+      logbook: incidents.filter(item => (item.entryType || 'incident') === 'logbook')
+    };
+
+    const typeLabels = {
+      incident: 'Incidencias',
+      comment: 'Comentarios',
+      evolution: 'Evoluciones',
+      logbook: 'Bitácoras'
+    };
+
+    let diaryTables = '';
+    for (const [type, items] of Object.entries(incidentsByType)) {
+      if (items.length === 0) continue;
+
+      const sortedItems = items.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+
+      let tableRows = '';
+      sortedItems.forEach(item => {
+        const date = item.date ? formatDate(item.date) : formatDate(item.createdAt);
+        const status = item.status || '—';
+        const description = item.description || '';
+        const category = item.category || '—';
+
+        tableRows += `<tr>
+          <td>${date}</td>
+          <td>${escapeHTML(description)}</td>
+          <td>${escapeHTML(category)}</td>
+          <td>${escapeHTML(status)}</td>
+        </tr>`;
+      });
+
+      diaryTables += `
+        <div class="bud-section-title" style="margin-top:24px">${typeLabels[type]} (${items.length})</div>
+        <table class="print-table">
+          <thead><tr>
+            <th style="width:120px">Fecha</th>
+            <th>Descripción</th>
+            <th style="width:150px">Categoría</th>
+            <th style="width:100px">Estado</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>`;
+    }
+
     return `
       <h2 class="print-section-title">Partidas Presupuestarias</h2>
       ${summaryCards}
       ${tableHTML}
-      ${diarySection}`;
+      ${diarySection}
+      ${diaryTables}`;
   }
 
   async function buildTimelinePrint(project, date) {
