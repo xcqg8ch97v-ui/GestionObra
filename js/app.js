@@ -2952,10 +2952,11 @@ ${content}
     // Contar tipos de entradas del diario
     console.log('[PDF] Total incidents loaded:', incidents.length);
     console.log('[PDF] Sample incident:', incidents[0]);
-    const incidentCount = incidents.filter(item => (item.entryType || 'incident') === 'incident').length;
-    const commentCount = incidents.filter(item => (item.entryType || 'incident') === 'comment').length;
-    const evolutionCount = incidents.filter(item => (item.entryType || 'incident') === 'evolution').length;
-    const logbookCount = incidents.filter(item => (item.entryType || 'incident') === 'logbook').length;
+    // Usar 'incident' como fallback solo para entradas sin entryType
+    const incidentCount = incidents.filter(item => item.entryType === 'incident' || !item.entryType).length;
+    const commentCount = incidents.filter(item => item.entryType === 'comment').length;
+    const evolutionCount = incidents.filter(item => item.entryType === 'evolution').length;
+    const logbookCount = incidents.filter(item => item.entryType === 'logbook').length;
     console.log('[PDF] Counts:', { incidentCount, commentCount, evolutionCount, logbookCount });
 
     // Resumen ejecutivo
@@ -3035,10 +3036,10 @@ ${content}
 
     // Tablas detalladas por tipo de entrada del diario
     const incidentsByType = {
-      incident: incidents.filter(item => (item.entryType || 'incident') === 'incident'),
-      comment: incidents.filter(item => (item.entryType || 'incident') === 'comment'),
-      evolution: incidents.filter(item => (item.entryType || 'incident') === 'evolution'),
-      logbook: incidents.filter(item => (item.entryType || 'incident') === 'logbook')
+      incident: incidents.filter(item => item.entryType === 'incident' || !item.entryType),
+      comment: incidents.filter(item => item.entryType === 'comment'),
+      evolution: incidents.filter(item => item.entryType === 'evolution'),
+      logbook: incidents.filter(item => item.entryType === 'logbook')
     };
 
     console.log('[PDF] incidentsByType:', incidentsByType);
