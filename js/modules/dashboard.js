@@ -533,7 +533,7 @@ const DashboardModule = (() => {
                 <div class="budget-desc">
                   <span class="budget-desc-text" data-full="${App.escapeHTML(description)}">${App.escapeHTML(summaryDescription)}</span>
                   ${isLong
-                    ? `<button class="budget-desc-toggle" onclick="DashboardModule.toggleBudgetDesc(${b.id}, event)" title="Ver descripción completa">
+                    ? `<button class="budget-desc-toggle" data-budget-id="${b.id}" title="Ver descripción completa">
                         <i data-lucide="chevron-down"></i>
                       </button>`
                     : ''}
@@ -598,6 +598,12 @@ const DashboardModule = (() => {
     tbody.innerHTML = rowsHtml;
 
     lucide.createIcons();
+
+    // Setup expand/collapse buttons for budget descriptions
+    tbody.querySelectorAll('.budget-desc-toggle').forEach(btn => {
+      const budgetId = parseInt(btn.dataset.budgetId);
+      btn.addEventListener('click', (e) => toggleBudgetDesc(budgetId, e));
+    });
   }
 
   async function openBudgetForm(budget = null) {
