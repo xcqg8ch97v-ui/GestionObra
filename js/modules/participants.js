@@ -169,42 +169,27 @@ const ParticipantsModule = (() => {
       return null; // No se pudo determinar
     }
 
-    // Mapear DNIs a nombres por orden de aparición
+    // Crear participantes para todos los nombres sin mapeo automático de DNIs
+    // El usuario puede editar los DNIs manualmente en el modal
     const found = [];
-    const seen = new Set();
+    const seenNames = new Set();
 
-    for (let i = 0; i < dniEntries.length; i++) {
-      const dniEntry = dniEntries[i];
-      const nameEntry = nameEntries[i];
-      
-      if (!nameEntry) {
-        console.log('[Participants] Sin nombre para DNI:', dniEntry.documentId);
-        continue;
-      }
-
-      const name = nameEntry.name;
-      const documentId = dniEntry.documentId;
-      const dedupeKey = `${name.toLowerCase()}|${documentId}`;
-      
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-
-      // Detectar si es autónomo
-      const isAutonomous = isAutonomous(lines, dniEntry.lineIndex);
-      const role = isAutonomous === true ? 'Autónomo' : isAutonomous === false ? 'Empleado' : '';
+    nameEntries.forEach(nameEntry => {
+      if (seenNames.has(nameEntry.name)) return;
+      seenNames.add(nameEntry.name);
 
       found.push({
-        name,
+        name: nameEntry.name,
         type: 'external',
-        role,
+        role: '',
         company: '',
         phone: '',
         email: '',
-        notes: `${App.t('participants_import_pdf_notes_prefix')} ${documentId}`,
-        documentId,
-        sourceLine: dniEntry.line
+        notes: '',
+        documentId: '',
+        sourceLine: nameEntry.lineIndex
       });
-    }
+    });
 
     console.log('[Participants] Participantes detectados:', found.length);
     return found;
@@ -212,12 +197,12 @@ const ParticipantsModule = (() => {
 
   function openPdfPreviewModal(candidates, fileName) {
     const rows = candidates.map((c, i) => `
-      <tr>
-        <td><input type="checkbox" class="pdf-participant-check" data-idx="${i}" checked></td>
-        <td>${App.escapeHTML(c.name)}</td>
-        <td>${App.escapeHTML(c.documentId || '—')}</td>
-        <td>${App.escapeHTML(c.company || '—')}</td>
-        <td>${App.escapeHTML(c.role || '—')}</td>
+      <tr data-idx="${i}">
+        <td><input type="checkbox" class="pdf-participant-check" checked></td>
+        <td><input type="text" class="pdf-participant-name" value="${App.escapeHTML(c.name)}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
+        <td><input type="text" class="pdf-participant-dni" value="${App.escapeHTML(c.documentId || '')}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
+        <td><input type="text" class="pdf-participant-company" value="${App.escapeHTML(c.company || '')}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
+        <td><input type="text" class="pdf-participant-role" value="${App.escapeHTML(c.role || '')}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
       </tr>
     `).join('');
 
@@ -249,7 +234,7 @@ const ParticipantsModule = (() => {
       </button>
     `;
 
-    App.openModal(App.t('participants_import_pdf_modal_title'), body, footer);
+    App.openModal(App.t('participants_import_pdf_modal_title'), body, footer, { width: '800px' });
 
     const checkAll = document.getElementById('pdf-participants-check-all');
     if (checkAll) {
@@ -259,17 +244,17 @@ const ParticipantsModule = (() => {
     }
 
     document.getElementById('btn-confirm-import-participants-pdf').addEventListener('click', async () => {
-      const selectedIndexes = [...document.querySelectorAll('.pdf-participant-check:checked')]
-        .map(cb => parseInt(cb.dataset.idx, 10))
-        .filter(n => !Number.isNaN(n));
+      const selectedRows = [...document.querySelectorAll('.pdf-participant-check:checked')]
+        .map(cb => cb.closest('tr'))
+        .filter(tr => tr);
 
-      if (selectedIndexes.length === 0) {
+      if (selectedRows.length === 0) {
         App.toast(App.t('participants_import_pdf_none_selected'), 'warning');
         return;
       }
 
       const approved = await App.confirm(
-        App.t('participants_import_pdf_final_confirm', { count: selectedIndexes.length }),
+        App.t('participants_import_pdf_final_confirm', { count: selectedRows.length }),
         { title: App.t('participants_import_pdf_modal_title'), confirmLabel: App.t('accept'), cancelLabel: App.t('cancel'), danger: false }
       );
       if (!approved) return;
@@ -280,10 +265,14 @@ const ParticipantsModule = (() => {
       let created = 0;
       let skipped = 0;
 
-      for (const idx of selectedIndexes) {
-        const c = candidates[idx];
-        if (!c) continue;
-        const key = `${(c.name || '').trim().toLowerCase()}|${(c.company || '').trim().toLowerCase()}`;
+      for (const row of selectedRows) {
+        const name = row.querySelector('.pdf-participant-name')?.value?.trim() || '';
+        const documentId = row.querySelector('.pdf-participant-dni')?.value?.trim() || '';
+        const company = row.querySelector('.pdf-participant-company')?.value?.trim() || '';
+        const role = row.querySelector('.pdf-participant-role')?.value?.trim() || '';
+
+        if (!name) continue;
+        const key = `${name.toLowerCase()}|${company.toLowerCase()}`;
         if (existingKeys.has(key)) {
           skipped++;
           continue;
@@ -291,13 +280,14 @@ const ParticipantsModule = (() => {
 
         await DB.add('participants', {
           projectId,
-          name: c.name,
-          type: c.type || 'external',
-          role: c.role || '',
-          company: c.company || '',
-          phone: c.phone || '',
-          email: c.email || '',
-          notes: c.notes || '',
+          name,
+          type: 'external',
+          role,
+          company,
+          documentId,
+          phone: '',
+          email: '',
+          notes: documentId ? `${App.t('participants_import_pdf_notes_prefix')} ${documentId}` : '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });

@@ -433,8 +433,9 @@ const DashboardModule = (() => {
         const saving = data.estimated - data.real;
         const devClass = saving > 0 ? 'badge-positive' : saving < 0 ? 'badge-negative' : 'badge-neutral';
         const devSign = saving > 0 ? '+' : '';
+        const catId = cat.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         return `
-          <div class="budget-cat-card">
+          <div class="budget-cat-card" onclick="DashboardModule.scrollToCategory('${catId}')" style="cursor:pointer">
             <div class="budget-cat-title">${App.escapeHTML(cat)}</div>
             <div class="budget-cat-stats">
               <div class="budget-cat-stat">
@@ -504,18 +505,33 @@ const DashboardModule = (() => {
       const supplierNames = (b.supplierIds && b.supplierIds.length > 0)
         ? b.supplierIds.map(id => supplierMap[id] || '').filter(Boolean).join(', ')
         : (supplierMap[b.supplierId] || '—');
-      const summaryDescription = summarizeBudgetDescription(b.description || '');
-
+      
+      // Separar categoría de descripción si están unidas con guión
       const fullDescription = (b.description || '').replace(/\s+/g, ' ').trim();
-      const isLong = fullDescription.length > 180;
+      let category = b.category || App.t('overview_no_category');
+      let description = fullDescription;
+      
+      // Si la descripción contiene " - ", separar en categoría y descripción
+      if (fullDescription.includes(' - ')) {
+        const parts = fullDescription.split(' - ');
+        if (parts.length >= 2) {
+          category = parts[0].trim();
+          description = parts.slice(1).join(' - ').trim();
+        }
+      }
+      
+      const summaryDescription = summarizeBudgetDescription(description);
+      const catId = category.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const isLong = description.length > 180;
+      
       return `
-        <tr data-budget-id="${b.id}">
+        <tr data-budget-id="${b.id}" data-cat-id="${catId}">
           <td>
-            <strong>${App.escapeHTML(b.category || App.t('overview_no_category'))}</strong>
-            ${summaryDescription
+            <strong>${App.escapeHTML(category)}</strong>
+            ${description
               ? `
                 <div class="budget-desc">
-                  <span class="budget-desc-text" data-full="${App.escapeHTML(fullDescription)}">${App.escapeHTML(summaryDescription)}</span>
+                  <span class="budget-desc-text" data-full="${App.escapeHTML(description)}">${App.escapeHTML(summaryDescription)}</span>
                   ${isLong
                     ? `<button class="budget-desc-toggle" onclick="DashboardModule.toggleBudgetDesc(${b.id}, event)" title="Ver descripción completa">
                         <i data-lucide="chevron-down"></i>
@@ -554,15 +570,19 @@ const DashboardModule = (() => {
 
       const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'));
       rowsHtml = sortedGroups.map(([category, items]) => {
-        const catEstimated = items.reduce((s, it) => s + (it.estimatedCost || 0), 0);
-        const catReal = items.reduce((s, it) => s + (it.realCost || 0), 0);
+        const catEstimated = items.reduce((s, b) => s + (b.estimatedCost || 0), 0);
+        const catReal = items.reduce((s, b) => s + (b.realCost || 0), 0);
         const catSaving = catEstimated - catReal;
         const catDevClass = catSaving > 0 ? 'badge-positive' : catSaving < 0 ? 'badge-negative' : 'badge-neutral';
         const catSign = catSaving > 0 ? '+' : '';
+        const catId = category.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         return `
-          <tr class="budget-group-row">
-            <td colspan="7">
-              <div class="budget-group-head">
+          <tr id="cat-row-${catId}" class="budget-cat-row" data-expanded="true">
+            <td colspan="6">
+              <div style="display:flex;align-items:center;gap:8px">
+                <button id="cat-toggle-${catId}" class="btn btn-xs btn-outline" onclick="DashboardModule.toggleCategory('${catId}')">
+                  <i data-lucide="chevron-up"></i>
+                </button>
                 <span>${App.escapeHTML(category)}</span>
                 <span>${items.length} partida${items.length !== 1 ? 's' : ''} · ${App.formatCurrency(catEstimated)} · <span class="badge ${catDevClass}">${catSign}${App.formatCurrency(catSaving)}</span></span>
               </div>
@@ -1659,21 +1679,32 @@ const DashboardModule = (() => {
   }
 
   function toggleBudgetDesc(id, event) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
+    console.log('[Dashboard] toggleBudgetDesc called with id:', id);
     const row = document.querySelector(`tr[data-budget-id="${id}"]`);
+    console.log('[Dashboard] Row found:', !!row);
     if (!row) return;
     const textSpan = row.querySelector('.budget-desc-text');
     const btn = row.querySelector('.budget-desc-toggle');
     const icon = btn?.querySelector('i');
-    if (!textSpan || !btn || !icon) return;
+    console.log('[Dashboard] Elements found:', { textSpan: !!textSpan, btn: !!btn, icon: !!icon });
+    if (!textSpan || !btn || !icon) {
+      console.log('[Dashboard] Missing elements, aborting');
+      return;
+    }
     const isExpanded = textSpan.classList.contains('expanded');
+    const fullText = textSpan.dataset.full || '';
+    console.log('[Dashboard] isExpanded:', isExpanded, 'fullText length:', fullText.length);
     if (isExpanded) {
-      textSpan.textContent = textSpan.dataset.full?.slice(0, 177) + '...' || textSpan.textContent;
+      // Contraer: mostrar versión resumida
+      const summary = fullText.length > 180 ? fullText.slice(0, 177) + '...' : fullText;
+      textSpan.textContent = summary;
       textSpan.classList.remove('expanded');
       icon.setAttribute('data-lucide', 'chevron-down');
       btn.title = 'Ver descripción completa';
     } else {
-      textSpan.textContent = textSpan.dataset.full || textSpan.textContent;
+      // Expandir: mostrar texto completo
+      textSpan.textContent = fullText;
       textSpan.classList.add('expanded');
       icon.setAttribute('data-lucide', 'chevron-up');
       btn.title = 'Contraer descripción';
@@ -1713,6 +1744,37 @@ const DashboardModule = (() => {
     applyBudgetFilter(budgets);
   }
 
+  function scrollToCategory(catId) {
+    const row = document.getElementById(`cat-row-${catId}`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.style.background = 'var(--bg-highlight)';
+      setTimeout(() => { row.style.background = ''; }, 2000);
+    }
+  }
+
+  function toggleCategory(catId) {
+    const row = document.getElementById(`cat-row-${catId}`);
+    const rows = document.querySelectorAll(`[data-cat-id="${catId}"]`);
+    const toggle = document.getElementById(`cat-toggle-${catId}`);
+    
+    if (!row) return;
+    
+    const isExpanded = row.dataset.expanded === 'true';
+    row.dataset.expanded = isExpanded ? 'false' : 'true';
+    
+    rows.forEach(r => {
+      r.style.display = isExpanded ? 'none' : '';
+    });
+    
+    if (toggle) {
+      toggle.innerHTML = isExpanded 
+        ? '<i data-lucide="chevron-down"></i>' 
+        : '<i data-lucide="chevron-up"></i>';
+      lucide.createIcons();
+    }
+  }
+
   return {
     init,
     editSupplier,
@@ -1722,6 +1784,8 @@ const DashboardModule = (() => {
     showBC3Tree,
     toggleBudgetDesc,
     sortBudgets,
+    scrollToCategory,
+    toggleCategory,
     refresh: () => { loadSuppliers(); loadBudgets(); }
   };
 })();

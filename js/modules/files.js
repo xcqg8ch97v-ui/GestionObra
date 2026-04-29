@@ -258,6 +258,9 @@ const FilesModule = (() => {
           <div class="file-meta">${info.label} · ${sizeStr} · ${App.formatDate(f.uploadedAt)}${f.cloudinaryUrl ? ' · <span style="color:var(--cyan);font-size:11px">☁ nube</span>' : ''}</div>
         </div>
         <div class="file-actions">
+          <button class="action-btn" onclick="FilesModule.previewFile(${f.id})" title="${App.t('preview')}">
+            <i data-lucide="eye"></i>
+          </button>
           <button class="action-btn" onclick="FilesModule.downloadFile(${f.id})" title="${App.t('download')}">
             <i data-lucide="download"></i>
           </button>
@@ -301,6 +304,50 @@ const FilesModule = (() => {
     URL.revokeObjectURL(url);
   }
 
+  async function previewFile(id) {
+    const file = await DB.getById('files', id);
+    if (!file) {
+      App.toast(App.t('file_not_found'), 'error');
+      return;
+    }
+
+    const binaryData = file.data || (file.blob instanceof Blob ? await file.blob.arrayBuffer() : null);
+
+    if (!binaryData) {
+      // Fallback: use Cloudinary URL if available
+      if (file.cloudinaryUrl) {
+        window.open(file.cloudinaryUrl, '_blank');
+        return;
+      }
+      App.toast(App.t('file_content_unavailable'), 'error');
+      return;
+    }
+
+    const blob = new Blob([binaryData], { type: file.type });
+    const url = URL.createObjectURL(blob);
+
+    if (file.type === 'application/pdf') {
+      // Abrir PDF en nueva pestaña
+      window.open(url, '_blank');
+      URL.revokeObjectURL(url);
+    } else if (file.type.startsWith('image/')) {
+      // Mostrar imagen en modal
+      const body = `
+        <div style="text-align:center">
+          <img src="${url}" alt="${App.escapeHTML(file.name)}" style="max-width:100%;max-height:70vh;object-fit:contain" />
+        </div>
+      `;
+      App.openModal(App.escapeHTML(file.name), body, `
+        <button class="btn btn-outline" onclick="App.closeModal()">${App.t('close')}</button>
+        <button class="btn btn-primary" onclick="FilesModule.downloadFile(${id})">${App.t('download')}</button>
+      `);
+    } else {
+      // Para otros tipos, abrir en nueva pestaña
+      window.open(url, '_blank');
+      URL.revokeObjectURL(url);
+    }
+  }
+
   async function deleteFile(id) {
     if (!await App.confirm(App.t('confirm_delete_file'))) return;
     await DB.remove('files', id);
@@ -314,5 +361,5 @@ const FilesModule = (() => {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  return { init, downloadFile, deleteFile };
+  return { init, downloadFile, previewFile, deleteFile };
 })();

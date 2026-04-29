@@ -67,7 +67,7 @@ const App = (() => {
       section_diary: 'Diario de Obra',
       section_plans: 'Planos',
       section_expenses: 'Gastos de Obra',
-      section_files: 'Documentos del Proyecto',
+      section_files: 'Documentos',
       section_participants: 'Participantes',
       project_selector_subtitle: 'Selecciona una obra o crea una nueva',
       new_project: 'Nueva Obra',
@@ -131,6 +131,7 @@ const App = (() => {
       files_category_spreadsheet: 'Hojas de cálculo',
       files_category_participants: 'Participantes',
       files_category_other: 'Otros',
+      preview: 'Vista previa',
       download: 'Descargar',
       delete: 'Eliminar',
       file_exceeds_size_limit: '{{name}} excede {{size}}',
@@ -544,7 +545,7 @@ const App = (() => {
       section_timeline: 'Schedule',
       section_diary: 'Work Diary',
       section_plans: 'Blueprints',
-      section_files: 'Project Documents',
+      section_files: 'Documents',
       section_expenses: 'Site Expenses',
       section_participants: 'Project Participants',
       project_selector_subtitle: 'Select a project or create a new one',
@@ -619,6 +620,7 @@ const App = (() => {
       files_category_spreadsheet: 'Spreadsheets',
       files_category_participants: 'Participants',
       files_category_other: 'Other',
+      preview: 'Preview',
       download: 'Download',
       delete: 'Delete',
       file_exceeds_size_limit: '{{name}} exceeds {{size}}',
@@ -2660,13 +2662,20 @@ const App = (() => {
     });
   }
 
-  function openModal(title, bodyHTML, footerHTML, { size = '' } = {}) {
+  function openModal(title, bodyHTML, footerHTML, { size = '', width = '' } = {}) {
     const overlay = document.getElementById('modal-overlay');
     const box = document.getElementById('modal');
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = bodyHTML;
     document.getElementById('modal-footer').innerHTML = footerHTML || '';
     box.classList.toggle('modal-sm', size === 'sm');
+    
+    if (width) {
+      box.style.maxWidth = width;
+    } else {
+      box.style.maxWidth = '';
+    }
+    
     overlay.classList.add('active');
     lucide.createIcons();
 
