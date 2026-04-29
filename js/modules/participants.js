@@ -81,7 +81,13 @@ const ParticipantsModule = (() => {
 
   function parseParticipantsFromLines(lines) {
     const HEADER_RE = /(autorizad|listado|obra|empresa|firma|fecha|dni\/nie|documento|contrata)/i;
-    const DOC_RE = /\b(?:\d{8}[A-Z]|[XYZ]\d{7}[A-Z]|[A-Z]\d{8})\b/i;
+    // Mejorada regex para detectar más formatos de DNI/NIE:
+    // - 8 dígitos + letra (estándar)
+    // - 7-8 dígitos + letra (formatos antiguos)
+    // - XYZ + 7-8 dígitos + letra (NIE)
+    // - Letra + 7-8 dígitos (formato alternativo)
+    // - Con o sin espacios/guiones
+    const DOC_RE = /\b(?:[XYZ]?\s*\d{7,8}\s*[-/]?\s*[A-Za-z]|[A-Za-z]\s*\d{7,8})\b/;
     const DATE_RE = /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/;
     const ROLE_HINT_RE = /(jefe|encargad|capataz|operari|oficial|pe[oó]n|coordinador|seguridad|instalador|t[eé]cnico|electricista|fontanero|soldador|alba[ñn]il)/i;
     const COMPANY_HINT_RE = /(s\.l\.?|s\.a\.?|slu|sl|sa|ute|construcciones|servicios|instalaciones|contratas|reformas|ingenier[ií]a)/i;
