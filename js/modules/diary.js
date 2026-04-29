@@ -8,7 +8,8 @@ const DiaryModule = (() => {
   const ENTRY_TYPES = {
     incident: { label: 'Incidencia', class: 'badge-pending', icon: 'alert-triangle' },
     comment: { label: 'Comentario', class: 'badge-neutral', icon: 'message-square' },
-    evolution: { label: 'Evolución', class: 'badge-active', icon: 'book-open' }
+    evolution: { label: 'Evolución', class: 'badge-active', icon: 'book-open' },
+    logbook: { label: 'Bitácora', class: 'badge-positive', icon: 'notebook-pen' }
   };
 
   const STATUSES = {
@@ -24,6 +25,7 @@ const DiaryModule = (() => {
 
   let projectId = null;
   let customIncidentCategories = [];
+  let projectParticipants = [];
 
   function getIncidentCategories() {
     return DEFAULT_CATEGORIES.concat(customIncidentCategories.map(c => c.name));
@@ -32,6 +34,7 @@ const DiaryModule = (() => {
   async function init(pid) {
     projectId = pid;
     customIncidentCategories = await DB.getCustomCategories(projectId, 'incidentCategory');
+    projectParticipants = await DB.getAllForProject('participants', projectId);
     setupButtons();
     loadIncidents();
   }
@@ -40,11 +43,24 @@ const DiaryModule = (() => {
     document.getElementById('btn-add-incident').addEventListener('click', () => openIncidentForm(null, 'incident'));
     document.getElementById('btn-add-comment').addEventListener('click', () => openIncidentForm(null, 'comment'));
     document.getElementById('btn-add-evolution').addEventListener('click', () => openIncidentForm(null, 'evolution'));
+    document.getElementById('btn-add-logbook').addEventListener('click', () => openIncidentForm(null, 'logbook'));
     document.getElementById('btn-add-incident-empty').addEventListener('click', () => openIncidentForm(null, 'incident'));
     document.getElementById('btn-add-comment-empty').addEventListener('click', () => openIncidentForm(null, 'comment'));
     document.getElementById('btn-add-evolution-empty').addEventListener('click', () => openIncidentForm(null, 'evolution'));
+    document.getElementById('btn-add-logbook-empty').addEventListener('click', () => openIncidentForm(null, 'logbook'));
     document.getElementById('diary-filter').addEventListener('change', loadIncidents);
     document.getElementById('diary-type-filter').addEventListener('change', loadIncidents);
+    const dateFilter = document.getElementById('diary-date-filter');
+    const clearDateBtn = document.getElementById('btn-clear-diary-date');
+    if (dateFilter) {
+      dateFilter.addEventListener('change', loadIncidents);
+    }
+    if (clearDateBtn && dateFilter) {
+      clearDateBtn.addEventListener('click', () => {
+        dateFilter.value = '';
+        loadIncidents();
+      });
+    }
     const searchInput = document.getElementById('diary-search');
     if (searchInput) {
       searchInput.value = '';
@@ -77,6 +93,11 @@ const DiaryModule = (() => {
       incidents = incidents.filter(i => i.status === filter);
     }
 
+    const dateFilter = document.getElementById('diary-date-filter')?.value || '';
+    if (dateFilter) {
+      incidents = incidents.filter(i => (i.date || '').slice(0, 10) === dateFilter);
+    }
+
     const searchEl = document.getElementById('diary-search');
     const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
     if (q) {
@@ -84,7 +105,8 @@ const DiaryModule = (() => {
         (i.description || '').toLowerCase().includes(q) ||
         (i.category || '').toLowerCase().includes(q) ||
         (i.responsiblePerson || '').toLowerCase().includes(q) ||
-        (i.responsibleCompany || '').toLowerCase().includes(q)
+        (i.responsibleCompany || '').toLowerCase().includes(q) ||
+        (i.participants || []).join(' ').toLowerCase().includes(q)
       );
     }
 
@@ -107,11 +129,13 @@ const DiaryModule = (() => {
     // Load photos from IndexedDB
     const mainParts = [];
     const evolutionParts = [];
+    const logbookParts = [];
 
     for (const incident of incidents) {
       const status = STATUSES[incident.status] || STATUSES.pending;
       const entryType = ENTRY_TYPES[incident.entryType] || ENTRY_TYPES.incident;
       const isIncident = incident.entryType === 'incident';
+      const isLogbook = incident.entryType === 'logbook';
 
       // Get photo thumbnails
       let photosHTML = '';
@@ -163,6 +187,23 @@ const DiaryModule = (() => {
             </div>`
         : '';
 
+      const participants = Array.isArray(incident.participants) ? incident.participants : [];
+      const logbookParticipantsHTML = isLogbook && participants.length > 0
+        ? `
+            <div class="logbook-participants">
+              <div class="logbook-participants-title">
+                <i data-lucide="users" style="width:13px;height:13px"></i>
+                ${App.t('diary_logbook_participants')}
+              </div>
+              <div class="logbook-participants-list">
+                ${participants.map(name => `<span class="logbook-participant-chip">${App.escapeHTML(name)}</span>`).join('')}
+              </div>
+            </div>
+          `
+        : '';
+
+      const descriptionText = incident.description || '';
+
       const cardHTML = `
         <div class="incident-card" data-id="${incident.id}">
           <div class="incident-card-header">
@@ -181,7 +222,8 @@ const DiaryModule = (() => {
           <div class="incident-card-body">
             ${categoryHTML}
             ${responsibleHTML}
-            <p class="incident-description">${App.escapeHTML(incident.description)}</p>
+            <p class="incident-description">${App.escapeHTML(descriptionText)}</p>
+            ${logbookParticipantsHTML}
             ${photosHTML}
           </div>
           <div class="incident-card-footer">
@@ -202,6 +244,8 @@ const DiaryModule = (() => {
             <div class="evolution-content">${cardHTML}</div>
           </div>
         `);
+      } else if (incident.entryType === 'logbook') {
+        logbookParts.push(cardHTML);
       } else {
         mainParts.push(cardHTML);
       }
@@ -227,6 +271,15 @@ const DiaryModule = (() => {
       `);
     }
 
+    if (logbookParts.length > 0) {
+      sections.push(`
+        <div class="diary-group diary-group-logbook">
+          <div class="diary-group-title">${App.t('diary_logbook_title')}</div>
+          <div class="diary-group-list">${logbookParts.join('')}</div>
+        </div>
+      `);
+    }
+
     feed.innerHTML = sections.join('');
     lucide.createIcons();
   }
@@ -234,12 +287,14 @@ const DiaryModule = (() => {
   // --- Incident Form ---
   async function openIncidentForm(incident = null, presetType = 'incident') {
     customIncidentCategories = await DB.getCustomCategories(projectId, 'incidentCategory');
+    projectParticipants = await DB.getAllForProject('participants', projectId);
     const isEdit = !!incident;
     const effectiveType = isEdit ? (incident.entryType || 'incident') : presetType;
     const typeTitles = {
       incident: App.t('diary_new_incident'),
       comment: App.t('diary_new_comment'),
-      evolution: App.t('diary_new_evolution')
+      evolution: App.t('diary_new_evolution'),
+      logbook: App.t('diary_new_logbook')
     };
     const title = isEdit ? App.t('edit_entry') : (typeTitles[effectiveType] || App.t('new_entry'));
 
@@ -254,6 +309,7 @@ const DiaryModule = (() => {
             <option value="incident" ${entryType === 'incident' ? 'selected' : ''}>${App.t('diary_incident_button')}</option>
             <option value="comment" ${entryType === 'comment' ? 'selected' : ''}>${App.t('diary_comment_button')}</option>
             <option value="evolution" ${entryType === 'evolution' ? 'selected' : ''}>${App.t('diary_evolution_button')}</option>
+            <option value="logbook" ${entryType === 'logbook' ? 'selected' : ''}>${App.t('diary_logbook_button')}</option>
           </select>
         </div>
         <div class="form-group incident-only-field">
@@ -268,6 +324,31 @@ const DiaryModule = (() => {
       <div class="form-group">
         <label>${App.t('description')} *</label>
         <textarea id="inc-description" rows="3" placeholder="${App.t('diary_description_placeholder')}">${isEdit ? App.escapeHTML(incident.description) : ''}</textarea>
+      </div>
+      <div class="form-group logbook-only-row">
+        <label>${App.t('diary_logbook_select_participants')}</label>
+        <select id="logbook-participants-select">
+          <option value="">${App.t('select')}</option>
+          ${projectParticipants
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(p => `<option value="${App.escapeHTML(p.name || '')}">${App.escapeHTML(p.name || '')}${p.company ? ` — ${App.escapeHTML(p.company)}` : ''}</option>`)
+            .join('')}
+        </select>
+      </div>
+      <div class="form-row logbook-only-row">
+        <div class="form-group logbook-only-field">
+          <label>${App.t('diary_logbook_manual_participant')}</label>
+          <input type="text" id="logbook-participant-manual" placeholder="${App.t('diary_logbook_manual_participant_placeholder')}">
+        </div>
+        <div class="form-group logbook-only-field" style="align-self:end">
+          <button class="btn btn-outline" type="button" id="btn-add-logbook-participant">
+            <i data-lucide="plus"></i> ${App.t('add')}
+          </button>
+        </div>
+      </div>
+      <div class="form-group logbook-only-row">
+        <label>${App.t('diary_logbook_participants')}</label>
+        <div id="logbook-selected-participants" class="logbook-selected-participants"></div>
       </div>
       <div class="form-row incident-only-row">
         <div class="form-group incident-only-field">
@@ -319,11 +400,74 @@ const DiaryModule = (() => {
     const photoInput = document.getElementById('photo-input');
     const preview = document.getElementById('photo-preview');
     const typeSelect = document.getElementById('inc-entry-type');
+    const participantSelect = document.getElementById('logbook-participants-select');
+    const manualParticipantInput = document.getElementById('logbook-participant-manual');
+    const addParticipantBtn = document.getElementById('btn-add-logbook-participant');
+    const selectedParticipantsWrap = document.getElementById('logbook-selected-participants');
+    const selectedParticipants = isEdit && Array.isArray(incident.participants)
+      ? [...incident.participants]
+      : [];
+
+    function renderSelectedParticipants() {
+      if (!selectedParticipantsWrap) return;
+      if (selectedParticipants.length === 0) {
+        selectedParticipantsWrap.innerHTML = `<span class="logbook-selected-empty">${App.t('diary_logbook_no_participants')}</span>`;
+        return;
+      }
+      selectedParticipantsWrap.innerHTML = selectedParticipants
+        .map((name, i) => `
+          <span class="logbook-participant-chip">
+            ${App.escapeHTML(name)}
+            <button type="button" class="logbook-remove-chip" onclick="window._removeLogbookParticipant(${i})">×</button>
+          </span>
+        `)
+        .join('');
+    }
+
+    function addParticipantName(name) {
+      const cleanName = (name || '').trim();
+      if (!cleanName) return;
+      if (selectedParticipants.includes(cleanName)) return;
+      selectedParticipants.push(cleanName);
+      renderSelectedParticipants();
+    }
+
+    window._removeLogbookParticipant = (index) => {
+      selectedParticipants.splice(index, 1);
+      renderSelectedParticipants();
+    };
+
+    if (participantSelect) {
+      participantSelect.addEventListener('change', () => {
+        addParticipantName(participantSelect.value);
+        participantSelect.value = '';
+      });
+    }
+
+    if (addParticipantBtn && manualParticipantInput) {
+      addParticipantBtn.addEventListener('click', () => {
+        addParticipantName(manualParticipantInput.value);
+        manualParticipantInput.value = '';
+        manualParticipantInput.focus();
+      });
+      manualParticipantInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addParticipantBtn.click();
+        }
+      });
+    }
+
+    renderSelectedParticipants();
 
     function syncEntryTypeUI() {
       const isIncidentType = typeSelect.value === 'incident';
+      const isLogbookType = typeSelect.value === 'logbook';
       document.querySelectorAll('.incident-only-field, .incident-only-row').forEach(el => {
         el.style.display = isIncidentType ? '' : 'none';
+      });
+      document.querySelectorAll('.logbook-only-field, .logbook-only-row').forEach(el => {
+        el.style.display = isLogbookType ? '' : 'none';
       });
       document.getElementById('diary-filter').disabled = false;
     }
@@ -382,6 +526,7 @@ const DiaryModule = (() => {
     // Save
     document.getElementById('btn-save-incident').addEventListener('click', async () => {
       const description = document.getElementById('inc-description').value.trim();
+      const entryTypeValue = document.getElementById('inc-entry-type').value;
       if (!description) {
         App.toast(App.t('description_required'), 'warning');
         return;
@@ -395,12 +540,13 @@ const DiaryModule = (() => {
       }
 
       const data = {
-        entryType: document.getElementById('inc-entry-type').value,
+        entryType: entryTypeValue,
         description,
-        category: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-category').value : '',
-        status: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-status').value : 'resolved',
-        responsiblePerson: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-responsible-person').value.trim() : '',
-        responsibleCompany: document.getElementById('inc-entry-type').value === 'incident' ? document.getElementById('inc-responsible-company').value.trim() : '',
+        category: entryTypeValue === 'incident' ? document.getElementById('inc-category').value : '',
+        status: entryTypeValue === 'incident' ? document.getElementById('inc-status').value : 'resolved',
+        responsiblePerson: entryTypeValue === 'incident' ? document.getElementById('inc-responsible-person').value.trim() : '',
+        responsibleCompany: entryTypeValue === 'incident' ? document.getElementById('inc-responsible-company').value.trim() : '',
+        participants: entryTypeValue === 'logbook' ? selectedParticipants : [],
         date: document.getElementById('inc-date').value + ':00',
         photoIds: [...existingPhotoIds, ...newPhotoIds],
         updatedAt: new Date().toISOString()
@@ -421,6 +567,7 @@ const DiaryModule = (() => {
 
       // Cleanup
       delete window._removePendingPhoto;
+      delete window._removeLogbookParticipant;
       App.closeModal();
       loadIncidents();
     });
@@ -454,6 +601,8 @@ const DiaryModule = (() => {
   async function focusIncident(id) {
     document.getElementById('diary-filter').value = 'all';
     document.getElementById('diary-type-filter').value = 'all';
+    const dateFilter = document.getElementById('diary-date-filter');
+    if (dateFilter) dateFilter.value = '';
     await loadIncidents();
 
     const card = document.querySelector(`.incident-card[data-id="${id}"]`);

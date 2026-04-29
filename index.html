@@ -409,11 +409,18 @@
             <select id="budget-filter-category" style="height:36px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:13px">
               <option value="__all__">Todos los gremios</option>
             </select>
+            <select id="budget-view-mode" class="filter-select" style="min-width:190px">
+              <option value="list" data-i18n="budget_view_list">Vista lista</option>
+              <option value="grouped" data-i18n="budget_view_grouped">Agrupar por categoría</option>
+            </select>
             <button class="btn btn-outline" id="btn-import-bc3" title="Importar archivo BC3 / FIEBDC (Presto)" data-i18n-attr="title" data-i18n="dashboard_import_bc3">
               <i data-lucide="file-up"></i> <span data-i18n="dashboard_import_bc3">Importar BC3</span>
             </button>
             <button class="btn btn-outline" id="btn-view-bc3" title="Ver estructura BC3 importada" style="display:none">
               <i data-lucide="list-tree"></i> Ver BC3
+            </button>
+            <button class="btn btn-outline btn-danger" id="btn-reset-bc3" title="Restablecer partidas BC3 importadas" style="display:none">
+              <i data-lucide="rotate-ccw"></i> Restablecer BC3
             </button>
             <button class="btn btn-outline" onclick="App.printSection('dashboard')" title="Exportar PDF">
               <i data-lucide="printer"></i>
@@ -425,15 +432,22 @@
           <input type="file" id="bc3-file-input" accept=".bc3,.BC3,.fiebdc,.FIEBDC" style="display:none">
         </div>
         <div class="table-container">
+          <div class="budget-category-cards" id="budget-category-cards"></div>
           <table class="data-table" id="budgets-table">
             <thead>
               <tr>
-                <th>Partida</th>
+                <th onclick="DashboardModule.sortBudgets('name')" style="cursor:pointer" title="Ordenar por nombre">
+                  Partida <i data-lucide="arrow-up-down" style="width:14px;height:14px;vertical-align:middle"></i>
+                </th>
                 <th>Proveedor</th>
-                <th>Previsto</th>
+                <th onclick="DashboardModule.sortBudgets('estimated')" style="cursor:pointer" title="Ordenar por previsto">
+                  Previsto <i data-lucide="arrow-up-down" style="width:14px;height:14px;vertical-align:middle"></i>
+                </th>
                 <th>Real</th>
                 <th>Beneficio</th>
-                <th>Desviación</th>
+                <th onclick="DashboardModule.sortBudgets('deviation')" style="cursor:pointer" title="Ordenar por desviación">
+                  Desviación <i data-lucide="arrow-up-down" style="width:14px;height:14px;vertical-align:middle"></i>
+                </th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -572,12 +586,16 @@
           <button class="btn btn-outline" id="btn-add-evolution">
             <i data-lucide="book-open"></i> <span data-i18n="diary_evolution_button">Evolución</span>
           </button>
+          <button class="btn btn-outline" id="btn-add-logbook">
+            <i data-lucide="notebook-pen"></i> <span data-i18n="diary_logbook_button">Bitácora</span>
+          </button>
           <div class="filter-group">
             <select id="diary-type-filter" class="filter-select">
               <option value="all" data-i18n="diary_type_all">Todos los tipos</option>
               <option value="incident" data-i18n="diary_type_incidents">Incidencias</option>
               <option value="comment" data-i18n="diary_type_comments">Comentarios</option>
               <option value="evolution" data-i18n="diary_type_evolution">Evolución</option>
+              <option value="logbook" data-i18n="diary_type_logbook">Bitácora</option>
             </select>
           </div>
           <div class="filter-group">
@@ -587,6 +605,11 @@
               <option value="in-progress" data-i18n="diary_filter_in_progress">En proceso</option>
               <option value="resolved" data-i18n="diary_filter_resolved">Resueltas</option>
             </select>
+          </div>
+          <div class="diary-date-filter-wrap" title="Filtrar por día">
+            <i data-lucide="calendar-days"></i>
+            <input type="date" id="diary-date-filter" aria-label="Filtrar diario por día">
+            <button class="diary-date-clear" id="btn-clear-diary-date" title="Limpiar fecha">×</button>
           </div>
         </div>
       </div>
@@ -598,6 +621,7 @@
           <button class="btn btn-outline" id="btn-add-incident-empty" data-i18n="diary_create_incident">Crear incidencia</button>
           <button class="btn btn-outline" id="btn-add-comment-empty" data-i18n="diary_create_comment">Crear comentario</button>
           <button class="btn btn-outline" id="btn-add-evolution-empty" data-i18n="diary_create_evolution">Crear evolución</button>
+          <button class="btn btn-outline" id="btn-add-logbook-empty" data-i18n="diary_create_logbook">Crear bitácora</button>
         </div>
       </div>
     </section>
@@ -766,11 +790,15 @@
             <option value="internal" data-i18n="participants_filter_internal">Internos</option>
             <option value="external" data-i18n="participants_filter_external">Externos</option>
           </select>
+          <button class="btn btn-outline" id="btn-import-participants-pdf">
+            <i data-lucide="file-up"></i> <span data-i18n="participants_import_pdf">Importar PDF</span>
+          </button>
           <button class="btn btn-primary" id="btn-add-participant">
             <i data-lucide="user-plus"></i> <span data-i18n="new_participant">Nuevo Participante</span>
           </button>
         </div>
       </div>
+      <input type="file" id="participants-pdf-input" accept=".pdf,application/pdf" hidden>
       <div class="participants-grid" id="participants-grid"></div>
       <div class="empty-state" id="participants-empty">
         <i data-lucide="contact"></i>

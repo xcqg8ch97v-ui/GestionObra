@@ -26,10 +26,11 @@ const FilesModule = (() => {
 
   function getCategories() {
     return {
-      pdf:         { label: App.t('files_category_pdf'),              icon: 'file-text',  match: f => f.type === 'application/pdf' },
+      pdf:         { label: App.t('files_category_pdf'),              icon: 'file-text',  match: f => f.type === 'application/pdf' && f.category !== 'participantes' },
       image:       { label: App.t('files_category_image'),            icon: 'image',      match: f => f.type.startsWith('image/') },
       doc:         { label: App.t('files_category_doc'),              icon: 'file-text',  match: f => f.type.includes('word') || f.type === 'text/plain' },
       spreadsheet: { label: App.t('files_category_spreadsheet'),      icon: 'table',      match: f => f.type.includes('excel') || f.type.includes('spreadsheet') },
+      participantes: { label: App.t('files_category_participants'),    icon: 'users',      match: f => f.category === 'participantes' },
       other:       { label: App.t('files_category_other'),            icon: 'file',       match: () => true }
     };
   }

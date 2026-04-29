@@ -446,6 +446,12 @@ const CanvasModule = (() => {
 
   async function pasteFromSystemClipboard() {
     try {
+      // Verificar si la API de clipboard está disponible
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        console.warn('[Canvas] Clipboard API no disponible, usando clipboard interno');
+        pasteClipboard();
+        return;
+      }
       const items = await navigator.clipboard.read();
       for (const item of items) {
         const imageType = item.types.find(t => t.startsWith('image/'));
@@ -469,7 +475,10 @@ const CanvasModule = (() => {
           return;
         }
       }
+      // Si no se encontró imagen, usar clipboard interno
+      pasteClipboard();
     } catch (e) {
+      console.warn('[Canvas] Error al acceder al clipboard del sistema:', e);
       // System clipboard not accessible — fall back to internal clipboard
       pasteClipboard();
     }
@@ -2050,7 +2059,10 @@ const CanvasModule = (() => {
 
   async function tableDeleteSelected() {
     const table = getSelectedTableData(); if (!table) return;
-    if (!await App.confirm(App.t('confirm_delete_table'))) return;
+    console.log('[Canvas] Intentando eliminar tabla:', table.id);
+    const confirmed = await App.confirm(App.t('confirm_delete_table'));
+    console.log('[Canvas] Confirmación recibida:', confirmed);
+    if (!confirmed) return;
     const el = document.getElementById(table.id);
     if (el) el.remove();
     tables = tables.filter(t => t.id !== table.id);

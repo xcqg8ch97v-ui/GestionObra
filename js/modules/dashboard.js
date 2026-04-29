@@ -51,13 +51,63 @@ const DashboardModule = (() => {
     document.getElementById('btn-add-budget').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-add-budget-empty').addEventListener('click', () => openBudgetForm());
     document.getElementById('btn-view-bc3')?.addEventListener('click', () => showBC3Tree());
+    document.getElementById('btn-reset-bc3')?.addEventListener('click', () => resetBC3Import());
     checkBC3Button();
   }
 
   async function checkBC3Button() {
     const items = await DB.getByIndex('bc3items', 'projectId', projectId);
-    const btn = document.getElementById('btn-view-bc3');
-    if (btn) btn.style.display = items.length > 0 ? '' : 'none';
+    const hasItems = items.length > 0;
+    const btnView = document.getElementById('btn-view-bc3');
+    const btnReset = document.getElementById('btn-reset-bc3');
+    if (btnView) btnView.style.display = hasItems ? '' : 'none';
+    if (btnReset) btnReset.style.display = hasItems ? '' : 'none';
+  }
+
+  // =============================
+  // RESTABLECER IMPORTACIÓN BC3
+  // =============================
+  async function resetBC3Import() {
+    // Primera confirmación
+    const firstConfirm = confirm('⚠️ ATENCIÓN\n\n¿Estás seguro de que deseas restablecer las partidas importadas desde BC3?\n\nEsta acción eliminará:' +
+      '\n- Todos los elementos BC3 importados' +
+      '\n- Todas las partidas presupuestarias vinculadas a BC3' +
+      '\n\nLas partidas manuales que hayas creado no se verán afectadas.');
+    
+    if (!firstConfirm) return;
+
+    // Segunda confirmación - mostrar estadísticas
+    const items = await DB.getByIndex('bc3items', 'projectId', projectId);
+    const budgets = await DB.getAllForProject('budgets', projectId);
+    const bc3Budgets = budgets.filter(b => b.bc3Code);
+    
+    const secondConfirm = confirm(`🗑️ CONFIRMACIÓN FINAL\n\nSe eliminarán permanentemente:\n` +
+      `- ${items.length} elementos BC3\n` +
+      `- ${bc3Budgets.length} partidas presupuestarias vinculadas a BC3\n\n` +
+      `¿Estás completamente seguro? Esta acción NO se puede deshacer.`);
+    
+    if (!secondConfirm) return;
+
+    // Proceder con la eliminación
+    try {
+      App.toast('Eliminando datos BC3...', 'info');
+      
+      // Eliminar budgets con bc3Code
+      for (const budget of bc3Budgets) {
+        await DB.remove('budgets', budget.id);
+      }
+      
+      // Eliminar items BC3
+      await DB.clearStore('bc3items');
+      
+      checkBC3Button();
+      loadBudgets();
+      
+      App.toast(`Restablecimiento completado: ${bc3Budgets.length} partidas y ${items.length} elementos BC3 eliminados`, 'success');
+    } catch (err) {
+      console.error('Error al restablecer BC3:', err);
+      App.toast('Error al restablecer las partidas BC3', 'error');
+    }
   }
 
   // =============================
@@ -331,24 +381,82 @@ const DashboardModule = (() => {
 
   function applyBudgetFilter() {
     const sel = document.getElementById('budget-filter-category');
+    const viewSel = document.getElementById('budget-view-mode');
     const cat = sel ? sel.value : '__all__';
+    const viewMode = viewSel ? viewSel.value : 'list';
     const filtered = cat === '__all__' ? _allBudgets : _allBudgets.filter(b => b.category === cat);
-    renderBudgets(filtered, cat === '__all__' ? null : cat);
+    renderBudgets(filtered, cat === '__all__' ? null : cat, viewMode);
+
+    if (viewSel && !viewSel.dataset.bound) {
+      viewSel.addEventListener('change', () => applyBudgetFilter());
+      viewSel.dataset.bound = 'true';
+    }
   }
 
-  async function renderBudgets(budgets, filterLabel = null) {
+  async function renderBudgets(budgets, filterLabel = null, viewMode = 'list') {
     const tbody = document.getElementById('budgets-tbody');
     const emptyState = document.getElementById('budgets-empty');
     const table = document.getElementById('budgets-table');
+    const categoryCards = document.getElementById('budget-category-cards');
 
     if (budgets.length === 0) {
       table.style.display = 'none';
+      categoryCards.style.display = 'none';
       emptyState.style.display = 'flex';
       return;
     }
 
     table.style.display = 'table';
+    categoryCards.style.display = 'flex';
     emptyState.style.display = 'none';
+
+    // Calcular resúmenes por categoría
+    const categorySummary = {};
+    budgets.forEach(b => {
+      const cat = b.category || App.t('overview_no_category');
+      if (!categorySummary[cat]) {
+        categorySummary[cat] = {
+          count: 0,
+          estimated: 0,
+          real: 0
+        };
+      }
+      categorySummary[cat].count++;
+      categorySummary[cat].estimated += b.estimatedCost || 0;
+      categorySummary[cat].real += b.realCost || 0;
+    });
+
+    // Renderizar tarjetas de categoría
+    categoryCards.innerHTML = Object.entries(categorySummary)
+      .sort((a, b) => b[1].estimated - a[1].estimated)
+      .map(([cat, data]) => {
+        const saving = data.estimated - data.real;
+        const devClass = saving > 0 ? 'badge-positive' : saving < 0 ? 'badge-negative' : 'badge-neutral';
+        const devSign = saving > 0 ? '+' : '';
+        return `
+          <div class="budget-cat-card">
+            <div class="budget-cat-title">${App.escapeHTML(cat)}</div>
+            <div class="budget-cat-stats">
+              <div class="budget-cat-stat">
+                <span class="budget-cat-label">Partidas</span>
+                <span class="budget-cat-value">${data.count}</span>
+              </div>
+              <div class="budget-cat-stat">
+                <span class="budget-cat-label">Previsto</span>
+                <span class="budget-cat-value">${App.formatCurrency(data.estimated)}</span>
+              </div>
+              <div class="budget-cat-stat">
+                <span class="budget-cat-label">Real</span>
+                <span class="budget-cat-value">${App.formatCurrency(data.real)}</span>
+              </div>
+              <div class="budget-cat-stat">
+                <span class="budget-cat-label">Desviación</span>
+                <span class="badge ${devClass}">${devSign}${App.formatCurrency(saving)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
 
     const suppliers = await DB.getAllForProject('suppliers', projectId);
     const supplierMap = {};
@@ -377,7 +485,15 @@ const DashboardModule = (() => {
         </tr>`;
     }
 
-    tbody.innerHTML = budgets.map(b => {
+    function summarizeBudgetDescription(text) {
+      const raw = (text || '').replace(/\s+/g, ' ').trim();
+      if (!raw) return '';
+      const parts = raw.split(/[.;]\s+/).filter(Boolean);
+      const first = parts[0] || raw;
+      return first.length > 180 ? `${first.slice(0, 177)}...` : first;
+    }
+
+    function renderBudgetRow(b) {
       // Ahorro = previsto - real (positivo = gastamos menos de lo previsto)
       const saving = (b.estimatedCost || 0) - (b.realCost || 0);
       const savingPct = b.estimatedCost > 0 ? Math.abs((saving / b.estimatedCost) * 100).toFixed(1) : 0;
@@ -388,10 +504,26 @@ const DashboardModule = (() => {
       const supplierNames = (b.supplierIds && b.supplierIds.length > 0)
         ? b.supplierIds.map(id => supplierMap[id] || '').filter(Boolean).join(', ')
         : (supplierMap[b.supplierId] || '—');
+      const summaryDescription = summarizeBudgetDescription(b.description || '');
 
+      const fullDescription = (b.description || '').replace(/\s+/g, ' ').trim();
+      const isLong = fullDescription.length > 180;
       return `
-        <tr>
-          <td><strong>${App.escapeHTML(b.category)}</strong><br><small style="color:var(--text-muted)">${App.escapeHTML(b.description || '')}</small></td>
+        <tr data-budget-id="${b.id}">
+          <td>
+            <strong>${App.escapeHTML(b.category || App.t('overview_no_category'))}</strong>
+            ${summaryDescription
+              ? `
+                <div class="budget-desc">
+                  <span class="budget-desc-text" data-full="${App.escapeHTML(fullDescription)}">${App.escapeHTML(summaryDescription)}</span>
+                  ${isLong
+                    ? `<button class="budget-desc-toggle" onclick="DashboardModule.toggleBudgetDesc(${b.id}, event)" title="Ver descripción completa">
+                        <i data-lucide="chevron-down"></i>
+                      </button>`
+                    : ''}
+                </div>`
+              : ''}
+          </td>
           <td>${App.escapeHTML(supplierNames)}</td>
           <td>${App.formatCurrency(b.estimatedCost)}</td>
           <td>${App.formatCurrency(b.realCost)}</td>
@@ -409,7 +541,41 @@ const DashboardModule = (() => {
           </td>
         </tr>
       `;
-    }).join('');
+    }
+
+    let rowsHtml = '';
+    if (viewMode === 'grouped') {
+      const groups = new Map();
+      for (const b of budgets) {
+        const key = b.category || App.t('overview_no_category');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(b);
+      }
+
+      const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'));
+      rowsHtml = sortedGroups.map(([category, items]) => {
+        const catEstimated = items.reduce((s, it) => s + (it.estimatedCost || 0), 0);
+        const catReal = items.reduce((s, it) => s + (it.realCost || 0), 0);
+        const catSaving = catEstimated - catReal;
+        const catDevClass = catSaving > 0 ? 'badge-positive' : catSaving < 0 ? 'badge-negative' : 'badge-neutral';
+        const catSign = catSaving > 0 ? '+' : '';
+        return `
+          <tr class="budget-group-row">
+            <td colspan="7">
+              <div class="budget-group-head">
+                <span>${App.escapeHTML(category)}</span>
+                <span>${items.length} partida${items.length !== 1 ? 's' : ''} · ${App.formatCurrency(catEstimated)} · <span class="badge ${catDevClass}">${catSign}${App.formatCurrency(catSaving)}</span></span>
+              </div>
+            </td>
+          </tr>
+          ${items.map(renderBudgetRow).join('')}
+        `;
+      }).join('');
+    } else {
+      rowsHtml = budgets.map(renderBudgetRow).join('');
+    }
+
+    tbody.innerHTML = rowsHtml;
 
     lucide.createIcons();
   }
@@ -1075,19 +1241,33 @@ const DashboardModule = (() => {
     return concepts[code] || concepts[code + '#'] || concepts[code + '##'];
   }
 
+  function findDecomposition(decompositions, code) {
+    const base = normCode(code || '');
+    return decompositions[code]
+      || decompositions[base]
+      || decompositions[base + '#']
+      || decompositions[base + '##']
+      || null;
+  }
+
   function parseBC3(text) {
     const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     // Split into records: each starts with ~LETTER|
-    const rawRecords = normalized.split(/(?=~[A-Za-z]\|)/).filter(r => r.trim());
-
+    // PERO los registros ~T pueden ser multilinea - terminan con |\n o |\r\n
     const concepts = {};
     const decompositions = {};
     const texts = {};
 
-    for (let raw of rawRecords) {
-      raw = raw.replace(/\n/g, ''); // join multi-line records
+    // Parse record by record, handling multiline ~T records
+    const recordRegex = /~[A-Za-z]\|[^~]*/g;
+    let match;
+    while ((match = recordRegex.exec(normalized)) !== null) {
+      let raw = match[0];
+      // Remove trailing newline but preserve internal ones for ~T
+      raw = raw.replace(/\n+$/, '');
       if (raw.length < 3) continue;
       const typeChar = raw.charAt(1).toUpperCase();
+      // Find content after ~X|
       const content = raw.substring(3);
       const fields = content.split('|');
 
@@ -1101,16 +1281,26 @@ const DashboardModule = (() => {
           const code = rawCode;
           const unit = (fields[1] || '').trim();
           const summary = (fields[2] || '').trim();
-          // BC3 estándar: precio en fields[3]; Presto puede poner fecha en fields[3] y precio en fields[4]
-          // Detectar automáticamente: si fields[3] no parsea como número, usar fields[4]
+          // BC3 estándar: precio en fields[3]; Presto pone fecha en fields[3] y precio en fields[4]
           const f3 = (fields[3] || '').trim();
           const f4 = (fields[4] || '').trim();
+          const f5 = (fields[5] || '').trim(); // Campo adicional (tipo/porcentaje)
           const price3 = parseFloat(f3.split('\\')[0]) || 0;
           const price4 = parseFloat(f4.split('\\')[0]) || 0;
-          // Si f3 parece una fecha (contiene '/') o es 0 y f4 tiene valor, usar f4
-          const priceField = (f3.includes('/') || (price3 === 0 && price4 > 0)) ? f4 : f3;
+          // Detectar formato Presto: si f3 es fecha (DDMMYY) o está vacío, usar f4
+          const isDate = /^\d{6}$/.test(f3.replace(/\//g, ''));
+          const priceField = (isDate || f3 === '' || (price3 === 0 && price4 > 0)) ? f4 : f3;
           const prices = priceField ? priceField.split('\\').map(p => parseFloat(p) || 0) : [0];
-          concepts[code] = { code, unit, summary, price: prices[0] || 0, isRoot, isChapter };
+          concepts[code] = { 
+            code, 
+            unit, 
+            summary, 
+            price: prices[0] || 0,
+            priceDate: isDate ? f3 : null,
+            auxField: f5,
+            isRoot, 
+            isChapter 
+          };
           break;
         }
         case 'D': {
@@ -1132,8 +1322,14 @@ const DashboardModule = (() => {
         }
         case 'T': {
           const code = (fields[0] || '').trim();
-          const longText = (fields[1] || '').trim();
-          if (code) texts[code] = longText;
+          // For ~T, join remaining fields as the text may contain | characters
+          // Actually in BC3, the text is in field[1] but can have newlines
+          let longText = (fields[1] || '').trim();
+          // Also append any additional fields that might be part of the text
+          if (fields.length > 2) {
+            longText += '|' + fields.slice(2).join('|');
+          }
+          if (code && longText) texts[code] = longText.replace(/\n/g, ' '); // normalize newlines to spaces
           break;
         }
       }
@@ -1144,7 +1340,7 @@ const DashboardModule = (() => {
 
   // Nueva función: construir árbol completo de capítulos/partidas/subpartidas
   function buildBC3FullTree(parsed) {
-    const { concepts, decompositions } = parsed;
+    const { concepts, decompositions, texts } = parsed;
     // Buscar raíz
     let rootCode = null;
     for (const [code, c] of Object.entries(concepts)) {
@@ -1160,24 +1356,43 @@ const DashboardModule = (() => {
       }
     }
 
+    // Helper para obtener texto largo si existe
+    function getLongText(code) {
+      return texts[code] || texts[code + '#'] || texts[code + '##'] || null;
+    }
+
     // Recursivo: construye árbol
-    function buildNode(code, parentQty = 1) {
+    function buildNode(code, parentQty = 1, parentChapter = null) {
       const concept = findConcept(concepts, code);
       if (!concept) return null;
-      const children = decompositions[normCode(code)] || decompositions[code];
+      const children = findDecomposition(decompositions, code);
+      // Usar texto largo (~T) si existe, sino summary (~C)
+      const longText = getLongText(code);
+      const displayName = longText || concept.summary || code;
       const node = {
         code,
-        name: concept.summary || code,
+        name: displayName,
         summary: concept.summary || code,
+        shortName: concept.summary || code,
         unit: concept.unit || '',
         unitPrice: concept.price,
+        priceDate: concept.priceDate,
+        auxField: concept.auxField,
         quantity: parentQty,
         totalCost: Math.round((concept.price * parentQty) * 100) / 100,
         type: concept.isChapter ? 'chapter' : 'partida',
+        isRoot: concept.isRoot,
+        isChapter: concept.isChapter,
+        chapter: parentChapter,
         children: []
       };
       if (children && children.length) {
-        node.children = children.map(child => buildNode(child.code, child.yield || 1)).filter(Boolean);
+        node.children = children
+          .map(child => {
+            const childQty = (parentQty || 1) * (child.factor || 1) * (child.yield || 1);
+            return buildNode(child.code, childQty, parentChapter || node);
+          })
+          .filter(Boolean);
         // Si tiene hijos, recalcula el coste total sumando hijos
         node.totalCost = node.children.reduce((s, c) => s + c.totalCost, 0);
         // Si es capítulo, fuerza type
@@ -1188,9 +1403,43 @@ const DashboardModule = (() => {
     }
 
     // Raíz puede tener varios capítulos
-    const rootChildren = decompositions[normCode(rootCode)] || decompositions[rootCode] || [];
+    const rootChildren = findDecomposition(decompositions, rootCode) || [];
     const chapters = rootChildren.map(rc => buildNode(rc.code, rc.yield || 1)).filter(Boolean);
-    return { rootCode, rootName: findConcept(concepts, rootCode || '')?.summary || '', chapters };
+    const rootLongText = getLongText(rootCode || '');
+    const rootName = rootLongText || findConcept(concepts, rootCode || '')?.summary || '';
+    return { rootCode, rootName, chapters };
+  }
+
+  // Extrae solo las partidas hoja (productos individuales) de todos los capítulos
+  function collectLeafPartidas(chapters) {
+    const partidas = [];
+    function collectFromNode(node) {
+      const isLeaf = !node.children || node.children.length === 0;
+      if (isLeaf && node.type === 'partida') {
+        partidas.push({
+          code: node.code,
+          name: node.name,
+          summary: node.summary,
+          shortName: node.shortName,
+          unit: node.unit,
+          unitPrice: node.unitPrice,
+          priceDate: node.priceDate,
+          auxField: node.auxField,
+          quantity: node.quantity,
+          totalCost: node.totalCost,
+          chapter: node.chapter
+        });
+      }
+      if (node.children) {
+        for (const child of node.children) {
+          collectFromNode(child);
+        }
+      }
+    }
+    for (const ch of chapters) {
+      collectFromNode(ch);
+    }
+    return partidas;
   }
 
   // Reemplaza el buildBC3Tree por el nuevo árbol completo
@@ -1320,44 +1569,79 @@ const DashboardModule = (() => {
       await saveNode(ch, null);
     }
 
-    // Crear/actualizar entradas en budgets por cada capítulo
+    // Crear/actualizar entradas en budgets por cada PARTIDA INDIVIDUAL (no capítulos)
     const existingBudgets = await DB.getAllForProject('budgets', projectId);
     let budgetsCreated = 0;
-    for (const ch of chapters) {
-      const name = (ch.name || ch.code || '').slice(0, 60);
-      // Si ya existe una partida con el mismo nombre de capítulo BC3, actualizar importe
-      const existing = existingBudgets.find(b => b.bc3Code === ch.code);
-      if (existing) {
-        await DB.put('budgets', { ...existing, estimatedCost: ch.totalCost, updatedAt: new Date().toISOString() });
-      } else {
-        // Detectar gremio por palabras clave del nombre del capítulo
-        const nameLower = name.toLowerCase();
-        const tradeKeywords = {
-          'Albañilería':       ['albañil','mamposter','tabiq','solado','paviment','revoc','enfoscado','enlucid'],
-          'Fontanería':        ['fontaner','saneamiento','agua','tubería','sanitario','inodoro','grifo','plomer'],
-          'Electricidad':      ['electric','iluminac','instalac eléc','cuadro','cable','enchufe','luz'],
-          'Carpintería':       ['carpinter','puerta','ventana','madera','armario','tarima','parquet'],
-          'Pintura':           ['pintura','barniz','lacado','revestimiento'],
-          'Cristalería':       ['cristal','vidrio','mampara','espejo'],
-          'Climatización':     ['climati','ventilac','calefacc','aire acondicion','hvac','aerotermia'],
-          'Impermeabilización':['impermeab','cubierta','tejado','azotea'],
-          'Estructura':        ['estructura','hormigón','forjado','pilar','viga','cimentación','acero'],
-          'Cimentación':       ['cimentac','zapata','pilote','excavac'],
-          'Paisajismo':        ['jardín','paisaj','riego','césped','árbol'],
-          'Seguridad':         ['seguridad','alarma','cámara','videovigilancia']
-        };
-        let trade = 'Otros';
-        outer: for (const [t, kws] of Object.entries(tradeKeywords)) {
-          for (const kw of kws) {
-            if (nameLower.includes(kw)) { trade = t; break outer; }
-          }
+    
+    // Obtener todas las partidas individuales (hojas) de los capítulos seleccionados
+    const allPartidas = collectLeafPartidas(chapters);
+    
+    // Detectar gremio por palabras clave
+    const tradeKeywords = {
+      'Albañilería':       ['albañil','mamposter','tabiq','solado','paviment','revoc','enfoscado','enlucid'],
+      'Fontanería':        ['fontaner','saneamiento','agua','tubería','sanitario','inodoro','grifo','plomer'],
+      'Electricidad':      ['electric','iluminac','instalac eléc','cuadro','cable','enchufe','luz'],
+      'Carpintería':       ['carpinter','puerta','ventana','madera','armario','tarima','parquet'],
+      'Pintura':           ['pintura','barniz','lacado','revestimiento'],
+      'Cristalería':       ['cristal','vidrio','mampara','espejo'],
+      'Climatización':     ['climati','ventilac','calefacc','aire acondicion','hvac','aerotermia'],
+      'Impermeabilización':['impermeab','cubierta','tejado','azotea'],
+      'Estructura':        ['estructura','hormigón','forjado','pilar','viga','cimentación','acero'],
+      'Cimentación':       ['cimentac','zapata','pilote','excavac'],
+      'Paisajismo':        ['jardín','paisaj','riego','césped','árbol'],
+      'Seguridad':         ['seguridad','alarma','cámara','videovigilancia']
+    };
+    
+    for (const partida of allPartidas) {
+      // Detectar gremio por palabras clave del nombre del capítulo padre
+      const chName = partida.chapter?.name || '';
+      const chShortName = partida.chapter?.shortName || '';
+      const nameLower = (chName + ' ' + chShortName).toLowerCase();
+      let trade = 'Otros';
+      outer: for (const [t, kws] of Object.entries(tradeKeywords)) {
+        for (const kw of kws) {
+          if (nameLower.includes(kw)) { trade = t; break outer; }
         }
+      }
+      
+      // Construir descripción detallada
+      let description = `${chShortName || chName} — ${partida.name}`;
+      if (partida.unit) {
+        description += ` (${partida.quantity} ${partida.unit})`;
+      }
+      // Añadir fecha de precio si existe (formato Presto: DDMMYY)
+      if (partida.priceDate) {
+        const d = partida.priceDate;
+        if (d.length === 6) {
+          description += ` [Precio ${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4,6)}]`;
+        } else if (d.includes('/')) {
+          description += ` [Precio ${d}]`;
+        }
+      }
+      
+      // Si ya existe una partida con el mismo código BC3, actualizar
+      const existing = existingBudgets.find(b => b.bc3Code === partida.code);
+      if (existing) {
+        await DB.put('budgets', { 
+          ...existing, 
+          name: partida.shortName || partida.name,
+          description: description,
+          category: trade,
+          estimatedCost: partida.totalCost,
+          bc3PriceDate: partida.priceDate,
+          bc3AuxField: partida.auxField,
+          updatedAt: new Date().toISOString() 
+        });
+      } else {
         await DB.add('budgets', {
           projectId,
           category: trade,
-          description: name,
-          bc3Code: ch.code,
-          estimatedCost: Math.round(ch.totalCost * 100) / 100,
+          name: partida.shortName || partida.name,
+          description: description,
+          bc3Code: partida.code,
+          bc3PriceDate: partida.priceDate,
+          bc3AuxField: partida.auxField,
+          estimatedCost: Math.round(partida.totalCost * 100) / 100,
           realCost: 0,
           profitMargin: 0,
           supplierId: null,
@@ -1369,9 +1653,64 @@ const DashboardModule = (() => {
     }
 
     App.closeModal();
-    App.toast(`BC3 importado: ${count} elementos · ${budgetsCreated} partidas presupuestarias creadas`, 'success');
+    App.toast(`BC3 importado: ${count} elementos · ${budgetsCreated} partidas individuales creadas`, 'success');
     checkBC3Button();
     loadBudgets();
+  }
+
+  function toggleBudgetDesc(id, event) {
+    event.stopPropagation();
+    const row = document.querySelector(`tr[data-budget-id="${id}"]`);
+    if (!row) return;
+    const textSpan = row.querySelector('.budget-desc-text');
+    const btn = row.querySelector('.budget-desc-toggle');
+    const icon = btn?.querySelector('i');
+    if (!textSpan || !btn || !icon) return;
+    const isExpanded = textSpan.classList.contains('expanded');
+    if (isExpanded) {
+      textSpan.textContent = textSpan.dataset.full?.slice(0, 177) + '...' || textSpan.textContent;
+      textSpan.classList.remove('expanded');
+      icon.setAttribute('data-lucide', 'chevron-down');
+      btn.title = 'Ver descripción completa';
+    } else {
+      textSpan.textContent = textSpan.dataset.full || textSpan.textContent;
+      textSpan.classList.add('expanded');
+      icon.setAttribute('data-lucide', 'chevron-up');
+      btn.title = 'Contraer descripción';
+    }
+    lucide.createIcons();
+  }
+
+  let currentSortField = null;
+  let currentSortAsc = true;
+
+  async function sortBudgets(field) {
+    if (currentSortField === field) {
+      currentSortAsc = !currentSortAsc;
+    } else {
+      currentSortField = field;
+      currentSortAsc = true;
+    }
+    const budgets = await DB.getAllForProject('budgets', projectId);
+    budgets.sort((a, b) => {
+      let valA, valB;
+      if (field === 'name') {
+        valA = (a.name || '').toLowerCase();
+        valB = (b.name || '').toLowerCase();
+      } else if (field === 'estimated') {
+        valA = a.estimatedCost || 0;
+        valB = b.estimatedCost || 0;
+      } else if (field === 'deviation') {
+        valA = (a.estimatedCost || 0) - (a.realCost || 0);
+        valB = (b.estimatedCost || 0) - (b.realCost || 0);
+      } else {
+        return 0;
+      }
+      if (valA < valB) return currentSortAsc ? -1 : 1;
+      if (valA > valB) return currentSortAsc ? 1 : -1;
+      return 0;
+    });
+    applyBudgetFilter(budgets);
   }
 
   return {
@@ -1381,6 +1720,8 @@ const DashboardModule = (() => {
     editBudget,
     deleteBudget,
     showBC3Tree,
+    toggleBudgetDesc,
+    sortBudgets,
     refresh: () => { loadSuppliers(); loadBudgets(); }
   };
 })();
