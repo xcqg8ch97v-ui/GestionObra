@@ -449,7 +449,12 @@ const OverviewModule = (() => {
           <span>Diario</span>
         </div>
         <div class="overview-card-value">${diaryEntries}</div>
-        <div class="overview-card-detail">${incidents.filter(item => (item.entryType || 'incident') === 'incident').length} incidencias · ${incidents.filter(item => (item.entryType || 'incident') !== 'incident').length} notas</div>
+        <div class="overview-card-detail">
+          ${incidents.filter(item => (item.entryType || 'incident') === 'incident').length} incidencias · 
+          ${incidents.filter(item => (item.entryType || 'incident') === 'comment').length} comentarios · 
+          ${incidents.filter(item => (item.entryType || 'incident') === 'evolution').length} evoluciones · 
+          ${incidents.filter(item => (item.entryType || 'incident') === 'logbook').length} bitácoras
+        </div>
       </div>
 
       <div class="overview-card overview-card-wide">
