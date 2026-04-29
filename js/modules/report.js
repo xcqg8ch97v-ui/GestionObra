@@ -510,7 +510,9 @@ const ReportModule = (() => {
           const rows = budgets.map(b => {
             const dev = (b.estimatedCost || 0) > 0
               ? Math.round(((b.realCost || 0) - (b.estimatedCost || 0)) / (b.estimatedCost || 1) * 100) : 0;
-            return [b.name || b.category || '', b.category || '', fmtCurrency(b.estimatedCost || 0), fmtCurrency(b.realCost || 0), (dev >= 0 ? '+' : '') + dev + '%'];
+            // Usar name si existe (importado de BC3), sino description, sino category
+            const displayName = b.name || b.description || b.category || '';
+            return [displayName, b.category || '', fmtCurrency(b.estimatedCost || 0), fmtCurrency(b.realCost || 0), (dev >= 0 ? '+' : '') + dev + '%'];
           });
           rows.push(['TOTAL', '', fmtCurrency(totalEstimated), fmtCurrency(totalReal), (devTotal >= 0 ? '+' : '') + devTotal + '%']);
 
