@@ -2924,9 +2924,10 @@ ${content}
 
   async function buildBudgetsPrint(project, date) {
     if (!currentProjectId) return '<p>Sin datos</p>';
-    const [budgets, suppliers] = await Promise.all([
+    const [budgets, suppliers, incidents] = await Promise.all([
       DB.getAllForProject('budgets', currentProjectId),
-      DB.getAllForProject('suppliers', currentProjectId)
+      DB.getAllForProject('suppliers', currentProjectId),
+      DB.getAllForProject('incidents', currentProjectId)
     ]);
 
     const supplierMap = {};
@@ -2947,6 +2948,12 @@ ${content}
       if (!byCategory[b.category]) byCategory[b.category] = [];
       byCategory[b.category].push(b);
     });
+
+    // Contar tipos de entradas del diario
+    const incidentCount = incidents.filter(item => (item.entryType || 'incident') === 'incident').length;
+    const commentCount = incidents.filter(item => (item.entryType || 'incident') === 'comment').length;
+    const evolutionCount = incidents.filter(item => (item.entryType || 'incident') === 'evolution').length;
+    const logbookCount = incidents.filter(item => (item.entryType || 'incident') === 'logbook').length;
 
     // Resumen ejecutivo
     const summaryCards = `
@@ -3013,10 +3020,21 @@ ${content}
         </tr></tbody>
       </table>`;
 
+    // Sección del diario de trabajo
+    const diarySection = `
+      <div class="bud-section-title">Diario de Trabajo</div>
+      <div class="print-summary">
+        <div class="print-stat"><strong>${incidentCount}</strong><span>Incidencias</span></div>
+        <div class="print-stat"><strong>${commentCount}</strong><span>Comentarios</span></div>
+        <div class="print-stat"><strong>${evolutionCount}</strong><span>Evoluciones</span></div>
+        <div class="print-stat"><strong>${logbookCount}</strong><span>Bitácoras</span></div>
+      </div>`;
+
     return `
       <h2 class="print-section-title">Partidas Presupuestarias</h2>
       ${summaryCards}
-      ${tableHTML}`;
+      ${tableHTML}
+      ${diarySection}`;
   }
 
   async function buildTimelinePrint(project, date) {
