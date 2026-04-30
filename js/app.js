@@ -3212,8 +3212,9 @@ ${content}
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    const iconName = icons[type] || 'info'; // Fallback to 'info' if type not found
     toast.innerHTML = `
-      <i data-lucide="${icons[type]}" class="toast-icon"></i>
+      <i data-lucide="${iconName}" class="toast-icon"></i>
       <span>${escapeHTML(message)}</span>
     `;
     container.appendChild(toast);
