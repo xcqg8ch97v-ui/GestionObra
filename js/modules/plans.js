@@ -397,6 +397,8 @@ const PlansModule = (() => {
   let annoTool = 'draw';
   let annoHistory = [];
 
+  let showAnnotations = true;
+
   function setupViewer() {
     const overlay = document.getElementById('plan-viewer-overlay');
     document.getElementById('plan-viewer-close').addEventListener('click', closeViewer);
@@ -407,6 +409,7 @@ const PlansModule = (() => {
     document.getElementById('plan-viewer-prev').addEventListener('click', () => viewerNav(-1));
     document.getElementById('plan-viewer-next').addEventListener('click', () => viewerNav(1));
     document.getElementById('plan-viewer-annotate').addEventListener('click', enterAnnotateMode);
+    document.getElementById('plan-viewer-toggle-annotations').addEventListener('click', toggleAnnotations);
 
     // Annotation toolbar
     document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(btn => {
@@ -652,6 +655,7 @@ const PlansModule = (() => {
     const annoBtn = document.getElementById('plan-viewer-annotate');
     const isImage = file.type && file.type.startsWith('image/');
     const isPDF = file.type === 'application/pdf';
+    const hasAnnotations = plan.annotations && plan.annotations !== '{}';
     annoBtn.style.display = (isImage || isPDF) ? '' : 'none';
 
     if (isImage) {
@@ -693,7 +697,18 @@ const PlansModule = (() => {
     } else {
       body.innerHTML = `<p style="color:#fff;text-align:center">${App.t('preview_not_available')}</p>`;
     }
+
+    // Auto-enter annotate mode if plan has annotations and showAnnotations is true
+    if (hasAnnotations && !annoMode && showAnnotations) {
+      await enterAnnotateMode();
+    }
+
     try { lucide.createIcons(); } catch(e) {}
+  }
+
+  function toggleAnnotations() {
+    showAnnotations = !showAnnotations;
+    renderViewerContent();
   }
 
   // ======== ANNOTATION MODE ========
@@ -969,60 +984,11 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
 
-    // Save annotation JSON for future editing
+    // Save annotation JSON for future editing (don't modify original file)
     const json = annoCanvas.toJSON();
     delete json.backgroundImage;
     delete json.background;
     plan.annotations = JSON.stringify(json);
-
-    // Bake annotations into the actual image file at full resolution
-    const file = await DB.getFile(plan.fileId);
-    if (file) {
-      const origBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-      if (origBlob) {
-        // Load original image at full size
-        const origUrl = URL.createObjectURL(origBlob);
-        const origImg = new Image();
-        origImg.src = origUrl;
-        await new Promise(r => { origImg.onload = r; });
-
-        const fullW = origImg.width;
-        const fullH = origImg.height;
-
-        // Create full-res canvas
-        const fullCanvas = document.createElement('canvas');
-        fullCanvas.width = fullW;
-        fullCanvas.height = fullH;
-        const ctx = fullCanvas.getContext('2d');
-
-        // Draw original image as base
-        ctx.drawImage(origImg, 0, 0);
-        URL.revokeObjectURL(origUrl);
-
-        // Render only annotation objects (no background) and scale up
-        const scaleX = fullW / annoCanvas.width;
-        const scaleY = fullH / annoCanvas.height;
-        ctx.save();
-        ctx.scale(scaleX, scaleY);
-        const objs = annoCanvas.getObjects();
-        for (const obj of objs) {
-          obj.render(ctx);
-        }
-        ctx.restore();
-
-        // Convert to blob and update the file
-        const newBlob = await new Promise(r => fullCanvas.toBlob(r, 'image/png'));
-        const newData = await newBlob.arrayBuffer();
-        file.data = newData;
-        file.blob = undefined;
-        file.type = 'image/png';
-        file.size = newData.byteLength;
-        if (file.name && !file.name.endsWith('.png')) {
-          file.name = file.name.replace(/\.[^.]+$/, '.png');
-        }
-        await DB.put('files', file);
-      }
-    }
 
     await DB.put('plans', plan);
     App.toast(App.t('annotations_saved_on_plan'), 'success');
@@ -1030,6 +996,7 @@ const PlansModule = (() => {
 
   return {
     init,
-    refresh: loadPlans
+    refresh: loadPlans,
+    toggleAnnotations
   };
 })();

@@ -363,7 +363,14 @@ const FilesModule = (() => {
     
     const menu = document.createElement('div');
     menu.className = 'ctx-menu';
-    menu.style.cssText = `position:fixed;left:${event.clientX}px;top:${event.clientY}px;z-index:999;display:block;`;
+
+    // Calcular posición para que no se salga de la pantalla
+    const menuWidth = 200;
+    const menuHeight = 100;
+    const x = Math.min(event.clientX, window.innerWidth - menuWidth);
+    const y = Math.min(event.clientY, window.innerHeight - menuHeight);
+
+    menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:999;display:block;`;
     
     let menuHTML = `<div class="ctx-header">${App.escapeHTML(fileName)}</div>`;
     menuHTML += `<button class="ctx-item" data-action="download-original"><i data-lucide="file" style="width:14px;height:14px"></i> ${App.t('download_original')}</button>`;
