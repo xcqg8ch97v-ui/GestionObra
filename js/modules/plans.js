@@ -400,7 +400,7 @@ const PlansModule = (() => {
   function setupViewer() {
     const overlay = document.getElementById('plan-viewer-overlay');
     document.getElementById('plan-viewer-close').addEventListener('click', closeViewer);
-    document.getElementById('plan-viewer-download').addEventListener('click', downloadCurrentPlan);
+    document.getElementById('plan-viewer-download').addEventListener('click', showDownloadMenu);
     document.getElementById('plan-viewer-zoom-in').addEventListener('click', () => setZoom(viewerZoom * 1.3));
     document.getElementById('plan-viewer-zoom-out').addEventListener('click', () => setZoom(viewerZoom / 1.3));
     document.getElementById('plan-viewer-fit').addEventListener('click', () => setZoom(1));
@@ -504,6 +504,130 @@ const PlansModule = (() => {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+
+  async function downloadAnnotatedPlan() {
+    const plan = viewerPlans[viewerIndex];
+    if (!plan) return;
+
+    // Check if plan has annotations
+    if (!plan.annotations) {
+      App.toast(App.t('plan_no_annotations') || 'Este plano no tiene anotaciones', 'warning');
+      return;
+    }
+
+    const file = await DB.getFile(plan.fileId);
+    if (!file) { App.toast(App.t('file_not_found'), 'error'); return; }
+
+    const origBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+    if (!origBlob) return;
+
+    // Load original image at full size
+    const origUrl = URL.createObjectURL(origBlob);
+    const origImg = new Image();
+    origImg.src = origUrl;
+    await new Promise(r => { origImg.onload = r; });
+
+    const fullW = origImg.width;
+    const fullH = origImg.height;
+
+    // Create full-res canvas
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = fullW;
+    fullCanvas.height = fullH;
+    const ctx = fullCanvas.getContext('2d');
+
+    // Draw original image as base
+    ctx.drawImage(origImg, 0, 0);
+    URL.revokeObjectURL(origUrl);
+
+    // Parse annotations
+    let annotationObjects = [];
+    try {
+      const parsed = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
+      annotationObjects = parsed.objects || [];
+    } catch(e) {
+      console.warn('Error parsing annotations:', e);
+    }
+
+    // Render annotations at full resolution
+    const scaleX = fullW / 1200; // Assuming 1200 was the render scale
+    const scaleY = fullH / 1200;
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+
+    for (const objData of annotationObjects) {
+      const obj = fabric.util.enlivenObjects([objData], (objs) => {
+        objs.forEach(o => {
+          o.render(ctx);
+        });
+      });
+    }
+
+    ctx.restore();
+
+    // Convert to blob and download
+    const newBlob = await new Promise(r => fullCanvas.toBlob(r, 'image/png'));
+    const url = URL.createObjectURL(newBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = plan.name + '_anotado.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+
+  async function showDownloadMenu() {
+    const plan = viewerPlans[viewerIndex];
+    if (!plan) return;
+
+    const hasAnnotations = plan.annotations && plan.annotations !== '{}';
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'absolute';
+    menu.style.zIndex = '10000';
+
+    let menuHTML = `<button class="context-menu-item" data-action="download-original">
+      <i data-lucide="download"></i> ${App.t('download_original') || 'Descargar original'}
+    </button>`;
+
+    if (hasAnnotations) {
+      menuHTML += `<button class="context-menu-item" data-action="download-annotated">
+        <i data-lucide="edit-3"></i> ${App.t('download_annotated') || 'Descargar con anotaciones'}
+      </button>`;
+    }
+
+    menu.innerHTML = menuHTML;
+
+    const btn = document.getElementById('plan-viewer-download');
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 5) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+
+    document.body.appendChild(menu);
+    lucide.createIcons();
+
+    menu.querySelectorAll('.context-menu-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        const action = item.dataset.action;
+        if (action === 'download-original') {
+          await downloadCurrentPlan();
+        } else if (action === 'download-annotated') {
+          await downloadAnnotatedPlan();
+        }
+        document.body.removeChild(menu);
+      });
+    });
+
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target) && e.target !== btn) {
+        document.body.removeChild(menu);
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
   }
 
   async function renderViewerContent() {
