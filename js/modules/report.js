@@ -608,6 +608,14 @@ const ReportModule = (() => {
       // SECTION: INCIDENCIAS
       // ─────────────────────────────────────────────
       if (has('incidencias')) {
+        console.log('[Report] Total incidents loaded:', incidents.length);
+        console.log('[Report] Sample incident:', incidents[0]);
+        const incidentCount = incidents.filter(item => item.entryType === 'incident' || !item.entryType).length;
+        const commentCount = incidents.filter(item => item.entryType === 'comment').length;
+        const evolutionCount = incidents.filter(item => item.entryType === 'evolution').length;
+        const logbookCount = incidents.filter(item => item.entryType === 'logbook').length;
+        console.log('[Report] Counts:', { incidentCount, commentCount, evolutionCount, logbookCount });
+
         doc.addPage(); addPageHeader();
         const resolved  = incidents.filter(i => i.status === 'resolved').length;
         const inprog    = incidents.filter(i => i.status === 'in-progress').length;
