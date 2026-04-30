@@ -75,7 +75,7 @@ const ReportModule = (() => {
     const footer = `
       <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirm-report">
-        <i data-lucide="file-down"></i> Generar PDF
+        <i data-lucide="download"></i> Generar PDF
       </button>`;
 
     App.openModal('Exportar Informe PDF', body, footer, 'sm');
