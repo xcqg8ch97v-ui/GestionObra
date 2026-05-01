@@ -396,6 +396,9 @@ const PlansModule = (() => {
   let annoMode = false;
   let annoTool = 'draw';
   let annoHistory = [];
+  let annoZoom = 1;
+  let annoBaseZoom = 1;
+  let annoBgObjectUrl = null;
 
   let showAnnotations = true;
 
@@ -426,6 +429,11 @@ const PlansModule = (() => {
     document.getElementById('plan-anno-exit').addEventListener('click', exitAnnotateMode);
     document.getElementById('plan-anno-color').addEventListener('input', applyAnnoTool);
     document.getElementById('plan-anno-width').addEventListener('change', applyAnnoTool);
+    document.getElementById('plan-anno-zoom-in').addEventListener('click', () => setAnnoZoom(annoZoom * 1.2));
+    document.getElementById('plan-anno-zoom-out').addEventListener('click', () => setAnnoZoom(annoZoom / 1.2));
+    document.getElementById('plan-anno-fit').addEventListener('click', fitAnnoCanvas);
+    document.getElementById('plan-anno-delete').addEventListener('click', annoDeleteSelection);
+    document.getElementById('plan-anno-duplicate').addEventListener('click', annoDuplicateSelection);
 
     overlay.addEventListener('click', (e) => {
       if (!annoMode && (e.target === overlay || e.target.classList.contains('plan-viewer-body'))) closeViewer();
@@ -436,6 +444,10 @@ const PlansModule = (() => {
       if (annoMode) {
         if (e.key === 'Escape') exitAnnotateMode();
         if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); annoUndo(); }
+        if ((e.metaKey || e.ctrlKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); annoDuplicateSelection(); }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); annoDeleteSelection(); }
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); setAnnoZoom(annoZoom * 1.2); }
+        if (e.key === '-') { e.preventDefault(); setAnnoZoom(annoZoom / 1.2); }
         return;
       }
       if (e.key === 'Escape') closeViewer();
@@ -448,7 +460,12 @@ const PlansModule = (() => {
     // Mouse wheel zoom (only when not annotating)
     const body = document.getElementById('plan-viewer-body');
     body.addEventListener('wheel', (e) => {
-      if (annoMode) return;
+      if (annoMode) {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        setAnnoZoom(annoZoom * (e.deltaY > 0 ? 0.9 : 1.1));
+        return;
+      }
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       setZoom(viewerZoom * delta);
@@ -724,9 +741,15 @@ const PlansModule = (() => {
     if (!isImage && !isPDF) return;
 
     annoMode = true;
+    annoZoom = 1;
+    annoBaseZoom = 1;
     annoHistory = [];
+    annoTool = 'draw';
     document.getElementById('plan-anno-toolbar').style.display = 'flex';
     document.getElementById('plan-viewer-annotate').style.display = 'none';
+    const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
+    document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
+    if (defaultBtn) defaultBtn.classList.add('active');
 
     // Hide zoom/nav buttons during annotation
     ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next'].forEach(id => {
@@ -739,27 +762,21 @@ const PlansModule = (() => {
     if (isImage) {
       const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
       bgUrl = URL.createObjectURL(blob);
+      annoBgObjectUrl = bgUrl;
     } else if (isPDF) {
-      // Use the first rendered page image already in viewer, or render it
-      const existingImg = body.querySelector('img');
-      if (existingImg && existingImg.src) {
-        bgUrl = existingImg.src;
-      } else {
-        // Fallback: render first page
-        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-        const arrayBuf = await blob.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-        const page = await pdf.getPage(1);
-        const vp = page.getViewport({ scale: 1 });
-        const scale = Math.min(1200 / vp.width, 2);
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        bgUrl = canvas.toDataURL('image/png');
-      }
+      const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+      const arrayBuf = await blob.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+      const page = await pdf.getPage(1);
+      const vp = page.getViewport({ scale: 1 });
+      const scale = Math.min(2400 / vp.width, 3);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      bgUrl = canvas.toDataURL('image/png');
     }
 
     // Load image to get dimensions
@@ -767,24 +784,35 @@ const PlansModule = (() => {
     img.src = bgUrl;
     await new Promise(r => { img.onload = r; });
 
-    // Fit canvas to available space
+    // Fit visual zoom to available space, but keep canvas at native resolution
     const rect = body.getBoundingClientRect();
-    const scale = Math.min(rect.width / img.width, rect.height / img.height, 1);
-    const cw = Math.round(img.width * scale);
-    const ch = Math.round(img.height * scale);
+    const maxSide = 4096;
+    const maxPixels = 12_000_000;
+    const dimScale = Math.min(
+      1,
+      maxSide / img.width,
+      maxSide / img.height,
+      Math.sqrt(maxPixels / (img.width * img.height))
+    );
+    const cw = Math.max(1, Math.round(img.width * dimScale));
+    const ch = Math.max(1, Math.round(img.height * dimScale));
+    const fitScale = Math.min(rect.width / cw, rect.height / ch, 1);
+    const bgScaleX = cw / img.width;
+    const bgScaleY = ch / img.height;
 
-    body.innerHTML = `<canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas>`;
+    body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas></div>`;
 
     annoCanvas = new fabric.Canvas('plan-anno-canvas', {
       width: cw,
       height: ch,
-      selection: false
+      selection: false,
+      preserveObjectStacking: true
     });
 
     // Set plan as background
     annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), {
-      scaleX: cw / img.width,
-      scaleY: ch / img.height
+      scaleX: bgScaleX,
+      scaleY: bgScaleY
     });
 
     // Load existing annotations
@@ -792,25 +820,39 @@ const PlansModule = (() => {
       try {
         const parsed = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
         if (parsed.objects && parsed.objects.length > 0) {
+          const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || cw);
+          const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || ch);
+          if (savedWidth > 0 && savedHeight > 0 && (savedWidth !== cw || savedHeight !== ch)) {
+            const sx = cw / savedWidth;
+            const sy = ch / savedHeight;
+            parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+          }
           await new Promise(resolve => {
             annoCanvas.loadFromJSON(parsed, () => {
               // Re-set background (loadFromJSON clears it)
               annoCanvas.setBackgroundImage(bgUrl, () => {
                 annoCanvas.renderAll();
                 resolve();
-              }, { scaleX: cw / img.width, scaleY: ch / img.height });
+              }, { scaleX: bgScaleX, scaleY: bgScaleY });
             });
           });
         }
       } catch(e) { console.warn('Error loading annotations:', e); }
     }
 
+    annoCanvas.on('object:modified', pushHistory);
+    annoCanvas.on('path:created', pushHistory);
+
     applyAnnoTool();
+    annoHistory = [annoCanvas.toJSON()];
+    annoBaseZoom = fitScale;
+    setAnnoZoom(annoBaseZoom);
     try { lucide.createIcons(); } catch(e) {}
   }
 
   function exitAnnotateMode() {
     annoMode = false;
+    annoBaseZoom = 1;
     destroyAnnoCanvas();
     document.getElementById('plan-anno-toolbar').style.display = 'none';
 
@@ -824,6 +866,10 @@ const PlansModule = (() => {
   }
 
   function destroyAnnoCanvas() {
+    if (annoBgObjectUrl) {
+      URL.revokeObjectURL(annoBgObjectUrl);
+      annoBgObjectUrl = null;
+    }
     if (annoCanvas) {
       annoCanvas.dispose();
       annoCanvas = null;
@@ -836,13 +882,25 @@ const PlansModule = (() => {
     const width = parseInt(document.getElementById('plan-anno-width').value) || 4;
 
     annoCanvas.isDrawingMode = false;
-    annoCanvas.selection = false;
+    annoCanvas.selection = annoTool === 'select';
     annoCanvas.defaultCursor = 'crosshair';
 
     // Remove temp event listeners
     annoCanvas.off('mouse:down');
     annoCanvas.off('mouse:move');
     annoCanvas.off('mouse:up');
+
+    const interactive = annoTool === 'select';
+    annoCanvas.forEachObject(obj => {
+      obj.selectable = interactive;
+      obj.evented = interactive;
+    });
+    if (interactive) {
+      annoCanvas.defaultCursor = 'default';
+      annoCanvas.hoverCursor = 'move';
+      annoCanvas.requestRenderAll();
+      return;
+    }
 
     if (annoTool === 'draw') {
       annoCanvas.isDrawingMode = true;
@@ -949,8 +1007,9 @@ const PlansModule = (() => {
 
   function annoUndo() {
     if (!annoCanvas) return;
-    if (annoHistory.length > 0) {
-      const prev = annoHistory.pop();
+    if (annoHistory.length > 1) {
+      annoHistory.pop();
+      const prev = annoHistory[annoHistory.length - 1];
       // Save current bg before restore
       const bgUrl = annoCanvas.backgroundImage?._element?.src;
       const bgSx = annoCanvas.backgroundImage?.scaleX || 1;
@@ -963,10 +1022,7 @@ const PlansModule = (() => {
         }
       });
     } else {
-      // Last undo = clear all
-      const objs = annoCanvas.getObjects().slice();
-      objs.forEach(o => annoCanvas.remove(o));
-      annoCanvas.renderAll();
+      App.toast(App.t('search_no_results') || 'Sin resultados', 'info');
     }
   }
 
@@ -979,6 +1035,73 @@ const PlansModule = (() => {
     annoCanvas.renderAll();
   }
 
+  function fitAnnoCanvas() {
+    if (!annoCanvas) return;
+    annoCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    setAnnoZoom(annoBaseZoom || 1);
+  }
+
+  function setAnnoZoom(nextZoom) {
+    if (!annoCanvas) return;
+    const minZoom = Math.max(0.1, (annoBaseZoom || 1) * 0.5);
+    const clamped = Math.max(minZoom, Math.min(nextZoom, 8));
+    const point = new fabric.Point(annoCanvas.getWidth() / 2, annoCanvas.getHeight() / 2);
+    annoCanvas.zoomToPoint(point, clamped);
+    annoZoom = clamped;
+    updateAnnoZoomLabel();
+    annoCanvas.requestRenderAll();
+  }
+
+  function updateAnnoZoomLabel() {
+    const label = document.getElementById('plan-anno-zoom-label');
+    if (label) {
+      const base = annoBaseZoom || 1;
+      const relative = Math.round((annoZoom / base) * 100);
+      label.textContent = `${relative}%`;
+    }
+  }
+
+  function scaleAnnoObject(obj, sx, sy) {
+    if (!obj || typeof obj !== 'object') return;
+    if (typeof obj.left === 'number') obj.left *= sx;
+    if (typeof obj.top === 'number') obj.top *= sy;
+    if (typeof obj.scaleX === 'number') obj.scaleX *= sx;
+    if (typeof obj.scaleY === 'number') obj.scaleY *= sy;
+    if (typeof obj.strokeWidth === 'number') obj.strokeWidth *= Math.max(sx, sy);
+    if (Array.isArray(obj.points)) {
+      obj.points = obj.points.map(p => ({ ...p, x: (p.x || 0) * sx, y: (p.y || 0) * sy }));
+    }
+    if (Array.isArray(obj.objects)) {
+      obj.objects.forEach(child => scaleAnnoObject(child, sx, sy));
+    }
+  }
+
+  function annoDeleteSelection() {
+    if (!annoCanvas) return;
+    const selected = annoCanvas.getActiveObjects();
+    if (!selected.length) return;
+    pushHistory();
+    selected.forEach(obj => annoCanvas.remove(obj));
+    annoCanvas.discardActiveObject();
+    annoCanvas.requestRenderAll();
+  }
+
+  function annoDuplicateSelection() {
+    if (!annoCanvas) return;
+    const active = annoCanvas.getActiveObject();
+    if (!active) return;
+    pushHistory();
+    active.clone((clone) => {
+      clone.set({
+        left: (clone.left || 0) + 24,
+        top: (clone.top || 0) + 24
+      });
+      annoCanvas.add(clone);
+      annoCanvas.setActiveObject(clone);
+      annoCanvas.requestRenderAll();
+    });
+  }
+
   async function annoSave() {
     if (!annoCanvas) return;
     const plan = viewerPlans[viewerIndex];
@@ -988,6 +1111,8 @@ const PlansModule = (() => {
     const json = annoCanvas.toJSON();
     delete json.backgroundImage;
     delete json.background;
+    json.__canvasWidth = annoCanvas.getWidth();
+    json.__canvasHeight = annoCanvas.getHeight();
     plan.annotations = JSON.stringify(json);
 
     await DB.put('plans', plan);

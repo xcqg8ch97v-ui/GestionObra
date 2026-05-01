@@ -2,6 +2,7 @@
    Wizard Module - Project Creation Wizard
    Genera el proyecto correctamente definido desde cero
    ========================================
+*/
 
 const ProjectWizardModule = (() => {
   let projectId = null;
@@ -162,7 +163,7 @@ Próximos hitos</textarea>
         if (currentStep < steps.length) {
           currentStep += 1;
           showStep(currentStep);
-+          if (currentStep === steps.length) updateWizardSummary();
+          if (currentStep === steps.length) updateWizardSummary();
         } else {
           createProjectFromWizard();
         }

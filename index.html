@@ -254,6 +254,9 @@
           <button class="tool-btn" id="btn-attach-file" title="Adjuntar archivo" data-i18n-attr="title" data-i18n="tool_attach_file">
             <i data-lucide="paperclip"></i>
           </button>
+          <button class="tool-btn" id="btn-paste-canvas" title="Pegar" data-i18n-attr="title" data-i18n="tool_paste_canvas">
+            <i data-lucide="clipboard"></i>
+          </button>
           <button class="tool-btn" id="btn-clear-canvas" title="Limpiar canvas" data-i18n-attr="title" data-i18n="tool_clear_canvas">
             <i data-lucide="trash-2"></i>
           </button>
@@ -666,11 +669,17 @@
       </div>
       <!-- Annotation toolbar (hidden until annotate mode) -->
       <div class="plan-anno-toolbar" id="plan-anno-toolbar">
+        <button class="plan-anno-btn" data-tool="select" title="Seleccionar y mover" data-i18n-attr="title" data-i18n="plan_anno_select"><i data-lucide="mouse-pointer-2"></i></button>
         <button class="plan-anno-btn active" data-tool="draw" title="Dibujo libre" data-i18n-attr="title" data-i18n="plan_anno_draw"><i data-lucide="pencil"></i></button>
         <button class="plan-anno-btn" data-tool="arrow" title="Flecha" data-i18n-attr="title" data-i18n="plan_anno_arrow"><i data-lucide="move-right"></i></button>
         <button class="plan-anno-btn" data-tool="text" title="Texto" data-i18n-attr="title" data-i18n="plan_anno_text"><i data-lucide="type"></i></button>
         <button class="plan-anno-btn" data-tool="rect" title="Rectángulo" data-i18n-attr="title" data-i18n="plan_anno_rect"><i data-lucide="square"></i></button>
         <button class="plan-anno-btn" data-tool="circle" title="Círculo" data-i18n-attr="title" data-i18n="plan_anno_circle"><i data-lucide="circle"></i></button>
+        <span class="plan-anno-sep"></span>
+        <button class="plan-anno-btn" id="plan-anno-zoom-out" title="Reducir" data-i18n-attr="title" data-i18n="plan_viewer_zoom_out"><i data-lucide="zoom-out"></i></button>
+        <span class="plan-anno-zoom-label" id="plan-anno-zoom-label">100%</span>
+        <button class="plan-anno-btn" id="plan-anno-zoom-in" title="Ampliar" data-i18n-attr="title" data-i18n="plan_viewer_zoom_in"><i data-lucide="zoom-in"></i></button>
+        <button class="plan-anno-btn" id="plan-anno-fit" title="Ajustar" data-i18n-attr="title" data-i18n="plan_viewer_fit"><i data-lucide="maximize-2"></i></button>
         <span class="plan-anno-sep"></span>
         <input type="color" id="plan-anno-color" value="#EF4444" class="plan-anno-color" title="Color" data-i18n-attr="title" data-i18n="plan_anno_color">
         <select id="plan-anno-width" class="plan-anno-select" title="Grosor" data-i18n-attr="title" data-i18n="plan_anno_width_title">
@@ -679,6 +688,8 @@
           <option value="8" data-i18n="plan_anno_thick">Grueso</option>
         </select>
         <span class="plan-anno-sep"></span>
+        <button class="plan-anno-btn" id="plan-anno-duplicate" title="Duplicar selección" data-i18n-attr="title" data-i18n="plan_anno_duplicate"><i data-lucide="copy"></i></button>
+        <button class="plan-anno-btn" id="plan-anno-delete" title="Eliminar selección" data-i18n-attr="title" data-i18n="plan_anno_delete"><i data-lucide="eraser"></i></button>
         <button class="plan-anno-btn" id="plan-anno-undo" title="Deshacer" data-i18n-attr="title" data-i18n="plan_anno_undo"><i data-lucide="undo-2"></i></button>
         <button class="plan-anno-btn" id="plan-anno-clear" title="Borrar todo" data-i18n-attr="title" data-i18n="plan_anno_clear"><i data-lucide="trash-2"></i></button>
         <span class="plan-anno-sep"></span>

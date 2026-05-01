@@ -1040,25 +1040,40 @@ const CanvasModule = (() => {
       }
     });
 
-    // Long-press on touch to open file context menu
+    // Long-press on touch to open contextual menu
     let fileLongPressTimer = null;
     let fileLongPressTarget = null;
+    let fileLongPressStartX = 0;
+    let fileLongPressStartY = 0;
     canvas.on('mouse:down', (opt) => {
       if (!opt.e.touches || opt.e.touches.length !== 1) return;
+      const touch = opt.e.touches[0] || opt.e.changedTouches[0];
+      fileLongPressStartX = touch?.clientX || 0;
+      fileLongPressStartY = touch?.clientY || 0;
       const target = canvas.findTarget(opt.e, false);
-      if (target && target._isAttachedFile) {
-        fileLongPressTarget = target;
-        fileLongPressTimer = setTimeout(() => {
-          const touch = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : opt.e;
+      fileLongPressTarget = target || null;
+      fileLongPressTimer = setTimeout(() => {
+        const touch = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : opt.e;
+        if (fileLongPressTarget && fileLongPressTarget._isAttachedFile) {
           canvas.setActiveObject(fileLongPressTarget);
           canvas.requestRenderAll();
           showCanvasFileMenu(touch.clientX, touch.clientY, fileLongPressTarget);
-          fileLongPressTarget = null;
-        }, 600);
-      }
+        } else {
+          showCanvasTouchMenu(touch.clientX, touch.clientY);
+        }
+        fileLongPressTarget = null;
+      }, 600);
     });
-    canvas.on('mouse:move', () => {
-      if (fileLongPressTimer) { clearTimeout(fileLongPressTimer); fileLongPressTimer = null; }
+    canvas.on('mouse:move', (opt) => {
+      if (!fileLongPressTimer) return;
+      const touch = opt.e.touches ? opt.e.touches[0] || opt.e.changedTouches[0] : null;
+      if (!touch) return;
+      const dx = Math.abs((touch.clientX || 0) - fileLongPressStartX);
+      const dy = Math.abs((touch.clientY || 0) - fileLongPressStartY);
+      if (dx > 12 || dy > 12) {
+        clearTimeout(fileLongPressTimer);
+        fileLongPressTimer = null;
+      }
     });
     canvas.on('mouse:up', () => {
       if (fileLongPressTimer) { clearTimeout(fileLongPressTimer); fileLongPressTimer = null; }
@@ -1119,6 +1134,12 @@ const CanvasModule = (() => {
 
     document.getElementById('btn-save-canvas').addEventListener('click', saveState);
     document.getElementById('btn-export-canvas').addEventListener('click', exportCanvas);
+    const btnPaste = document.getElementById('btn-paste-canvas');
+    if (btnPaste) {
+      btnPaste.addEventListener('click', async () => {
+        await pasteFromSystemClipboard();
+      });
+    }
     document.getElementById('canvas-bg-color').addEventListener('input', (e) => {
       setCanvasBackgroundColor(e.target.value, false);
     });
@@ -1681,6 +1702,10 @@ const CanvasModule = (() => {
       e.stopPropagation();
       selectTable(table.id);
     });
+    wrapper.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      selectTable(table.id);
+    }, { passive: true });
 
     // Right-click context menu on table cells
     wrapper.addEventListener('contextmenu', (e) => {
@@ -1851,14 +1876,59 @@ const CanvasModule = (() => {
     }, 10);
   }
 
+  function showCanvasTouchMenu(x, y) {
+    const existing = document.getElementById('canvas-touch-ctx');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'canvas-touch-ctx';
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:999;display:block;`;
+    menu.innerHTML = `
+      <div class="ctx-header">Canvas</div>
+      <button class="ctx-item" data-action="paste"><i data-lucide="clipboard" style="width:14px;height:14px"></i> Pegar</button>
+    `;
+
+    document.body.appendChild(menu);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+    menu.addEventListener('click', async (e) => {
+      const item = e.target.closest('[data-action]');
+      if (!item) return;
+      if (item.dataset.action === 'paste') {
+        await pasteFromSystemClipboard();
+      }
+      menu.remove();
+    });
+
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', closeMenu);
+        document.removeEventListener('touchstart', closeMenu);
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeMenu);
+      document.addEventListener('touchstart', closeMenu);
+    }, 0);
+  }
+
   function setupTableDrag(wrapper, table) {
     const handle = wrapper.querySelector('.canvas-table-handle');
     let isDragging = false;
+    let dragTouchId = null;
     let startX, startY, startLeft, startTop;
 
     function onStart(e) {
       isDragging = true;
       const p = e.touches ? e.touches[0] : e;
+      if (e.touches && e.touches[0]) dragTouchId = e.touches[0].identifier;
       startX = p.clientX;
       startY = p.clientY;
       startLeft = table.x;
@@ -1869,7 +1939,15 @@ const CanvasModule = (() => {
 
     const onMove = (e) => {
       if (!isDragging) return;
-      const p = e.touches ? e.touches[0] : e;
+      let p = e;
+      if (e.touches) {
+        p = e.touches[0];
+        if (dragTouchId !== null) {
+          const found = Array.from(e.touches).find(t => t.identifier === dragTouchId);
+          if (found) p = found;
+        }
+        e.preventDefault();
+      }
       const zoom = getViewportZoom();
       table.x = startLeft + (p.clientX - startX) / zoom;
       table.y = startTop + (p.clientY - startY) / zoom;
@@ -1877,7 +1955,10 @@ const CanvasModule = (() => {
       positionTableToolbar();
     };
 
-    const onUp = () => { isDragging = false; };
+    const onUp = () => {
+      isDragging = false;
+      dragTouchId = null;
+    };
 
     handle.addEventListener('mousedown', onStart);
     handle.addEventListener('touchstart', onStart, { passive: false });
@@ -2684,6 +2765,7 @@ const CanvasModule = (() => {
     const fileName = target._attachedFileName || 'Archivo';
     menu.innerHTML = `
       <div class="ctx-header">${fileName}</div>
+      <button class="ctx-item" data-action="paste"><i data-lucide="clipboard" style="width:14px;height:14px"></i> Pegar</button>
       <button class="ctx-item" data-action="download"><i data-lucide="download" style="width:14px;height:14px"></i> ${App.t('download')}</button>
       <button class="ctx-item" data-action="rename"><i data-lucide="pencil" style="width:14px;height:14px"></i> ${App.t('rename')}</button>
       <div class="ctx-sep"></div>
@@ -2703,7 +2785,9 @@ const CanvasModule = (() => {
       if (!item) return;
       const action = item.dataset.action;
 
-      if (action === 'download') {
+      if (action === 'paste') {
+        await pasteFromSystemClipboard();
+      } else if (action === 'download') {
         await downloadAttachedFile(target._attachedFileId, target._attachedFileName);
       } else if (action === 'rename') {
         const newName = await App.prompt(App.t('file_name_prompt'), target._attachedFileName || '');
