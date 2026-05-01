@@ -6,6 +6,7 @@
 const FilesModule = (() => {
 // Actualizado: 2026-04-10
   let projectId = null;
+  let pdfViewerState = null;
 
 
   function getFileTypes() {
@@ -22,6 +23,39 @@ const FilesModule = (() => {
       'text/plain': { icon: 'file-text', class: 'doc', label: App.t('file_type_text') },
       'application/zip': { icon: 'archive', class: 'other', label: App.t('file_type_zip') }
     };
+  }
+
+  async function highlightPdfMatches(page, viewport, ctx) {
+    if (!pdfViewerState) return;
+    const query = (pdfViewerState.searchTerm || '').trim().toLowerCase();
+    if (!query) return;
+
+    try {
+      const content = await page.getTextContent();
+      const highlightColor = 'rgba(255, 215, 0, 0.35)';
+      const padY = 1.5;
+
+      ctx.save();
+      ctx.fillStyle = highlightColor;
+
+      content.items.forEach(item => {
+        const raw = (item.str || '');
+        if (!raw) return;
+        if (!raw.toLowerCase().includes(query)) return;
+
+        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const x = tx[4];
+        const y = tx[5];
+        const h = Math.max(8, Math.hypot(tx[2], tx[3]));
+        const w = Math.max(8, (item.width || 0) * viewport.scale);
+
+        ctx.fillRect(x, y - h - padY, w, h + padY * 2);
+      });
+
+      ctx.restore();
+    } catch (err) {
+      console.warn('[Files] PDF highlight error:', err);
+    }
   }
 
   function getCategories() {
@@ -327,9 +361,8 @@ const FilesModule = (() => {
     const url = URL.createObjectURL(blob);
 
     if (file.type === 'application/pdf') {
-      // Abrir PDF en nueva pestaña
-      window.open(url, '_blank');
       URL.revokeObjectURL(url);
+      await openPdfViewer(file, binaryData, id);
     } else if (file.type.startsWith('image/')) {
       // Mostrar imagen en modal
       const body = `
@@ -346,6 +379,271 @@ const FilesModule = (() => {
       window.open(url, '_blank');
       URL.revokeObjectURL(url);
     }
+  }
+
+  async function openPdfViewer(file, binaryData, fileId) {
+    if (typeof pdfjsLib === 'undefined') {
+      const url = URL.createObjectURL(new Blob([binaryData], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const body = `
+      <div class="pdf-viewer-shell" id="pdf-viewer-shell">
+        <div class="pdf-viewer-toolbar">
+          <button class="btn btn-outline" id="pdf-prev" title="${App.t('plan_viewer_prev')}">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <span class="pdf-viewer-page" id="pdf-page-label">1 / 1</span>
+          <button class="btn btn-outline" id="pdf-next" title="${App.t('plan_viewer_next')}">
+            <i data-lucide="chevron-right"></i>
+          </button>
+
+          <div class="pdf-viewer-divider"></div>
+
+          <button class="btn btn-outline" id="pdf-zoom-out" title="${App.t('plan_viewer_zoom_out')}">
+            <i data-lucide="zoom-out"></i>
+          </button>
+          <span class="pdf-viewer-zoom" id="pdf-zoom-label">100%</span>
+          <button class="btn btn-outline" id="pdf-zoom-in" title="${App.t('plan_viewer_zoom_in')}">
+            <i data-lucide="zoom-in"></i>
+          </button>
+          <button class="btn btn-outline" id="pdf-fit" title="${App.t('plan_viewer_fit')}">
+            ${App.t('plan_viewer_fit')}
+          </button>
+
+          <div class="pdf-viewer-divider"></div>
+
+          <div class="pdf-viewer-search-wrap">
+            <input id="pdf-search-input" type="text" placeholder="${App.t('search_placeholder')}" class="pdf-viewer-search-input" />
+            <button class="btn btn-outline" id="pdf-search-next" title="${App.t('search_placeholder')}">
+              <i data-lucide="search"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="pdf-viewer-canvas-wrap" id="pdf-canvas-wrap">
+          <canvas id="pdf-canvas"></canvas>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <button class="btn btn-outline" id="pdf-viewer-close">${App.t('close')}</button>
+      <button class="btn btn-primary" id="pdf-viewer-download">${App.t('download')}</button>
+    `;
+
+    App.openModal(App.escapeHTML(file.name), body, footer, { width: '1200px' });
+
+    const pdfDoc = await pdfjsLib.getDocument({ data: binaryData }).promise;
+    pdfViewerState = {
+      fileId,
+      pdfDoc,
+      page: 1,
+      totalPages: pdfDoc.numPages,
+      zoom: 1,
+      fitMode: true,
+      rendering: false,
+      pendingPage: null,
+      searchTerm: '',
+      lastSearchPage: 1,
+      textCache: new Map(),
+      observer: null
+    };
+
+    bindPdfViewerEvents();
+    setupPdfViewerCleanup();
+    await renderPdfPage(1, { forceFit: true });
+    lucide.createIcons();
+  }
+
+  function bindPdfViewerEvents() {
+    const prevBtn = document.getElementById('pdf-prev');
+    const nextBtn = document.getElementById('pdf-next');
+    const zoomInBtn = document.getElementById('pdf-zoom-in');
+    const zoomOutBtn = document.getElementById('pdf-zoom-out');
+    const fitBtn = document.getElementById('pdf-fit');
+    const searchInput = document.getElementById('pdf-search-input');
+    const searchNextBtn = document.getElementById('pdf-search-next');
+    const closeBtn = document.getElementById('pdf-viewer-close');
+    const downloadBtn = document.getElementById('pdf-viewer-download');
+    const wrap = document.getElementById('pdf-canvas-wrap');
+
+    if (prevBtn) prevBtn.addEventListener('click', () => changePdfPage(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => changePdfPage(1));
+    if (zoomInBtn) zoomInBtn.addEventListener('click', () => changePdfZoom(0.1));
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => changePdfZoom(-0.1));
+    if (fitBtn) fitBtn.addEventListener('click', () => {
+      if (!pdfViewerState) return;
+      pdfViewerState.fitMode = true;
+      renderPdfPage(pdfViewerState.page, { forceFit: true });
+    });
+    if (closeBtn) closeBtn.addEventListener('click', () => App.closeModal());
+    if (downloadBtn) downloadBtn.addEventListener('click', () => {
+      if (pdfViewerState?.fileId) downloadFile(pdfViewerState.fileId);
+    });
+
+    if (searchInput) {
+      searchInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          await findNextInPdf(searchInput.value);
+        }
+      });
+    }
+
+    if (searchNextBtn) {
+      searchNextBtn.addEventListener('click', async () => {
+        const term = searchInput?.value || '';
+        await findNextInPdf(term);
+      });
+    }
+
+    if (wrap) {
+      wrap.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        changePdfZoom(e.deltaY < 0 ? 0.05 : -0.05);
+      }, { passive: false });
+    }
+  }
+
+  function setupPdfViewerCleanup() {
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay || !pdfViewerState) return;
+
+    const observer = new MutationObserver(() => {
+      if (!overlay.classList.contains('active')) {
+        cleanupPdfViewer();
+      }
+    });
+    observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+    pdfViewerState.observer = observer;
+  }
+
+  function cleanupPdfViewer() {
+    if (!pdfViewerState) return;
+    if (pdfViewerState.observer) {
+      pdfViewerState.observer.disconnect();
+    }
+    pdfViewerState = null;
+  }
+
+  async function changePdfPage(delta) {
+    if (!pdfViewerState) return;
+    const target = Math.min(Math.max(1, pdfViewerState.page + delta), pdfViewerState.totalPages);
+    if (target === pdfViewerState.page) return;
+    await renderPdfPage(target);
+  }
+
+  function changePdfZoom(delta) {
+    if (!pdfViewerState) return;
+    const next = Math.min(3, Math.max(0.3, pdfViewerState.zoom + delta));
+    if (next === pdfViewerState.zoom) return;
+    pdfViewerState.zoom = next;
+    pdfViewerState.fitMode = false;
+    renderPdfPage(pdfViewerState.page);
+  }
+
+  async function renderPdfPage(pageNumber, { forceFit = false } = {}) {
+    if (!pdfViewerState || !pdfViewerState.pdfDoc) return;
+
+    if (pdfViewerState.rendering) {
+      pdfViewerState.pendingPage = { pageNumber, forceFit };
+      return;
+    }
+
+    pdfViewerState.rendering = true;
+    pdfViewerState.page = pageNumber;
+
+    try {
+      const page = await pdfViewerState.pdfDoc.getPage(pageNumber);
+      const canvas = document.getElementById('pdf-canvas');
+      const wrap = document.getElementById('pdf-canvas-wrap');
+      if (!canvas || !wrap) return;
+
+      if (forceFit || pdfViewerState.fitMode) {
+        const baseViewport = page.getViewport({ scale: 1 });
+        const availableWidth = Math.max(320, wrap.clientWidth - 24);
+        pdfViewerState.zoom = Math.min(2.5, Math.max(0.3, availableWidth / baseViewport.width));
+      }
+
+      const viewport = page.getViewport({ scale: pdfViewerState.zoom });
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      await highlightPdfMatches(page, viewport, ctx);
+      updatePdfToolbar();
+    } catch (err) {
+      console.error('[Files] PDF render error:', err);
+      App.toast(App.t('preview_not_available'), 'error');
+    } finally {
+      pdfViewerState.rendering = false;
+      const pending = pdfViewerState?.pendingPage;
+      if (pending) {
+        pdfViewerState.pendingPage = null;
+        renderPdfPage(pending.pageNumber, { forceFit: pending.forceFit });
+      }
+    }
+  }
+
+  function updatePdfToolbar() {
+    if (!pdfViewerState) return;
+    const label = document.getElementById('pdf-page-label');
+    const zoom = document.getElementById('pdf-zoom-label');
+    const prevBtn = document.getElementById('pdf-prev');
+    const nextBtn = document.getElementById('pdf-next');
+
+    if (label) label.textContent = `${pdfViewerState.page} / ${pdfViewerState.totalPages}`;
+    if (zoom) zoom.textContent = `${Math.round(pdfViewerState.zoom * 100)}%`;
+    if (prevBtn) prevBtn.disabled = pdfViewerState.page <= 1;
+    if (nextBtn) nextBtn.disabled = pdfViewerState.page >= pdfViewerState.totalPages;
+  }
+
+  async function getPdfPageText(pageNumber) {
+    if (!pdfViewerState) return '';
+    if (pdfViewerState.textCache.has(pageNumber)) {
+      return pdfViewerState.textCache.get(pageNumber);
+    }
+
+    const page = await pdfViewerState.pdfDoc.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const text = content.items.map(i => i.str).join(' ').toLowerCase();
+    pdfViewerState.textCache.set(pageNumber, text);
+    return text;
+  }
+
+  async function findNextInPdf(term) {
+    if (!pdfViewerState) return;
+    const query = (term || '').trim().toLowerCase();
+    if (!query) {
+      App.toast(App.t('search_placeholder'), 'info');
+      return;
+    }
+
+    const total = pdfViewerState.totalPages;
+    const start = pdfViewerState.searchTerm === query
+      ? Math.min(total, pdfViewerState.lastSearchPage + 1)
+      : pdfViewerState.page;
+    pdfViewerState.searchTerm = query;
+
+    for (let offset = 0; offset < total; offset++) {
+      const pageNum = ((start - 1 + offset) % total) + 1;
+      const text = await getPdfPageText(pageNum);
+      if (text.includes(query)) {
+        pdfViewerState.lastSearchPage = pageNum;
+        await renderPdfPage(pageNum);
+        App.toast(`"${query}" · página ${pageNum}`, 'success');
+        return;
+      }
+    }
+
+    App.toast(App.t('search_no_results'), 'warning');
   }
 
   async function deleteFile(id) {

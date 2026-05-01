@@ -129,7 +129,7 @@
         <li>
           <a href="#participants" class="nav-link" data-section="participants">
             <i data-lucide="contact"></i>
-            <span class="nav-text" data-i18n="section_participants">Participantes</span>
+            <span class="nav-text" data-i18n="section_participants">Trabajadores</span>
           </a>
         </li>
       </ul>
@@ -779,12 +779,12 @@
 
     <section id="section-participants" class="content-section">
       <div class="panel-header">
-          <h2 data-i18n="participants_title">Participantes</h2>
+        <h2 data-i18n="participants_title">Trabajadores</h2>
         <button class="btn btn-outline btn-icon print-btn" onclick="App.printSection('participants')" title="Imprimir"><i data-lucide="printer"></i></button>
-        <div class="participants-actions">
+        <div class="workers-actions">
           <div class="filter-search">
             <i data-lucide="search"></i>
-            <input type="text" id="participants-search" placeholder="Buscar participante..." data-i18n-attr="placeholder" data-i18n="participants_search_placeholder">
+            <input type="text" id="participants-search" placeholder="Buscar trabajador..." data-i18n-attr="placeholder" data-i18n="participants_search_placeholder">
           </div>
           <select id="participants-type-filter" class="filter-select">
             <option value="all" data-i18n="participants_filter_all">Todos</option>
@@ -795,16 +795,30 @@
             <i data-lucide="file-up"></i> <span data-i18n="participants_import_pdf">Importar PDF</span>
           </button>
           <button class="btn btn-primary" id="btn-add-participant">
-            <i data-lucide="user-plus"></i> <span data-i18n="new_participant">Nuevo Participante</span>
+            <i data-lucide="user-plus"></i> <span data-i18n="new_participant">Añadir trabajador</span>
           </button>
         </div>
       </div>
       <input type="file" id="participants-pdf-input" accept=".pdf,application/pdf" hidden>
-      <div class="participants-grid" id="participants-grid"></div>
-      <div class="empty-state" id="participants-empty">
-        <i data-lucide="contact"></i>
-        <p data-i18n="participants_no_participants">No hay participantes registrados</p>
-        <button class="btn btn-outline" id="btn-add-participant-empty" data-i18n="participants_add_first">Añadir primer participante</button>
+      <div class="workers-layout">
+        <div class="workers-main">
+          <div class="workers-groups" id="workers-groups"></div>
+          <div class="empty-state" id="workers-empty">
+            <i data-lucide="id-card"></i>
+            <p data-i18n="participants_no_participants">No hay trabajadores registrados</p>
+            <button class="btn btn-outline" id="btn-add-participant-empty" data-i18n="participants_add_first">Añadir primer trabajador</button>
+          </div>
+        </div>
+        <aside class="workers-docs" id="workers-docs-panel">
+          <div class="workers-docs-header">
+            <h3 data-i18n="workers_documents_title">Documentos de trabajadores</h3>
+          </div>
+          <div class="workers-docs-list" id="workers-docs-list"></div>
+          <div class="empty-state slim" id="workers-docs-empty">
+            <i data-lucide="file-text"></i>
+            <p data-i18n="workers_documents_empty">Aún no hay PDFs de trabajadores</p>
+          </div>
+        </aside>
       </div>
     </section>
   </main>

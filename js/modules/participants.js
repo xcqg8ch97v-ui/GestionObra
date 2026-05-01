@@ -330,51 +330,173 @@ const ParticipantsModule = (() => {
 
     items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     renderGrid(items);
+    await renderWorkersDocuments();
   }
 
   function renderGrid(items) {
-    const grid = document.getElementById('participants-grid');
-    const empty = document.getElementById('participants-empty');
-    if (!grid) return;
+    const groupsContainer = document.getElementById('workers-groups');
+    const empty = document.getElementById('workers-empty');
+    if (!groupsContainer) return;
 
     if (items.length === 0) {
-      grid.style.display = 'none';
+      groupsContainer.innerHTML = '';
+      groupsContainer.style.display = 'none';
       if (empty) empty.style.display = 'flex';
       return;
     }
 
-    grid.style.display = 'grid';
+    groupsContainer.style.display = 'flex';
     if (empty) empty.style.display = 'none';
 
-    grid.innerHTML = items.map(p => {
-      const typeLabel = p.type === 'internal' ? App.t('participant_type_internal') : App.t('participant_type_external');
-      const typeBadge = p.type === 'internal' ? 'badge-active' : 'badge-pending';
-      const initials = getInitials(p.name);
-      const avatarColor = stringToColor(p.name || '');
+    const byCompany = groupByCompany(items);
+    const orderedCompanies = Object.keys(byCompany).sort((a, b) => {
+      if (a === '__no_company__') return 1;
+      if (b === '__no_company__') return -1;
+      return a.localeCompare(b);
+    });
+    const html = orderedCompanies.map(company => renderCompanyGroup(company, byCompany[company])).join('');
+    groupsContainer.innerHTML = html;
 
-      return `
-        <div class="participant-card" data-id="${p.id}">
-          <div class="participant-card-header">
-            <div class="participant-avatar" style="background:${avatarColor}">${App.escapeHTML(initials)}</div>
-            <div class="participant-info">
-              <div class="participant-name participant-editable" data-field="name" data-id="${p.id}">${App.escapeHTML(p.name || App.t('no_name'))}</div>
-              <div class="participant-role participant-editable" data-field="role" data-id="${p.id}">${App.escapeHTML(p.role || '')}</div>
-            </div>
-            <select class="badge ${typeBadge} participant-type-badge participant-editable" data-field="type" data-id="${p.id}" style="border:none;background:transparent;cursor:pointer;padding:0;font-size:10px;font-weight:600;white-space:nowrap">
-              <option value="internal" ${p.type === 'internal' ? 'selected' : ''}>${App.t('participant_type_internal')}</option>
-              <option value="external" ${p.type === 'external' ? 'selected' : ''}>${App.t('participant_type_external')}</option>
-            </select>
+    attachGroupInteractions(groupsContainer);
+    setupInlineEditing(groupsContainer);
+    lucide.createIcons();
+  }
+
+  function groupByCompany(items) {
+    const map = {};
+    items.forEach(worker => {
+      const companyKey = (worker.company || '').trim() || '__no_company__';
+      if (!map[companyKey]) map[companyKey] = [];
+      map[companyKey].push(worker);
+    });
+    return map;
+  }
+
+  function renderCompanyGroup(companyKey, workers) {
+    const internal = workers.filter(w => w.type === 'internal');
+    const external = workers.filter(w => w.type !== 'internal');
+    const companyLabel = companyKey === '__no_company__' ? App.t('workers_group_no_company') : companyKey;
+    const totalLabel = App.t('workers_total_label', { count: workers.length });
+
+    return `
+      <div class="workers-group" data-company="${App.escapeHTML(companyKey)}">
+        <div class="workers-group-header">
+          <div class="workers-group-title">
+            <h3>${App.escapeHTML(companyLabel)}</h3>
+            <span>${App.escapeHTML(totalLabel)}</span>
           </div>
-          ${p.company ? `<div class="participant-detail"><i data-lucide="building-2"></i><span class="participant-editable" data-field="company" data-id="${p.id}">${App.escapeHTML(p.company)}</span></div>` : ''}
-          ${p.phone ? `<div class="participant-detail participant-detail-link" onclick="ParticipantsModule.callPhone('${App.escapeHTML(p.phone)}')"><i data-lucide="phone"></i>${App.escapeHTML(p.phone)}</div>` : ''}
-          ${p.email ? `<div class="participant-detail participant-detail-link" onclick="ParticipantsModule.sendEmail('${App.escapeHTML(p.email)}')"><i data-lucide="mail"></i>${App.escapeHTML(p.email)}</div>` : ''}
-          ${p.notes ? `<div class="participant-notes">${App.escapeHTML(p.notes)}</div>` : ''}
-          <div class="participant-card-actions">
-            <button class="action-btn" onclick="ParticipantsModule.edit(${p.id})" title="${App.t('edit')}">
-              <i data-lucide="pencil"></i>
+          <button class="workers-group-toggle" data-company="${App.escapeHTML(companyKey)}">
+            <i data-lucide="chevron-up" class="workers-toggle-icon"></i>
+            <span data-i18n="workers_toggle_hide">${App.t('workers_toggle_hide')}</span>
+          </button>
+        </div>
+        <div class="workers-group-body">
+          ${renderTypeBlock('internal', internal)}
+          ${renderTypeBlock('external', external)}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTypeBlock(type, workers) {
+    if (workers.length === 0) return '';
+    const headerLabel = type === 'internal' ? App.t('workers_group_internal') : App.t('workers_group_external');
+
+    return `
+      <div class="workers-type-block" data-type="${type}">
+        <div class="workers-type-header">
+          <span>${App.escapeHTML(headerLabel)}</span>
+          <span>${workers.length}</span>
+        </div>
+        <table class="workers-table">
+          <thead>
+            <tr>
+              <th style="width:36%">${App.t('full_name')}</th>
+              <th style="width:20%">${App.t('role')}</th>
+              <th style="width:16%">${App.t('phone')}</th>
+              <th style="width:18%">${App.t('email')}</th>
+              <th style="width:10%">${App.t('supplier_table_actions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${workers.map(renderWorkerRow).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderWorkerRow(worker) {
+    const initials = getInitials(worker.name);
+    const avatarColor = stringToColor(worker.name || '');
+    const hasNotes = !!(worker.notes && worker.notes.trim());
+
+    return `
+      <tr data-id="${worker.id}">
+        <td>
+          <div class="worker-name-cell">
+            <span class="worker-avatar" style="background:${avatarColor}">${App.escapeHTML(initials)}</span>
+            <span class="worker-editable" data-field="name" data-id="${worker.id}" contenteditable="true">${App.escapeHTML(worker.name || App.t('no_name'))}</span>
+          </div>
+        </td>
+        <td><span class="worker-editable" data-field="role" data-id="${worker.id}" contenteditable="true">${App.escapeHTML(worker.role || '')}</span></td>
+        <td>${renderContactCell(worker.phone, 'phone')}</td>
+        <td>${renderContactCell(worker.email, 'email')}</td>
+        <td>
+          <div class="worker-actions">
+            ${hasNotes ? `<span class="worker-note-indicator" title="${App.t('workers_notes_tooltip')}"><i data-lucide="sticky-note"></i></span>` : ''}
+            <button class="action-btn" onclick="ParticipantsModule.edit(${worker.id})" title="${App.t('edit')}"><i data-lucide="pencil"></i></button>
+            <button class="action-btn action-btn-danger" onclick="ParticipantsModule.remove(${worker.id})" title="${App.t('delete')}"><i data-lucide="trash-2"></i></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  function renderContactCell(value, type) {
+    if (!value) return '<span style="color:var(--text-muted)">—</span>';
+    const safe = App.escapeHTML(value);
+    const encoded = encodeURIComponent(value);
+    const handler = type === 'phone'
+      ? `ParticipantsModule.callPhone(decodeURIComponent('${encoded}'))`
+      : `ParticipantsModule.sendEmail(decodeURIComponent('${encoded}'))`;
+    const icon = type === 'phone' ? 'phone' : 'mail';
+    return `<span class="worker-contact-link" onclick="${handler}"><i data-lucide="${icon}" style="width:14px;height:14px"></i> ${safe}</span>`;
+  }
+
+  async function renderWorkersDocuments() {
+    const list = document.getElementById('workers-docs-list');
+    const empty = document.getElementById('workers-docs-empty');
+    if (!list || !empty) return;
+
+    let files = await DB.getAllForProject('files', projectId);
+    files = files
+      .filter(f => f.category === 'participantes' && f.type === 'application/pdf')
+      .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0));
+
+    if (files.length === 0) {
+      list.innerHTML = '';
+      list.style.display = 'none';
+      empty.style.display = 'flex';
+      return;
+    }
+
+    list.style.display = 'flex';
+    empty.style.display = 'none';
+    list.innerHTML = files.map(file => {
+      const date = file.uploadedAt || file.createdAt;
+      return `
+        <div class="workers-doc-item">
+          <div class="workers-doc-info">
+            <div class="workers-doc-name" title="${App.escapeHTML(file.name)}">${App.escapeHTML(file.name)}</div>
+            <div class="workers-doc-meta">PDF · ${formatFileSize(file.size || 0)} · ${date ? App.formatDate(date) : '—'}</div>
+          </div>
+          <div class="workers-doc-actions">
+            <button class="workers-doc-btn" onclick="FilesModule.previewFile(${file.id})" title="${App.t('preview')}">
+              <i data-lucide="eye"></i>
             </button>
-            <button class="action-btn action-btn-danger" onclick="ParticipantsModule.remove(${p.id})" title="${App.t('delete')}">
-              <i data-lucide="trash-2"></i>
+            <button class="workers-doc-btn" onclick="FilesModule.downloadFile(${file.id})" title="${App.t('download')}">
+              <i data-lucide="download"></i>
             </button>
           </div>
         </div>
@@ -382,32 +504,40 @@ const ParticipantsModule = (() => {
     }).join('');
 
     lucide.createIcons();
+  }
 
-    // Setup inline editing
-    grid.querySelectorAll('.participant-editable').forEach(el => {
-      if (el.tagName === 'SELECT') {
-        el.addEventListener('change', async (e) => {
-          const field = e.target.dataset.field;
-          const id = parseInt(e.target.dataset.id);
-          const value = e.target.value;
-          await saveInlineEdit(id, field, value, e.target);
-        });
-      } else {
-        el.setAttribute('contenteditable', 'true');
-        el.addEventListener('blur', async (e) => {
-          const field = e.target.dataset.field;
-          const id = parseInt(e.target.dataset.id);
-          const value = e.target.textContent.trim();
-          await saveInlineEdit(id, field, value, e.target);
-        });
-        el.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            e.target.blur();
-          }
-        });
-      }
+  function attachGroupInteractions(root) {
+    root.querySelectorAll('.workers-group-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.closest('.workers-group');
+        if (!group) return;
+        const body = group.querySelector('.workers-group-body');
+        const isCollapsed = body?.classList.toggle('collapsed');
+        btn.classList.toggle('is-collapsed', !!isCollapsed);
+        const label = btn.querySelector('span[data-i18n]');
+        if (label) {
+          label.textContent = isCollapsed ? App.t('workers_toggle_show') : App.t('workers_toggle_hide');
+        }
+      });
     });
+  }
+
+  function setupInlineEditing(root) {
+    root.querySelectorAll('.worker-editable').forEach(el => {
+      el.addEventListener('blur', async (e) => {
+        const field = e.target.dataset.field;
+        const id = parseInt(e.target.dataset.id);
+        const value = e.target.textContent.trim();
+        await saveInlineEdit(id, field, value, e.target);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.target.blur();
+        }
+      });
+    });
+
   }
 
   async function saveInlineEdit(id, field, value, element) {
@@ -417,15 +547,8 @@ const ParticipantsModule = (() => {
     participant[field] = value;
     participant.updatedAt = new Date().toISOString();
 
-    // Update type badge class if type changed
-    if (field === 'type' && element.tagName === 'SELECT') {
-      element.classList.remove('badge-active', 'badge-pending');
-      element.classList.add(value === 'internal' ? 'badge-active' : 'badge-pending');
-    }
-
-    // Update avatar if name changed
     if (field === 'name') {
-      const avatar = element.closest('.participant-card').querySelector('.participant-avatar');
+      const avatar = element.closest('tr')?.querySelector('.worker-avatar');
       if (avatar) {
         avatar.textContent = getInitials(value);
         avatar.style.background = stringToColor(value || '');
@@ -450,6 +573,12 @@ const ParticipantsModule = (() => {
     }
     const h = Math.abs(hash) % 360;
     return `hsl(${h}, 55%, 45%)`;
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   function openParticipantForm(existing) {
