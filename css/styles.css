@@ -5607,3 +5607,271 @@ body.is-resizing-timeline-label {
     padding: var(--sp-sm);
   }
 }
+
+/* --- Ajustes globales móvil/tablet --- */
+@media (max-width: 900px) {
+  .panel-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .panel-header h2 {
+    width: 100%;
+    margin: 0;
+  }
+
+  .panel-header > div:last-child {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .sub-tabs {
+    padding: 0 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .sub-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sub-tab {
+    flex: 0 0 auto;
+  }
+
+  .timeline-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .timeline-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .timeline-actions .btn,
+  .timeline-actions .view-toggle,
+  .timeline-actions .tl-hide-completed {
+    flex: 0 0 auto;
+  }
+
+  .diary-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .diary-search-wrap,
+  .diary-actions .filter-group,
+  .diary-date-filter-wrap {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .diary-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .files-filter-bar {
+    padding: 0 12px 8px;
+  }
+
+  .files-filter-bar .filter-select {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .files-group-toggle {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .workers-actions {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .workers-actions .filter-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .workers-actions .filter-select,
+  .workers-actions .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 140px;
+  }
+
+  .plans-actions,
+  .files-actions {
+    width: 100%;
+  }
+
+  .plans-actions .btn,
+  .files-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .table-container {
+    overflow: auto;
+  }
+
+  .data-table,
+  #expenses-table,
+  .workers-table,
+  .timeline-table {
+    min-width: 720px;
+  }
+
+  .timeline-table {
+    min-width: 900px;
+  }
+
+  .workers-type-block {
+    overflow-x: auto;
+  }
+
+  #expenses-summary {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    padding: 0 12px 8px !important;
+  }
+
+  .file-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .file-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .canvas-toolbar {
+    gap: 8px;
+  }
+
+  .tool-group {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .plan-viewer-topbar {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .plan-viewer-title {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .plan-viewer-controls {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    padding-bottom: 2px;
+  }
+
+  .plan-viewer-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plan-anno-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .plan-anno-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plan-anno-btn,
+  .plan-anno-color,
+  .plan-anno-select,
+  .plan-anno-zoom-label {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    height: auto;
+    min-height: var(--topbar-height);
+    flex-wrap: wrap;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .topbar-title {
+    order: 1;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar-actions {
+    order: 2;
+    margin-left: 0;
+    gap: 6px;
+  }
+
+  .global-search-wrap {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0;
+    max-width: none;
+  }
+
+  .connection-status {
+    display: none;
+  }
+
+  .overview-report-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
