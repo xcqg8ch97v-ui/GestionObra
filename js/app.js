@@ -1645,6 +1645,18 @@ const App = (() => {
         </div>
 
         <div class="options-section">
+          <h3>Transferir por apartado</h3>
+          <p>Exporta o importa solo una sección del proyecto actual (sin mover el proyecto completo).</p>
+          <div class="options-add-row">
+            <select id="options-section-transfer" class="form-control">
+              ${PARTIAL_EXPORT_SECTIONS.map(section => `<option value="${section.key}">${section.label}</option>`).join('')}
+            </select>
+            <button class="btn btn-outline btn-sm" id="btn-options-export-section">Exportar apartado</button>
+            <button class="btn btn-primary btn-sm" id="btn-options-import-section">Importar apartado</button>
+          </div>
+        </div>
+
+        <div class="options-section">
           <h3>${t('download_attachments')}</h3>
           <p>${t('download_attachments_help')}</p>
           <button class="btn btn-outline" id="btn-options-download-attachments">${t('download_attachments')}</button>
@@ -1845,6 +1857,16 @@ const App = (() => {
 
     document.getElementById('btn-options-import-project').addEventListener('click', importProject);
     document.getElementById('btn-options-download-attachments').addEventListener('click', downloadAttachmentsZip);
+    document.getElementById('btn-options-export-section').addEventListener('click', async () => {
+      if (!currentProjectId) {
+        App.toast(t('no_project_open'), 'warning');
+        return;
+      }
+      const section = document.getElementById('options-section-transfer')?.value;
+      if (!section) return;
+      await exportProjectSection(currentProjectId, section);
+    });
+    document.getElementById('btn-options-import-section').addEventListener('click', importProjectSection);
 
     document.getElementById('btn-options-add-trade').addEventListener('click', async () => {
       const name = document.getElementById('options-new-trade').value.trim();
@@ -2213,6 +2235,21 @@ const App = (() => {
   // EXPORT / IMPORT
   // ========================================
 
+  const PARTIAL_EXPORT_SECTIONS = [
+    { key: 'dashboard', label: 'Proveedores y Presupuestos' },
+    { key: 'timeline', label: 'Cronograma' },
+    { key: 'diary', label: 'Diario de Obra' },
+    { key: 'plans', label: 'Planos' },
+    { key: 'files', label: 'Documentos' },
+    { key: 'expenses', label: 'Gastos de Obra' },
+    { key: 'participants', label: 'Trabajadores' },
+    { key: 'canvas', label: 'Mesa de Trabajo' }
+  ];
+
+  function getPartialSectionLabel(sectionKey) {
+    return PARTIAL_EXPORT_SECTIONS.find(s => s.key === sectionKey)?.label || sectionKey;
+  }
+
   function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     const CHUNK = 8192;
@@ -2247,7 +2284,23 @@ const App = (() => {
     };
   }
 
-  async function collectProjectFilesForExport(projectId, incidents = []) {
+  function collectCanvasAttachedFileIds(node, outSet) {
+    if (!node || typeof node !== 'object') return;
+    if (node._attachedFileId !== null && node._attachedFileId !== undefined) {
+      outSet.add(node._attachedFileId);
+    }
+    if (Array.isArray(node.objects)) {
+      node.objects.forEach(child => collectCanvasAttachedFileIds(child, outSet));
+    }
+  }
+
+  async function collectProjectFilesForExport(projectId, {
+    incidents = [],
+    tasks = [],
+    plans = [],
+    canvasSheets = {},
+    canvas = null
+  } = {}) {
     const projectFiles = await DB.getAllForProject('files', projectId);
     const exportedFiles = [...projectFiles];
     const seenIds = new Set(projectFiles.map(file => file.id));
@@ -2259,6 +2312,26 @@ const App = (() => {
       });
     });
 
+    tasks.forEach(task => {
+      (task.photoIds || []).forEach(photoId => {
+        if (photoId !== null && photoId !== undefined) referencedIds.add(photoId);
+      });
+    });
+
+    plans.forEach(plan => {
+      if (plan.fileId !== null && plan.fileId !== undefined) referencedIds.add(plan.fileId);
+    });
+
+    if (canvasSheets && typeof canvasSheets === 'object') {
+      Object.values(canvasSheets).forEach(sheetData => {
+        collectCanvasAttachedFileIds(sheetData, referencedIds);
+      });
+    }
+
+    if (canvas) {
+      collectCanvasAttachedFileIds(canvas, referencedIds);
+    }
+
     for (const fileId of referencedIds) {
       if (seenIds.has(fileId)) continue;
       const fileRecord = await DB.getById('files', fileId);
@@ -2269,6 +2342,302 @@ const App = (() => {
     }
 
     return exportedFiles;
+  }
+
+  async function exportProjectSection(projectId, sectionKey) {
+    const project = await DB.getById('projects', projectId);
+    if (!project) {
+      toast(t('project_not_found'), 'error');
+      return;
+    }
+
+    const payload = {
+      _partialExportVersion: 1,
+      _exportDate: new Date().toISOString(),
+      section: sectionKey,
+      project: {
+        id: project.id,
+        name: project.name
+      }
+    };
+
+    let incidents = [];
+    let tasks = [];
+    let plans = [];
+
+    if (sectionKey === 'dashboard') {
+      payload.suppliers = await DB.getAllForProject('suppliers', projectId);
+      payload.budgets = await DB.getAllForProject('budgets', projectId);
+      payload.bc3items = await DB.getAllForProject('bc3items', projectId);
+      const categories = await DB.getAllForProject('custom_categories', projectId);
+      payload.custom_categories = categories.filter(c => c.type === 'trade');
+    } else if (sectionKey === 'timeline') {
+      tasks = await DB.getAllForProject('tasks', projectId);
+      payload.tasks = tasks;
+    } else if (sectionKey === 'diary') {
+      incidents = await DB.getAllForProject('incidents', projectId);
+      payload.incidents = incidents;
+      const categories = await DB.getAllForProject('custom_categories', projectId);
+      payload.custom_categories = categories.filter(c => c.type === 'incidentCategory');
+    } else if (sectionKey === 'plans') {
+      plans = await DB.getAllForProject('plans', projectId);
+      payload.plans = plans;
+      const categories = await DB.getAllForProject('custom_categories', projectId);
+      payload.custom_categories = categories.filter(c => c.type === 'plan');
+    } else if (sectionKey === 'files') {
+      const files = await DB.getAllForProject('files', projectId);
+      payload.files = await Promise.all(files.map(encodeFileRecordForExport));
+    } else if (sectionKey === 'expenses') {
+      payload.expenses = await DB.getAllForProject('expenses', projectId);
+      const categories = await DB.getAllForProject('custom_categories', projectId);
+      payload.custom_categories = categories.filter(c => c.type === 'expenseCategory');
+    } else if (sectionKey === 'participants') {
+      payload.participants = await DB.getAllForProject('participants', projectId);
+    } else if (sectionKey === 'canvas') {
+      const sheetIndex = await DB.getSheetIndex(projectId);
+      if (sheetIndex && sheetIndex.sheets) {
+        payload.canvasSheetIndex = sheetIndex.sheets;
+        payload.canvasSheets = {};
+        for (const sheet of sheetIndex.sheets) {
+          const st = await DB.getCanvasState(projectId, sheet.id);
+          payload.canvasSheets[sheet.id] = st ? st.data : null;
+        }
+      } else {
+        const canvasState = await DB.getCanvasState(projectId);
+        payload.canvas = canvasState || null;
+      }
+    } else {
+      toast('Apartado no soportado para exportación', 'warning');
+      return;
+    }
+
+    if (!payload.files) {
+      const files = await collectProjectFilesForExport(projectId, {
+        incidents,
+        tasks,
+        plans,
+        canvasSheets: payload.canvasSheets,
+        canvas: payload.canvas?.data || payload.canvas
+      });
+      if (files.length) {
+        payload.files = await Promise.all(files.map(encodeFileRecordForExport));
+      }
+    }
+
+    const json = JSON.stringify(payload);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = project.name.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').trim().replace(/\s+/g, '-');
+    const sectionLabel = getPartialSectionLabel(sectionKey).replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').trim().replace(/\s+/g, '-');
+    link.download = `obra-${safeName}-${sectionLabel}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast(`Apartado "${getPartialSectionLabel(sectionKey)}" exportado`, 'success');
+  }
+
+  async function importProjectSection() {
+    if (!currentProjectId) {
+      toast(t('no_project_open'), 'warning');
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data || !data._partialExportVersion || !data.section) {
+          toast('Archivo de apartado no válido', 'error');
+          return;
+        }
+
+        const section = data.section;
+        const idMap = {};
+        const existingCustomCategories = await DB.getAllForProject('custom_categories', currentProjectId);
+
+        const importCustomCategoriesUnique = async (categories = []) => {
+          for (const cat of categories) {
+            const { id, ...rec } = cat;
+            rec.projectId = currentProjectId;
+            const normalizedAction = rec.action || 'add';
+            const exists = existingCustomCategories.some(existing =>
+              existing.projectId === currentProjectId &&
+              existing.type === rec.type &&
+              (existing.name || '').trim().toLowerCase() === (rec.name || '').trim().toLowerCase() &&
+              (existing.action || 'add') === normalizedAction
+            );
+            if (exists) continue;
+            rec.action = normalizedAction;
+            const newId = await DB.add('custom_categories', rec);
+            existingCustomCategories.push({ ...rec, id: newId });
+          }
+        };
+
+        const importFiles = async () => {
+          const fileRecords = data.files || [];
+          idMap.files = {};
+          for (const record of fileRecords) {
+            const oldRecId = record.id;
+            const { id, ...recData } = record;
+            recData.projectId = currentProjectId;
+            if (recData._encoded && recData.data) {
+              recData.data = base64ToArrayBuffer(recData.data);
+            }
+            delete recData.blob;
+            delete recData._encoded;
+            const newId = await DB.add('files', recData);
+            idMap.files[oldRecId] = newId;
+          }
+        };
+
+        if (Array.isArray(data.files) && data.files.length > 0) {
+          await importFiles();
+        }
+
+        if (section === 'dashboard') {
+          idMap.suppliers = {};
+          for (const s of (data.suppliers || [])) {
+            const oldId = s.id;
+            const { id, ...rec } = s;
+            rec.projectId = currentProjectId;
+            const newId = await DB.add('suppliers', rec);
+            idMap.suppliers[oldId] = newId;
+          }
+          for (const b of (data.budgets || [])) {
+            const { id, ...rec } = b;
+            rec.projectId = currentProjectId;
+            if (rec.supplierId && idMap.suppliers?.[rec.supplierId]) {
+              rec.supplierId = idMap.suppliers[rec.supplierId];
+            }
+            await DB.add('budgets', rec);
+          }
+          idMap.bc3items = {};
+          const pendingParentFixes = [];
+          for (const item of (data.bc3items || [])) {
+            const oldId = item.id;
+            const { id, ...rec } = item;
+            rec.projectId = currentProjectId;
+            const oldParentId = rec.parentId;
+            rec.parentId = null;
+            const newId = await DB.add('bc3items', rec);
+            idMap.bc3items[oldId] = newId;
+            pendingParentFixes.push({ newId, oldParentId });
+          }
+          for (const fix of pendingParentFixes) {
+            if (fix.oldParentId === null || fix.oldParentId === undefined) continue;
+            const mappedParent = idMap.bc3items[fix.oldParentId] || null;
+            if (!mappedParent) continue;
+            const bc3item = await DB.getById('bc3items', fix.newId);
+            if (!bc3item) continue;
+            bc3item.parentId = mappedParent;
+            await DB.put('bc3items', bc3item);
+          }
+          await importCustomCategoriesUnique(data.custom_categories || []);
+          if (typeof DashboardModule !== 'undefined') DashboardModule.init(currentProjectId);
+        } else if (section === 'timeline') {
+          idMap.tasks = {};
+          const importedTasks = data.tasks || [];
+          for (const task of importedTasks) {
+            const oldId = task.id;
+            const { id, ...rec } = task;
+            rec.projectId = currentProjectId;
+            rec.photoIds = (rec.photoIds || []).map(fid => idMap.files?.[fid]).filter(Boolean);
+            rec.dependencies = [];
+            const newId = await DB.add('tasks', rec);
+            idMap.tasks[oldId] = newId;
+          }
+          for (const oldTask of importedTasks) {
+            if (!oldTask.dependencies?.length) continue;
+            const newTaskId = idMap.tasks[oldTask.id];
+            const task = await DB.getById('tasks', newTaskId);
+            if (!task) continue;
+            task.dependencies = oldTask.dependencies.map(depId => idMap.tasks[depId]).filter(Boolean);
+            await DB.put('tasks', task);
+          }
+          if (typeof TimelineModule !== 'undefined') TimelineModule.init(currentProjectId);
+        } else if (section === 'diary') {
+          for (const inc of (data.incidents || [])) {
+            const { id, ...rec } = inc;
+            rec.projectId = currentProjectId;
+            rec.photoIds = (rec.photoIds || []).map(fid => idMap.files?.[fid]).filter(Boolean);
+            await DB.add('incidents', rec);
+          }
+          await importCustomCategoriesUnique(data.custom_categories || []);
+          if (typeof DiaryModule !== 'undefined') DiaryModule.init(currentProjectId);
+        } else if (section === 'plans') {
+          for (const plan of (data.plans || [])) {
+            const { id, ...rec } = plan;
+            rec.projectId = currentProjectId;
+            if (rec.fileId !== null && rec.fileId !== undefined) {
+              rec.fileId = idMap.files?.[rec.fileId] ?? null;
+            }
+            await DB.add('plans', rec);
+          }
+          await importCustomCategoriesUnique(data.custom_categories || []);
+          if (typeof PlansModule !== 'undefined') PlansModule.init(currentProjectId);
+        } else if (section === 'files') {
+          if (typeof FilesModule !== 'undefined') FilesModule.init(currentProjectId);
+        } else if (section === 'expenses') {
+          for (const exp of (data.expenses || [])) {
+            const { id, ...rec } = exp;
+            rec.projectId = currentProjectId;
+            await DB.add('expenses', rec);
+          }
+          await importCustomCategoriesUnique(data.custom_categories || []);
+          if (typeof ExpensesModule !== 'undefined') ExpensesModule.init(currentProjectId);
+        } else if (section === 'participants') {
+          for (const part of (data.participants || [])) {
+            const { id, ...rec } = part;
+            rec.projectId = currentProjectId;
+            await DB.add('participants', rec);
+          }
+          if (typeof ParticipantsModule !== 'undefined') ParticipantsModule.init(currentProjectId);
+        } else if (section === 'canvas') {
+          const existingIndex = await DB.getSheetIndex(currentProjectId);
+          const existingSheets = existingIndex?.sheets || [];
+          const newSheets = [...existingSheets];
+
+          if (data.canvasSheetIndex && data.canvasSheets) {
+            for (const oldSheet of data.canvasSheetIndex) {
+              const newSheetId = `sheet_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+              const newSheet = { id: newSheetId, name: `${oldSheet.name || 'Hoja'} (importada)` };
+              const sheetData = data.canvasSheets[oldSheet.id];
+              if (sheetData) {
+                remapCanvasFileReferences(sheetData.canvas, idMap.files || {});
+                remapCanvasFileReferences(sheetData, idMap.files || {});
+                await DB.saveCanvasState(currentProjectId, sheetData, newSheetId);
+              }
+              newSheets.push(newSheet);
+            }
+          } else if (data.canvas && data.canvas.data) {
+            const newSheetId = `sheet_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            remapCanvasFileReferences(data.canvas.data, idMap.files || {});
+            await DB.saveCanvasState(currentProjectId, data.canvas.data, newSheetId);
+            newSheets.push({ id: newSheetId, name: 'Hoja importada' });
+          }
+
+          await DB.saveSheetIndex(currentProjectId, newSheets);
+          if (typeof CanvasModule !== 'undefined') CanvasModule.init(currentProjectId);
+        } else {
+          toast('Apartado no soportado para importación', 'warning');
+          return;
+        }
+
+        if (typeof OverviewModule !== 'undefined') OverviewModule.init(currentProjectId);
+        toast(`Apartado "${getPartialSectionLabel(section)}" importado`, 'success');
+      } catch (err) {
+        console.error('Import section error:', err);
+        toast('Error importando apartado', 'error');
+      }
+    });
+    input.click();
   }
 
   function remapCanvasFileReferences(node, fileIdMap) {
@@ -2289,18 +2658,19 @@ const App = (() => {
 
     toast(t('exporting_project'), 'info');
 
-    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'participants', 'plans'];
-    const data = { project, _exportVersion: 1, _exportDate: new Date().toISOString() };
+    const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'participants', 'plans', 'custom_categories', 'bc3items'];
+    const data = { project, _exportVersion: 2, _exportDate: new Date().toISOString() };
     let incidents = [];
+    let tasks = [];
+    let plans = [];
 
     for (const store of STORES) {
       const records = await DB.getAllForProject(store, id);
       data[store] = records;
       if (store === 'incidents') incidents = records;
+      if (store === 'tasks') tasks = records;
+      if (store === 'plans') plans = records;
     }
-
-    const files = await collectProjectFilesForExport(id, incidents);
-    data.files = await Promise.all(files.map(encodeFileRecordForExport));
 
     // Canvas state (multi-sheet)
     const sheetIndex = await DB.getSheetIndex(id);
@@ -2316,6 +2686,15 @@ const App = (() => {
       const canvasState = await DB.getCanvasState(id);
       data.canvas = canvasState || null;
     }
+
+    const files = await collectProjectFilesForExport(id, {
+      incidents,
+      tasks,
+      plans,
+      canvasSheets: data.canvasSheets,
+      canvas: data.canvas?.data || data.canvas
+    });
+    data.files = await Promise.all(files.map(encodeFileRecordForExport));
 
     const json = JSON.stringify(data);
     const blob = new Blob([json], { type: 'application/json' });
@@ -2355,7 +2734,7 @@ const App = (() => {
         const newProjectId = await DB.add('projects', projData);
 
         // Import each store with updated projectId
-        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'files', 'participants', 'plans'];
+        const STORES = ['suppliers', 'budgets', 'tasks', 'incidents', 'expenses', 'files', 'participants', 'plans', 'custom_categories', 'bc3items'];
         const idMap = {}; // old ID -> new ID mapping for references
 
         for (const store of STORES) {

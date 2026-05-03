@@ -399,8 +399,22 @@ const PlansModule = (() => {
   let annoZoom = 1;
   let annoBaseZoom = 1;
   let annoBgObjectUrl = null;
+  let isClosingViewer = false;
 
   let showAnnotations = true;
+
+  function normalizeAnnoPayload(payload) {
+    if (!payload || typeof payload !== 'object') return { objects: [] };
+    const normalized = JSON.parse(JSON.stringify(payload));
+    delete normalized.backgroundImage;
+    delete normalized.background;
+    return normalized;
+  }
+
+  function snapshotAnnoState() {
+    if (!annoCanvas) return null;
+    return normalizeAnnoPayload(annoCanvas.toJSON());
+  }
 
   function setupViewer() {
     const overlay = document.getElementById('plan-viewer-overlay');
@@ -487,11 +501,23 @@ const PlansModule = (() => {
   }
 
   function closeViewer() {
-    if (annoMode) exitAnnotateMode();
+    isClosingViewer = true;
+    if (annoMode) exitAnnotateMode({ suppressRender: true });
     document.getElementById('plan-viewer-overlay').classList.remove('active');
     document.body.style.overflow = '';
     destroyAnnoCanvas();
+    clearViewerObjectUrl();
     document.getElementById('plan-viewer-body').innerHTML = '';
+    isClosingViewer = false;
+  }
+
+  function clearViewerObjectUrl() {
+    const body = document.getElementById('plan-viewer-body');
+    const currentUrl = body?.dataset?.objectUrl;
+    if (currentUrl) {
+      try { URL.revokeObjectURL(currentUrl); } catch (e) {}
+      delete body.dataset.objectUrl;
+    }
   }
 
   async function viewerNav(dir) {
@@ -539,55 +565,100 @@ const PlansModule = (() => {
     const file = await DB.getFile(plan.fileId);
     if (!file) { App.toast(App.t('file_not_found'), 'error'); return; }
 
-    const origBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-    if (!origBlob) return;
+    const sourceBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+    if (!sourceBlob) return;
 
-    // Load original image at full size
-    const origUrl = URL.createObjectURL(origBlob);
-    const origImg = new Image();
-    origImg.src = origUrl;
-    await new Promise(r => { origImg.onload = r; });
-
-    const fullW = origImg.width;
-    const fullH = origImg.height;
-
-    // Create full-res canvas
-    const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = fullW;
-    fullCanvas.height = fullH;
-    const ctx = fullCanvas.getContext('2d');
-
-    // Draw original image as base
-    ctx.drawImage(origImg, 0, 0);
-    URL.revokeObjectURL(origUrl);
-
-    // Parse annotations
-    let annotationObjects = [];
+    let parsed = null;
     try {
-      const parsed = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
-      annotationObjects = parsed.objects || [];
+      const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
+      parsed = normalizeAnnoPayload(parsedRaw);
     } catch(e) {
       console.warn('Error parsing annotations:', e);
+      App.toast(App.t('file_content_unavailable'), 'error');
+      return;
     }
 
-    // Render annotations at full resolution
-    const scaleX = fullW / 1200; // Assuming 1200 was the render scale
-    const scaleY = fullH / 1200;
-    ctx.save();
-    ctx.scale(scaleX, scaleY);
+    const savedW = Number(parsed?.__canvasWidth || parsed?.canvasWidth || 0);
+    const savedH = Number(parsed?.__canvasHeight || parsed?.canvasHeight || 0);
 
-    for (const objData of annotationObjects) {
-      const obj = fabric.util.enlivenObjects([objData], (objs) => {
-        objs.forEach(o => {
-          o.render(ctx);
+    let bgDataUrl = null;
+    let outW = savedW;
+    let outH = savedH;
+
+    if (file.type && file.type.startsWith('image/')) {
+      const srcUrl = URL.createObjectURL(sourceBlob);
+      try {
+        const img = new Image();
+        img.src = srcUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
         });
-      });
+
+        if (!outW || !outH) {
+          outW = img.width;
+          outH = img.height;
+        }
+
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = outW;
+        bgCanvas.height = outH;
+        const bgCtx = bgCanvas.getContext('2d');
+        bgCtx.drawImage(img, 0, 0, outW, outH);
+        bgDataUrl = bgCanvas.toDataURL('image/png');
+      } finally {
+        URL.revokeObjectURL(srcUrl);
+      }
+    } else if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+      const arrayBuf = await sourceBlob.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+      const page = await pdf.getPage(1);
+      const baseVp = page.getViewport({ scale: 1 });
+
+      if (!outW || !outH) {
+        const scale = Math.min(2400 / baseVp.width, 3);
+        const vp = page.getViewport({ scale });
+        outW = Math.round(vp.width);
+        outH = Math.round(vp.height);
+      }
+
+      const renderScale = outW / baseVp.width;
+      const viewport = page.getViewport({ scale: renderScale });
+      const pdfCanvas = document.createElement('canvas');
+      pdfCanvas.width = outW;
+      pdfCanvas.height = outH;
+      const pdfCtx = pdfCanvas.getContext('2d', { alpha: false });
+      await page.render({ canvasContext: pdfCtx, viewport }).promise;
+      bgDataUrl = pdfCanvas.toDataURL('image/png');
     }
 
-    ctx.restore();
+    if (!bgDataUrl || !outW || !outH) {
+      App.toast(App.t('preview_not_available'), 'error');
+      return;
+    }
 
-    // Convert to blob and download
-    const newBlob = await new Promise(r => fullCanvas.toBlob(r, 'image/png'));
+    const exportCanvas = new fabric.StaticCanvas(null, {
+      width: outW,
+      height: outH,
+      enableRetinaScaling: false
+    });
+
+    await new Promise(resolve => {
+      exportCanvas.setBackgroundImage(bgDataUrl, () => resolve(), { scaleX: 1, scaleY: 1 });
+    });
+
+    await new Promise(resolve => {
+      exportCanvas.loadFromJSON(parsed, () => {
+        exportCanvas.renderAll();
+        resolve();
+      });
+    });
+
+    const pngDataUrl = exportCanvas.toDataURL({ format: 'png', multiplier: 1 });
+    const res = await fetch(pngDataUrl);
+    const newBlob = await res.blob();
+    exportCanvas.dispose();
+
     const url = URL.createObjectURL(newBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -655,6 +726,9 @@ const PlansModule = (() => {
     if (!plan) return;
     const file = await DB.getFile(plan.fileId);
     const body = document.getElementById('plan-viewer-body');
+    clearViewerObjectUrl();
+    body.scrollTop = 0;
+    body.scrollLeft = 0;
     document.getElementById('plan-viewer-title').textContent = `${plan.name} (${viewerIndex + 1}/${viewerPlans.length})`;
 
     if (!file) {
@@ -677,6 +751,7 @@ const PlansModule = (() => {
 
     if (isImage) {
       const url = URL.createObjectURL(blob);
+      body.dataset.objectUrl = url;
       body.innerHTML = `<img src="${url}" alt="${App.escapeHTML(plan.name)}" style="transform:scale(${viewerZoom})" draggable="false">`;
     } else if (isPDF && typeof pdfjsLib !== 'undefined') {
       // Render PDF pages as images for viewing and annotation support
@@ -704,11 +779,13 @@ const PlansModule = (() => {
       } catch(e) {
         console.warn('PDF render error:', e);
         const url = URL.createObjectURL(blob);
+        body.dataset.objectUrl = url;
         body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>`;
         annoBtn.style.display = 'none';
       }
     } else if (isPDF) {
       const url = URL.createObjectURL(blob);
+      body.dataset.objectUrl = url;
       body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>`;
       annoBtn.style.display = 'none';
     } else {
@@ -716,7 +793,7 @@ const PlansModule = (() => {
     }
 
     // Auto-enter annotate mode if plan has annotations and showAnnotations is true
-    if (hasAnnotations && !annoMode && showAnnotations) {
+    if (hasAnnotations && !annoMode && showAnnotations && !isClosingViewer) {
       await enterAnnotateMode();
     }
 
@@ -725,7 +802,9 @@ const PlansModule = (() => {
 
   function toggleAnnotations() {
     showAnnotations = !showAnnotations;
-    renderViewerContent();
+    if (!isClosingViewer) {
+      renderViewerContent();
+    }
   }
 
   // ======== ANNOTATION MODE ========
@@ -757,6 +836,8 @@ const PlansModule = (() => {
     });
 
     const body = document.getElementById('plan-viewer-body');
+    body.scrollTop = 0;
+    body.scrollLeft = 0;
     let bgUrl;
 
     if (isImage) {
@@ -818,15 +899,17 @@ const PlansModule = (() => {
     // Load existing annotations
     if (plan.annotations) {
       try {
-        const parsed = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
+        const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
+        const parsed = normalizeAnnoPayload(parsedRaw);
         if (parsed.objects && parsed.objects.length > 0) {
           const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || cw);
           const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || ch);
-          if (savedWidth > 0 && savedHeight > 0 && (savedWidth !== cw || savedHeight !== ch)) {
+          if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - cw) > 1 || Math.abs(savedHeight - ch) > 1)) {
             const sx = cw / savedWidth;
             const sy = ch / savedHeight;
             parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
           }
+
           await new Promise(resolve => {
             annoCanvas.loadFromJSON(parsed, () => {
               // Re-set background (loadFromJSON clears it)
@@ -844,13 +927,13 @@ const PlansModule = (() => {
     annoCanvas.on('path:created', pushHistory);
 
     applyAnnoTool();
-    annoHistory = [annoCanvas.toJSON()];
+    annoHistory = [snapshotAnnoState()];
     annoBaseZoom = fitScale;
     setAnnoZoom(annoBaseZoom);
     try { lucide.createIcons(); } catch(e) {}
   }
 
-  function exitAnnotateMode() {
+  function exitAnnotateMode({ suppressRender = false } = {}) {
     annoMode = false;
     annoBaseZoom = 1;
     destroyAnnoCanvas();
@@ -862,7 +945,9 @@ const PlansModule = (() => {
       document.getElementById(id).style.display = '';
     });
 
-    renderViewerContent();
+    if (!suppressRender && !isClosingViewer) {
+      renderViewerContent();
+    }
   }
 
   function destroyAnnoCanvas() {
@@ -1002,14 +1087,15 @@ const PlansModule = (() => {
 
   function pushHistory() {
     if (!annoCanvas) return;
-    annoHistory.push(annoCanvas.toJSON());
+    const snap = snapshotAnnoState();
+    if (snap) annoHistory.push(snap);
   }
 
   function annoUndo() {
     if (!annoCanvas) return;
     if (annoHistory.length > 1) {
       annoHistory.pop();
-      const prev = annoHistory[annoHistory.length - 1];
+      const prev = normalizeAnnoPayload(annoHistory[annoHistory.length - 1]);
       // Save current bg before restore
       const bgUrl = annoCanvas.backgroundImage?._element?.src;
       const bgSx = annoCanvas.backgroundImage?.scaleX || 1;
@@ -1039,6 +1125,11 @@ const PlansModule = (() => {
     if (!annoCanvas) return;
     annoCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
     setAnnoZoom(annoBaseZoom || 1);
+    const body = document.getElementById('plan-viewer-body');
+    if (body) {
+      body.scrollTop = 0;
+      body.scrollLeft = 0;
+    }
   }
 
   function setAnnoZoom(nextZoom) {
@@ -1108,9 +1199,8 @@ const PlansModule = (() => {
     if (!plan) return;
 
     // Save annotation JSON for future editing (don't modify original file)
-    const json = annoCanvas.toJSON();
-    delete json.backgroundImage;
-    delete json.background;
+    const json = snapshotAnnoState();
+    if (!json) return;
     json.__canvasWidth = annoCanvas.getWidth();
     json.__canvasHeight = annoCanvas.getHeight();
     plan.annotations = JSON.stringify(json);
