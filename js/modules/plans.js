@@ -236,6 +236,8 @@ const PlansModule = (() => {
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           await page.render({ canvasContext: ctx, viewport }).promise;
           const dataUrl = canvas.toDataURL('image/png');
           thumbHTML = `<img src="${dataUrl}" alt="${App.escapeHTML(plan.name)}" class="plan-thumb" loading="lazy">`;
@@ -627,7 +629,9 @@ const PlansModule = (() => {
       const pdfCanvas = document.createElement('canvas');
       pdfCanvas.width = outW;
       pdfCanvas.height = outH;
-      const pdfCtx = pdfCanvas.getContext('2d', { alpha: false });
+      const pdfCtx = pdfCanvas.getContext('2d');
+      pdfCtx.fillStyle = '#ffffff';
+      pdfCtx.fillRect(0, 0, outW, outH);
       await page.render({ canvasContext: pdfCtx, viewport }).promise;
       bgDataUrl = pdfCanvas.toDataURL('image/png');
     }
@@ -769,6 +773,8 @@ const PlansModule = (() => {
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           await page.render({ canvasContext: ctx, viewport }).promise;
           const dataUrl = canvas.toDataURL('image/png');
           pagesHTML += `<img src="${dataUrl}" alt="Página ${i}" class="plan-viewer-page" style="transform:scale(${viewerZoom})" draggable="false">`;
@@ -819,118 +825,129 @@ const PlansModule = (() => {
     const isPDF = file.type === 'application/pdf';
     if (!isImage && !isPDF) return;
 
-    annoMode = true;
-    annoZoom = 1;
-    annoBaseZoom = 1;
-    annoHistory = [];
-    annoTool = 'draw';
-    document.getElementById('plan-anno-toolbar').style.display = 'flex';
-    document.getElementById('plan-viewer-annotate').style.display = 'none';
-    const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
-    document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
-    if (defaultBtn) defaultBtn.classList.add('active');
+    try {
+      annoMode = true;
+      annoZoom = 1;
+      annoBaseZoom = 1;
+      annoHistory = [];
+      annoTool = 'draw';
+      document.getElementById('plan-anno-toolbar').style.display = 'flex';
+      document.getElementById('plan-viewer-annotate').style.display = 'none';
+      const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
+      document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
+      if (defaultBtn) defaultBtn.classList.add('active');
 
-    // Hide zoom/nav buttons during annotation
-    ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next'].forEach(id => {
-      document.getElementById(id).style.display = 'none';
-    });
+      // Hide zoom/nav buttons during annotation
+      ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+      });
 
-    const body = document.getElementById('plan-viewer-body');
-    body.scrollTop = 0;
-    body.scrollLeft = 0;
-    let bgUrl;
+      const body = document.getElementById('plan-viewer-body');
+      body.scrollTop = 0;
+      body.scrollLeft = 0;
+      let bgUrl;
 
-    if (isImage) {
-      const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-      bgUrl = URL.createObjectURL(blob);
-      annoBgObjectUrl = bgUrl;
-    } else if (isPDF) {
-      const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-      const arrayBuf = await blob.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-      const page = await pdf.getPage(1);
-      const vp = page.getViewport({ scale: 1 });
-      const scale = Math.min(2400 / vp.width, 3);
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d', { alpha: false });
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      bgUrl = canvas.toDataURL('image/png');
-    }
+      if (isImage) {
+        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+        bgUrl = URL.createObjectURL(blob);
+        annoBgObjectUrl = bgUrl;
+      } else if (isPDF) {
+        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+        const arrayBuf = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+        const page = await pdf.getPage(1);
+        const vp = page.getViewport({ scale: 1 });
+        const scale = Math.min(2400 / vp.width, 3);
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        bgUrl = canvas.toDataURL('image/png');
+      }
 
-    // Load image to get dimensions
-    const img = new Image();
-    img.src = bgUrl;
-    await new Promise(r => { img.onload = r; });
+      // Load image to get dimensions
+      const img = new Image();
+      img.src = bgUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
 
-    // Fit visual zoom to available space, but keep canvas at native resolution
-    const rect = body.getBoundingClientRect();
-    const maxSide = 4096;
-    const maxPixels = 12_000_000;
-    const dimScale = Math.min(
-      1,
-      maxSide / img.width,
-      maxSide / img.height,
-      Math.sqrt(maxPixels / (img.width * img.height))
-    );
-    const cw = Math.max(1, Math.round(img.width * dimScale));
-    const ch = Math.max(1, Math.round(img.height * dimScale));
-    const fitScale = Math.min(rect.width / cw, rect.height / ch, 1);
-    const bgScaleX = cw / img.width;
-    const bgScaleY = ch / img.height;
+      // Fit visual zoom to available space, but keep canvas at native resolution
+      const rect = body.getBoundingClientRect();
+      const maxSide = 4096;
+      const maxPixels = 12_000_000;
+      const dimScale = Math.min(
+        1,
+        maxSide / img.width,
+        maxSide / img.height,
+        Math.sqrt(maxPixels / (img.width * img.height))
+      );
+      const cw = Math.max(1, Math.round(img.width * dimScale));
+      const ch = Math.max(1, Math.round(img.height * dimScale));
+      const fitScale = Math.min(rect.width / cw, rect.height / ch, 1);
+      const bgScaleX = cw / img.width;
+      const bgScaleY = ch / img.height;
 
-    body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas></div>`;
+      body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas></div>`;
 
-    annoCanvas = new fabric.Canvas('plan-anno-canvas', {
-      width: cw,
-      height: ch,
-      selection: false,
-      preserveObjectStacking: true
-    });
+      annoCanvas = new fabric.Canvas('plan-anno-canvas', {
+        width: cw,
+        height: ch,
+        selection: false,
+        preserveObjectStacking: true
+      });
 
-    // Set plan as background
-    annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), {
-      scaleX: bgScaleX,
-      scaleY: bgScaleY
-    });
+      // Set plan as background
+      annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), {
+        scaleX: bgScaleX,
+        scaleY: bgScaleY
+      });
 
-    // Load existing annotations
-    if (plan.annotations) {
-      try {
-        const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
-        const parsed = normalizeAnnoPayload(parsedRaw);
-        if (parsed.objects && parsed.objects.length > 0) {
-          const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || cw);
-          const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || ch);
-          if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - cw) > 1 || Math.abs(savedHeight - ch) > 1)) {
-            const sx = cw / savedWidth;
-            const sy = ch / savedHeight;
-            parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
-          }
+      // Load existing annotations
+      if (plan.annotations) {
+        try {
+          const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
+          const parsed = normalizeAnnoPayload(parsedRaw);
+          if (parsed.objects && parsed.objects.length > 0) {
+            const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || cw);
+            const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || ch);
+            if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - cw) > 1 || Math.abs(savedHeight - ch) > 1)) {
+              const sx = cw / savedWidth;
+              const sy = ch / savedHeight;
+              parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+            }
 
-          await new Promise(resolve => {
-            annoCanvas.loadFromJSON(parsed, () => {
-              // Re-set background (loadFromJSON clears it)
-              annoCanvas.setBackgroundImage(bgUrl, () => {
-                annoCanvas.renderAll();
-                resolve();
-              }, { scaleX: bgScaleX, scaleY: bgScaleY });
+            await new Promise(resolve => {
+              annoCanvas.loadFromJSON(parsed, () => {
+                // Re-set background (loadFromJSON clears it)
+                annoCanvas.setBackgroundImage(bgUrl, () => {
+                  annoCanvas.renderAll();
+                  resolve();
+                }, { scaleX: bgScaleX, scaleY: bgScaleY });
+              });
             });
-          });
-        }
-      } catch(e) { console.warn('Error loading annotations:', e); }
+          }
+        } catch(e) { console.warn('Error loading annotations:', e); }
+      }
+
+      annoCanvas.on('object:modified', pushHistory);
+      annoCanvas.on('path:created', pushHistory);
+
+      applyAnnoTool();
+      annoHistory = [snapshotAnnoState()];
+      annoBaseZoom = fitScale;
+      setAnnoZoom(annoBaseZoom);
+      try { lucide.createIcons(); } catch(e) {}
+    } catch (e) {
+      console.error('Error entering annotate mode:', e);
+      App.toast(App.t('file_content_unavailable') || 'No se pudo abrir la edición del plano', 'error');
+      exitAnnotateMode({ suppressRender: false });
     }
-
-    annoCanvas.on('object:modified', pushHistory);
-    annoCanvas.on('path:created', pushHistory);
-
-    applyAnnoTool();
-    annoHistory = [snapshotAnnoState()];
-    annoBaseZoom = fitScale;
-    setAnnoZoom(annoBaseZoom);
-    try { lucide.createIcons(); } catch(e) {}
   }
 
   function exitAnnotateMode({ suppressRender = false } = {}) {
