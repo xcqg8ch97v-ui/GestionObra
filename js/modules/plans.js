@@ -881,39 +881,66 @@ const PlansModule = (() => {
         img.onerror = reject;
       });
 
-      // Fit visual zoom to available space, but keep canvas at native resolution
+      // Pre-scale image to a reasonable max resolution for annotation quality
+      const maxAnnoSide = 2400;
+      const imgScale = Math.min(1, maxAnnoSide / img.width, maxAnnoSide / img.height);
+      const nativeW = Math.max(1, Math.round(img.width * imgScale));
+      const nativeH = Math.max(1, Math.round(img.height * imgScale));
+
+      // Draw image at native annotation resolution onto temp canvas
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = nativeW;
+      tmpCanvas.height = nativeH;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.fillStyle = '#ffffff';
+      tmpCtx.fillRect(0, 0, nativeW, nativeH);
+      tmpCtx.drawImage(img, 0, 0, nativeW, nativeH);
+      const nativeDataUrl = tmpCanvas.toDataURL('image/png');
+
+      // Load pre-scaled image
+      const scaledImg = new Image();
+      scaledImg.src = nativeDataUrl;
+      await new Promise((resolve, reject) => {
+        scaledImg.onload = resolve;
+        scaledImg.onerror = reject;
+      });
+
+      // Calculate canvas display size to fit in viewport
       const rect = body.getBoundingClientRect();
-      const maxSide = 4096;
-      const maxPixels = 12_000_000;
-      const dimScale = Math.min(
-        1,
-        maxSide / img.width,
-        maxSide / img.height,
-        Math.sqrt(maxPixels / (img.width * img.height))
-      );
-      const cw = Math.max(1, Math.round(img.width * dimScale));
-      const ch = Math.max(1, Math.round(img.height * dimScale));
-      const fitScale = Math.min(rect.width / cw, rect.height / ch, 1);
-      const bgScaleX = cw / img.width;
-      const bgScaleY = ch / img.height;
+      const padX = 32, padY = 32;
+      const availW = Math.max(200, rect.width - padX);
+      const availH = Math.max(200, rect.height - padY);
+      const imgAspect = nativeW / nativeH;
+      const viewAspect = availW / availH;
 
-      body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas></div>`;
+      let canvasW, canvasH;
+      if (imgAspect > viewAspect) {
+        canvasW = Math.min(availW, nativeW);
+        canvasH = Math.round(canvasW / imgAspect);
+      } else {
+        canvasH = Math.min(availH, nativeH);
+        canvasW = Math.round(canvasH * imgAspect);
+      }
+      canvasW = Math.max(1, Math.round(canvasW));
+      canvasH = Math.max(1, Math.round(canvasH));
 
-      // Wait one frame so layout is calculated before measuring rect
-      await new Promise(r => requestAnimationFrame(r));
+      const bgScaleX = canvasW / nativeW;
+      const bgScaleY = canvasH / nativeH;
+
+      body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${canvasW}" height="${canvasH}"></canvas></div>`;
 
       annoCanvas = new fabric.Canvas('plan-anno-canvas', {
-        width: cw,
-        height: ch,
+        width: canvasW,
+        height: canvasH,
         selection: false,
         preserveObjectStacking: true,
         backgroundColor: '#ffffff'
       });
 
-      // Create fabric.Image from the already-loaded HTML Image element (synchronous, no URL issues)
-      const bgFabricImg = new fabric.Image(img);
+      // Create fabric.Image from the pre-scaled HTML Image element (synchronous)
+      const bgFabricImg = new fabric.Image(scaledImg);
 
-      // Set plan as background
+      // Set plan as background — fills canvas exactly
       annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
         scaleX: bgScaleX,
         scaleY: bgScaleY
@@ -926,17 +953,16 @@ const PlansModule = (() => {
           const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
           const parsed = normalizeAnnoPayload(parsedRaw);
           if (parsed.objects && parsed.objects.length > 0) {
-            const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || cw);
-            const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || ch);
-            if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - cw) > 1 || Math.abs(savedHeight - ch) > 1)) {
-              const sx = cw / savedWidth;
-              const sy = ch / savedHeight;
+            const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || canvasW);
+            const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || canvasH);
+            if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - canvasW) > 1 || Math.abs(savedHeight - canvasH) > 1)) {
+              const sx = canvasW / savedWidth;
+              const sy = canvasH / savedHeight;
               parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
             }
 
             await new Promise(resolve => {
               annoCanvas.loadFromJSON(parsed, () => {
-                // loadFromJSON clears background — re-set with pre-loaded fabric.Image
                 annoCanvas.backgroundColor = '#ffffff';
                 annoCanvas.setBackgroundImage(bgFabricImg, () => {
                   annoCanvas.renderAll();
@@ -953,14 +979,8 @@ const PlansModule = (() => {
 
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
-
-      // Recalculate fitScale after layout is settled
-      const settledRect = body.getBoundingClientRect();
-      const safeFitScale = (settledRect.width > 0 && settledRect.height > 0)
-        ? Math.min(settledRect.width / cw, settledRect.height / ch, 1)
-        : fitScale;
-      annoBaseZoom = Math.max(0.1, safeFitScale);
-      setAnnoZoom(annoBaseZoom);
+      annoBaseZoom = 1;
+      setAnnoZoom(1);
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
       console.error('Error entering annotate mode:', e);
@@ -1218,11 +1238,13 @@ const PlansModule = (() => {
 
   function setAnnoZoom(nextZoom) {
     if (!annoCanvas) return;
-    const minZoom = Math.max(0.1, (annoBaseZoom || 1) * 0.5);
-    const clamped = Math.max(minZoom, Math.min(nextZoom, 8));
-
-    annoCanvas.setViewportTransform([clamped, 0, 0, clamped, 0, 0]);
-
+    const clamped = Math.max(0.1, Math.min(nextZoom, 8));
+    const w = annoCanvas.getWidth();
+    const h = annoCanvas.getHeight();
+    // Zoom from center: keep center point fixed
+    const panX = (w / 2) * (1 - clamped);
+    const panY = (h / 2) * (1 - clamped);
+    annoCanvas.setViewportTransform([clamped, 0, 0, clamped, panX, panY]);
     annoZoom = clamped;
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
@@ -1231,9 +1253,7 @@ const PlansModule = (() => {
   function updateAnnoZoomLabel() {
     const label = document.getElementById('plan-anno-zoom-label');
     if (label) {
-      const base = annoBaseZoom || 1;
-      const relative = Math.round((annoZoom / base) * 100);
-      label.textContent = `${relative}%`;
+      label.textContent = `${Math.round(annoZoom * 100)}%`;
     }
   }
 
