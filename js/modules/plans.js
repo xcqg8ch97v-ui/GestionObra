@@ -910,13 +910,20 @@ const PlansModule = (() => {
         backgroundColor: '#ffffff'
       });
 
-      // Set plan as background — wait for image load to complete
-      await new Promise(resolve => {
-        annoCanvas.setBackgroundImage(bgUrl, () => {
-          annoCanvas.renderAll();
-          resolve();
-        }, { scaleX: bgScaleX, scaleY: bgScaleY });
+      // Load background image as fabric.Image first (more reliable than URL string)
+      const bgFabricImg = await new Promise((resolve, reject) => {
+        fabric.Image.fromURL(bgUrl, function(img) {
+          if (img) resolve(img);
+          else reject(new Error('Failed to load background image'));
+        }, { crossOrigin: 'anonymous' });
       });
+
+      // Set plan as background
+      annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
+        scaleX: bgScaleX,
+        scaleY: bgScaleY
+      });
+      annoCanvas.renderAll();
 
       // Load existing annotations
       if (plan.annotations) {
@@ -934,9 +941,9 @@ const PlansModule = (() => {
 
             await new Promise(resolve => {
               annoCanvas.loadFromJSON(parsed, () => {
-                // loadFromJSON clears background — re-set it and wait
-                annoCanvas.setBackgroundImage(bgUrl, () => {
-                  annoCanvas.backgroundColor = '#ffffff';
+                // loadFromJSON clears background — re-set with pre-loaded fabric.Image
+                annoCanvas.backgroundColor = '#ffffff';
+                annoCanvas.setBackgroundImage(bgFabricImg, () => {
                   annoCanvas.renderAll();
                   resolve();
                 }, { scaleX: bgScaleX, scaleY: bgScaleY });
@@ -1175,14 +1182,14 @@ const PlansModule = (() => {
     if (annoHistory.length > 1) {
       annoHistory.pop();
       const prev = normalizeAnnoPayload(annoHistory[annoHistory.length - 1]);
-      // Save current bg before restore
-      const bgUrl = annoCanvas.backgroundImage?._element?.src;
-      const bgSx = annoCanvas.backgroundImage?.scaleX || 1;
-      const bgSy = annoCanvas.backgroundImage?.scaleY || 1;
+      // Save current bg fabric.Image before restore
+      const bgImg = annoCanvas.backgroundImage;
+      const bgSx = bgImg?.scaleX || 1;
+      const bgSy = bgImg?.scaleY || 1;
       annoCanvas.loadFromJSON(prev, () => {
         annoCanvas.backgroundColor = '#ffffff';
-        if (bgUrl) {
-          annoCanvas.setBackgroundImage(bgUrl, () => {
+        if (bgImg) {
+          annoCanvas.setBackgroundImage(bgImg, () => {
             annoCanvas.renderAll();
           }, { scaleX: bgSx, scaleY: bgSy });
         } else {
