@@ -477,13 +477,21 @@ const PlansModule = (() => {
       if (e.key === '-') setZoom(viewerZoom / 1.3);
     });
 
-    // Mouse wheel zoom (only when not annotating)
+    // Mouse wheel: zoom (Ctrl) or pan (no Ctrl) in annotation mode
     const body = document.getElementById('plan-viewer-body');
     body.addEventListener('wheel', (e) => {
       if (annoMode) {
-        if (!e.ctrlKey) return;
         e.preventDefault();
-        setAnnoZoom(annoZoom * (e.deltaY > 0 ? 0.9 : 1.1));
+        if (e.ctrlKey) {
+          // Ctrl+wheel = zoom
+          setAnnoZoom(annoZoom * (e.deltaY > 0 ? 0.9 : 1.1));
+        } else {
+          // Wheel = pan
+          const vpt = annoCanvas.viewportTransform.slice();
+          vpt[4] -= e.deltaX || 0;
+          vpt[5] -= e.deltaY || 0;
+          annoCanvas.setViewportTransform(vpt);
+        }
         return;
       }
       e.preventDefault();
@@ -1043,7 +1051,33 @@ const PlansModule = (() => {
       return;
     }
 
-    if (annoTool === 'draw') {
+    if (annoTool === 'hand') {
+      // Pan mode: drag to move viewport
+      annoCanvas.defaultCursor = 'grab';
+      let panning = false;
+      let lastX, lastY;
+      annoCanvas.on('mouse:down', (e) => {
+        panning = true;
+        lastX = e.e.clientX;
+        lastY = e.e.clientY;
+        annoCanvas.defaultCursor = 'grabbing';
+      });
+      annoCanvas.on('mouse:move', (e) => {
+        if (!panning) return;
+        const dx = e.e.clientX - lastX;
+        const dy = e.e.clientY - lastY;
+        lastX = e.e.clientX;
+        lastY = e.e.clientY;
+        const vpt = annoCanvas.viewportTransform.slice();
+        vpt[4] += dx;
+        vpt[5] += dy;
+        annoCanvas.setViewportTransform(vpt);
+      });
+      annoCanvas.on('mouse:up', () => {
+        panning = false;
+        annoCanvas.defaultCursor = 'grab';
+      });
+    } else if (annoTool === 'draw') {
       annoCanvas.isDrawingMode = true;
       annoCanvas.freeDrawingBrush.color = color;
       annoCanvas.freeDrawingBrush.width = width;
