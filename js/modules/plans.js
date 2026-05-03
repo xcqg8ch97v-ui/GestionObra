@@ -591,27 +591,27 @@ const PlansModule = (() => {
       return;
     }
 
-    const savedW = Number(parsed?.__canvasWidth || parsed?.canvasWidth || 0);
-    const savedH = Number(parsed?.__canvasHeight || parsed?.canvasHeight || 0);
+    // Annotation canvas dimensions (may be display-size, not full-res)
+    const annoW = Number(parsed?.__canvasWidth || parsed?.canvasWidth || 0);
+    const annoH = Number(parsed?.__canvasHeight || parsed?.canvasHeight || 0);
 
-    // Load original image at full resolution for background
+    // Render background at HIGH resolution (300 DPI equivalent)
+    const HIGH_RES_SCALE = 3; // 3x PDF default 72dpi = ~216 DPI; for 300 DPI use ~4.17
     let bgImg = null;
-    let outW = savedW || 0;
-    let outH = savedH || 0;
+    let outW = 0, outH = 0;
+    let pdfPageW_mm = 210, pdfPageH_mm = 297; // default A4
 
     if (file.type && file.type.startsWith('image/')) {
       const srcUrl = URL.createObjectURL(sourceBlob);
       try {
         bgImg = new Image();
         bgImg.src = srcUrl;
-        await new Promise((resolve, reject) => {
-          bgImg.onload = resolve;
-          bgImg.onerror = reject;
-        });
-        if (!outW || !outH) {
-          outW = bgImg.width;
-          outH = bgImg.height;
-        }
+        await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
+        outW = bgImg.width;
+        outH = bgImg.height;
+        // Estimate page size: assume 96 DPI for image
+        pdfPageW_mm = outW * 25.4 / 96;
+        pdfPageH_mm = outH * 25.4 / 96;
       } finally {
         URL.revokeObjectURL(srcUrl);
       }
@@ -621,15 +621,12 @@ const PlansModule = (() => {
       const page = await pdf.getPage(1);
       const baseVp = page.getViewport({ scale: 1 });
 
-      if (!outW || !outH) {
-        const scale = Math.min(2400 / baseVp.width, 3);
-        const vp = page.getViewport({ scale });
-        outW = Math.round(vp.width);
-        outH = Math.round(vp.height);
-      }
-
-      const renderScale = outW / baseVp.width;
+      // High-res render
+      const renderScale = HIGH_RES_SCALE;
       const viewport = page.getViewport({ scale: renderScale });
+      outW = Math.round(viewport.width);
+      outH = Math.round(viewport.height);
+
       const pdfCanvas = document.createElement('canvas');
       pdfCanvas.width = outW;
       pdfCanvas.height = outH;
@@ -640,10 +637,13 @@ const PlansModule = (() => {
 
       bgImg = new Image();
       bgImg.src = pdfCanvas.toDataURL('image/png');
-      await new Promise((resolve, reject) => {
-        bgImg.onload = resolve;
-        bgImg.onerror = reject;
-      });
+      await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
+
+      // Get original PDF page size in mm
+      const pdfPage = page.getViewport({ scale: 1 });
+      // PDF units: 1 point = 1/72 inch
+      pdfPageW_mm = pdfPage.width * 25.4 / 72;
+      pdfPageH_mm = pdfPage.height * 25.4 / 72;
     }
 
     if (!bgImg || !outW || !outH) {
@@ -651,7 +651,16 @@ const PlansModule = (() => {
       return;
     }
 
-    // Create export canvas with background image
+    // Scale annotations from annotation-canvas coords to high-res output coords
+    if (annoW > 0 && annoH > 0) {
+      const sx = outW / annoW;
+      const sy = outH / annoH;
+      if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
+        parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+      }
+    }
+
+    // Create export canvas at high resolution
     const exportCanvas = new fabric.StaticCanvas(null, {
       width: outW,
       height: outH,
@@ -659,7 +668,7 @@ const PlansModule = (() => {
       backgroundColor: '#ffffff'
     });
 
-    // Set background using pre-loaded Image element (synchronous, reliable)
+    // Set background using pre-loaded Image element
     const bgFabricImg = new fabric.Image(bgImg);
     exportCanvas.setBackgroundImage(bgFabricImg, exportCanvas.renderAll.bind(exportCanvas), {
       scaleX: outW / bgImg.width,
@@ -669,7 +678,6 @@ const PlansModule = (() => {
     // Load annotations on top
     await new Promise(resolve => {
       exportCanvas.loadFromJSON(parsed, () => {
-        // Re-set background after loadFromJSON clears it
         const bgFabricImg2 = new fabric.Image(bgImg);
         exportCanvas.backgroundColor = '#ffffff';
         exportCanvas.setBackgroundImage(bgFabricImg2, () => {
@@ -679,17 +687,15 @@ const PlansModule = (() => {
       });
     });
 
-    // Export as PDF
-    const pngDataUrl = exportCanvas.toDataURL({ format: 'png', multiplier: 2 });
+    // Export as high-quality image
+    const imgDataUrl = exportCanvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 1 });
     exportCanvas.dispose();
 
-    // Use jsPDF to create PDF at original page size
+    // Create PDF at original page dimensions
     const { jsPDF } = window.jspdf;
-    // Determine page orientation
-    const orientation = outW > outH ? 'l' : 'p';
-    // Use A4 as base, then scale to fit image
-    const pdfDoc = new jsPDF({ orientation, unit: 'px', format: [outW, outH], hotfixes: ['px_scaling'] });
-    pdfDoc.addImage(pngDataUrl, 'PNG', 0, 0, outW, outH);
+    const orientation = pdfPageW_mm > pdfPageH_mm ? 'l' : 'p';
+    const pdfDoc = new jsPDF({ orientation, unit: 'mm', format: [pdfPageW_mm, pdfPageH_mm] });
+    pdfDoc.addImage(imgDataUrl, 'JPEG', 0, 0, pdfPageW_mm, pdfPageH_mm, undefined, 'FAST');
     pdfDoc.save(plan.name + '_anotado.pdf');
   }
 

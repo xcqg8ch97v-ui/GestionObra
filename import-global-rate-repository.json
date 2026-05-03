@@ -1,0 +1,795 @@
+{
+  "_exportVersion": 1,
+  "_exportDate": "2024-04-10T12:00:00.000Z",
+  "project": {
+    "name": "Global Rate Repository",
+    "customerName": "PSA BDP (Internal Project)",
+    "projectType": "New Project",
+    "region": "GLOBAL",
+    "owner": "Arturo Tello",
+    "status": "active",
+    "startDate": "2025-09-10",
+    "goLiveDate": "2026-04-30",
+    "businessCase": "Replace Magaya as Ocean RMS. Separate Ocean Freight charges from surcharges & D&D. Integrate spot rates via API/web crawling. Evaluate Makara Insights for D&D. Integrate with SmartQuote. Provide analytics and reporting UI.",
+    "summary": "New platform for ocean freight rate management to replace Magaya. Expected cost $100k-$120k/year with 3-year contract.",
+    "jiraReference": "GOF-21",
+    "currentPsr": {
+      "weekNumber": 24,
+      "reportingDate": "2025-04-10",
+      "rag": {
+        "schedule": "Amber",
+        "budget": "Green",
+        "resources": "Green",
+        "scope": "Amber",
+        "risks": "Amber"
+      },
+      "overallStatus": "Amber",
+      "progressPercent": 29.1,
+      "accomplishments": [
+        "RFQ launched successfully",
+        "IT & Procurement alignment achieved",
+        "Makara API validated",
+        "Budget approved by Finance",
+        "Makara Integration Environment fixed"
+      ],
+      "upcomingActivities": [
+        "RFQ scoring workshops",
+        "FreightGate replacement definition",
+        "API production validation",
+        "Vendor presentations"
+      ],
+      "roadblocks": [
+        "RFQ Q&A workload high",
+        "Undefined FreightGate business requirements",
+        "Makara contract signature delays",
+        "Production API activation dependencies"
+      ]
+    }
+  },
+  "participants": [
+    {
+      "name": "Arturo Tello",
+      "role": "Project Manager",
+      "workstream": "Global Ocean Freight",
+      "email": "Arturo.tello@psabdp.com",
+      "country": "Spain",
+      "type": "internal"
+    },
+    {
+      "name": "Marc Bonet",
+      "role": "Strategy Manager",
+      "workstream": "Global Ocean Freight",
+      "email": "marc.bonet@psabdp.com",
+      "country": "Spain",
+      "type": "internal"
+    },
+    {
+      "name": "Eddie NG",
+      "role": "Head of Data & Analytics",
+      "workstream": "Digital and Solutions",
+      "email": "Eddie.NG@psabdp.com",
+      "country": "Singapore",
+      "type": "internal"
+    },
+    {
+      "name": "Leo Brea",
+      "role": "Sales Manager",
+      "company": "Makara / Veconinter",
+      "email": "leobrea@veconinter.com",
+      "country": "US",
+      "type": "external"
+    },
+    {
+      "name": "Larkin Papa",
+      "role": "Procurement Lead",
+      "workstream": "Global Procurement",
+      "type": "internal"
+    }
+  ],
+  "suppliers": [
+    {
+      "company": "Makara / Veconinter",
+      "trade": "Platform Provider",
+      "contactName": "Leo Brea",
+      "email": "leobrea@veconinter.com",
+      "phone": "",
+      "status": "active",
+      "category": "Ocean RMS Platform"
+    },
+    {
+      "company": "CargoOne",
+      "trade": "Platform Provider",
+      "contactName": "TBD",
+      "email": "",
+      "status": "pending",
+      "category": "Ocean RMS Platform"
+    },
+    {
+      "company": "WiseTech",
+      "trade": "Platform Provider",
+      "contactName": "TBD",
+      "email": "",
+      "status": "pending",
+      "category": "Ocean RMS Platform"
+    },
+    {
+      "company": "Freightos / WebCargo",
+      "trade": "Platform Provider",
+      "contactName": "TBD",
+      "email": "",
+      "status": "evaluated",
+      "category": "Ocean RMS Platform"
+    },
+    {
+      "company": "InfoX",
+      "trade": "Platform Provider",
+      "contactName": "TBD",
+      "email": "",
+      "status": "evaluated",
+      "category": "Ocean RMS Platform"
+    }
+  ],
+  "scope_items": [
+    {
+      "description": "Replace Magaya RMS as primary ocean freight platform",
+      "phase": "Implementation",
+      "priority": "Must Have",
+      "status": "in-progress",
+      "comments": "Hard stop July 31, 2026 - Magaya expiry",
+      "order": 1
+    },
+    {
+      "description": "Separate Ocean Freight charges from surcharges & D&D",
+      "phase": "Implementation",
+      "priority": "Must Have",
+      "status": "in-progress",
+      "comments": "Core requirement for new platform",
+      "order": 2
+    },
+    {
+      "description": "Integrate spot rates via API and web crawling",
+      "phase": "Implementation",
+      "priority": "Must Have",
+      "status": "in-progress",
+      "comments": "API validated, production activation pending",
+      "order": 3
+    },
+    {
+      "description": "Evaluate and integrate Makara Insights for D&D",
+      "phase": "Independent Track",
+      "priority": "Medium",
+      "status": "in-progress",
+      "comments": "85% complete - API validated",
+      "order": 4
+    },
+    {
+      "description": "Integrate with SmartQuote internal system",
+      "phase": "Integration",
+      "priority": "Must Have",
+      "status": "not-started",
+      "comments": "Requires vendor selection first",
+      "order": 5
+    },
+    {
+      "description": "Provide analytics and reporting UI",
+      "phase": "Implementation",
+      "priority": "Must Have",
+      "status": "not-started",
+      "comments": "Procurement benchmarking visibility",
+      "order": 6
+    },
+    {
+      "description": "Magaya & WebCargo decommissioning",
+      "phase": "Transition",
+      "priority": "Must Have",
+      "status": "in-progress",
+      "comments": "Hard stop July 31, 2026",
+      "order": 7
+    },
+    {
+      "description": "FreightGate US Capability - FMC filing/compliance",
+      "phase": "Extension",
+      "priority": "Medium",
+      "status": "in-progress",
+      "comments": "75% complete - requirements gathering ongoing",
+      "order": 8
+    },
+    {
+      "description": "Enterprise Security & SSO implementation",
+      "phase": "Implementation",
+      "priority": "Must Have",
+      "status": "not-started",
+      "comments": "RBAC + SSO required",
+      "order": 9
+    },
+    {
+      "description": "Procurement Analytics - Spend & carrier analytics",
+      "phase": "Implementation",
+      "priority": "Medium",
+      "status": "not-started",
+      "comments": "Post go-live enhancement",
+      "order": 10
+    }
+  ],
+  "tasks": [
+    {
+      "name": "Define project objectives and success criteria",
+      "category": "Phase 1 - Initiation",
+      "startDate": "2025-09-10",
+      "endDate": "2025-09-12",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Document business case and constraints",
+      "category": "Phase 1 - Initiation",
+      "startDate": "2025-09-10",
+      "endDate": "2025-09-17",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Identify stakeholders and governance structure",
+      "category": "Phase 1 - Initiation",
+      "startDate": "2025-09-10",
+      "endDate": "2025-09-12",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Confirm high-level requirements",
+      "category": "Phase 1 - Initiation",
+      "startDate": "2025-09-10",
+      "endDate": "2025-09-17",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Align timelines and milestones",
+      "category": "Phase 1 - Initiation",
+      "startDate": "2025-09-10",
+      "endDate": "2025-09-17",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Conduct interviews and demos with shortlisted vendors",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2025-07-22",
+      "endDate": "2025-11-22",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Document key features and gaps for each platform",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2025-09-10",
+      "endDate": "2025-11-25",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Consolidate benchmark matrix and finalize shortlist",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2025-09-10",
+      "endDate": "2025-11-27",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Evaluate build vs buy",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2025-09-10",
+      "endDate": "2026-01-26",
+      "responsible": "Procurement & IT",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Freightos / WebCargo Follow-up Demo",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2026-01-21",
+      "endDate": "2026-01-21",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Vendor Interview - InfoX",
+      "category": "Phase 2 - Benchmarking",
+      "startDate": "2026-01-20",
+      "endDate": "2026-01-20",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Check FreightGate termination terms",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2025-12-18",
+      "endDate": "2025-12-23",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Brief US team on Global Rate Repository initiative",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2025-12-18",
+      "endDate": "2025-12-23",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Requirements gathering - FreightGate replacement",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2025-12-19",
+      "endDate": "2026-01-22",
+      "responsible": "Marc Bonet",
+      "progress": 90,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Perform functional gap analysis",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2025-12-22",
+      "endDate": "2026-01-22",
+      "responsible": "Arturo Tello",
+      "progress": 70,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Escalate FreightGate requirements to CIO",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2026-01-23",
+      "endDate": "2026-01-23",
+      "responsible": "Marc Bonet",
+      "progress": 90,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Define Meridian technical requirements",
+      "category": "Phase 3 - FreightGate Assessment",
+      "startDate": "2026-01-24",
+      "endDate": "2026-01-29",
+      "responsible": "Arturo Tello",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Conduct initial evaluation and demo - Makara",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2025-10-23",
+      "endDate": "2025-10-23",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Receive and review Makara proposal",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2025-11-03",
+      "endDate": "2025-11-09",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Request and validate country coverage - Makara",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2025-11-09",
+      "endDate": "2025-11-19",
+      "responsible": "Leo Brea (Makara)",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Confirm feasibility and define scope - Makara",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2025-11-19",
+      "endDate": "2025-11-19",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Align on integration timeline - Makara",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2025-11-19",
+      "endDate": "2025-11-20",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Map Makara data flow for Rate Repository",
+      "category": "Phase 4 - Makara Insights",
+      "startDate": "2026-01-22",
+      "endDate": "2026-01-30",
+      "responsible": "Digital Team",
+      "progress": 10,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Prepare RFQ documentation based on requirements",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2025-11-19",
+      "endDate": "2025-12-01",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Share shortlist and RFQ with Procurement",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2025-11-19",
+      "endDate": "2025-12-01",
+      "responsible": "Marc Bonet",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Send NDAs via IntelAgree",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2025-12-02",
+      "endDate": "2025-12-04",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 100,
+      "status": "completed",
+      "systemTag": ""
+    },
+    {
+      "name": "Launch RFQ",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2025-12-04",
+      "endDate": "2026-02-03",
+      "responsible": "Procurement (Larkin Papa)",
+      "progress": 100,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "RFQ Vendor Q&A & internal responses",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-02-03",
+      "endDate": "2026-03-15",
+      "responsible": "Procurement",
+      "progress": 100,
+      "status": "in-progress",
+      "systemTag": ""
+    },
+    {
+      "name": "Scoring preparation & evaluator alignment",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-02-17",
+      "endDate": "2026-04-05",
+      "responsible": "Procurement",
+      "progress": 100,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Vendor scoring (ZIP)",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-02-23",
+      "endDate": "2026-04-05",
+      "responsible": "Procurement",
+      "progress": 100,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Score consolidation & shortlist definition",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-03-09",
+      "endDate": "2026-03-13",
+      "responsible": "Procurement",
+      "progress": 100,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Vendor presentations",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-03-23",
+      "endDate": "2026-04-03",
+      "responsible": "Procurement",
+      "progress": 100,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Final evaluation & vendor recommendation",
+      "category": "Phase 5 - RFQ",
+      "startDate": "2026-04-01",
+      "endDate": "2026-04-17",
+      "responsible": "Procurement",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Define integration scope and dependencies",
+      "category": "Phase 6 - Integration Assessment",
+      "startDate": "2026-01-03",
+      "endDate": "",
+      "responsible": "IT Team",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Assess Makara data compatibility with SmartQuote",
+      "category": "Phase 6 - Integration Assessment",
+      "startDate": "",
+      "endDate": "",
+      "responsible": "Digital Team",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Check integrations with Meridian",
+      "category": "Phase 6 - Integration Assessment",
+      "startDate": "2025-12-18",
+      "endDate": "2026-01-03",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Check integrations with FreightGate",
+      "category": "Phase 6 - Integration Assessment",
+      "startDate": "2025-12-18",
+      "endDate": "2026-01-23",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 50,
+      "status": "not-started",
+      "systemTag": ""
+    },
+    {
+      "name": "Check integrations with SmartQuote",
+      "category": "Phase 6 - Integration Assessment",
+      "startDate": "2025-12-18",
+      "endDate": "2026-01-03",
+      "responsible": "Marc Bonet & Arturo Tello",
+      "progress": 0,
+      "status": "not-started",
+      "systemTag": ""
+    }
+  ],
+  "oil_items": [
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Makara Integration Environment",
+      "dateRaised": "2025-12-01",
+      "raisedBy": "Marc Bonet",
+      "priority": "High",
+      "assignedTo": "Digital Team (Eddie)",
+      "targetDate": "2026-01-22",
+      "completedDate": "2026-01-23",
+      "status": "completed",
+      "comments": "API fixed after credential resolution"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Funds Reallocation",
+      "dateRaised": "2025-12-05",
+      "raisedBy": "Arturo Tello",
+      "priority": "High",
+      "assignedTo": "Marc Bonet & Finance",
+      "targetDate": "2025-12-19",
+      "completedDate": "2026-01-20",
+      "status": "completed",
+      "comments": "Budget approved by Finance"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Legacy Data Clean-up (Magaya)",
+      "dateRaised": "2025-12-05",
+      "raisedBy": "Arturo Tello",
+      "priority": "Low",
+      "assignedTo": "Arturo Tello",
+      "targetDate": "2026-02-27",
+      "completedDate": "",
+      "status": "in-progress",
+      "comments": "Pre-migration data hygiene"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Magaya Expiry",
+      "dateRaised": "2025-12-04",
+      "raisedBy": "Arturo Tello",
+      "priority": "High",
+      "assignedTo": "Arturo Tello",
+      "targetDate": "2026-07-31",
+      "completedDate": "",
+      "status": "in-progress",
+      "comments": "No auto-renewal, hard stop"
+    },
+    {
+      "workstream": "Global Procurement",
+      "issue": "WOC Endorsements (RMS RFQ)",
+      "dateRaised": "2025-12-08",
+      "raisedBy": "Larkin Papa",
+      "priority": "Medium",
+      "assignedTo": "Larkin Papa",
+      "targetDate": "2025-12-16",
+      "completedDate": "",
+      "status": "completed",
+      "comments": "WOC endorsed"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "NDA execution (all vendors)",
+      "dateRaised": "2026-01-15",
+      "raisedBy": "Arturo Tello",
+      "priority": "Medium",
+      "assignedTo": "Vendors",
+      "targetDate": "2026-01-22",
+      "completedDate": "2026-01-30",
+      "status": "completed",
+      "comments": "NDAs executed (except CargoOne, WiseTech)"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "FreightGate Integration Review",
+      "dateRaised": "2026-01-12",
+      "raisedBy": "Marc Bonet",
+      "priority": "Medium",
+      "assignedTo": "IT / Marc Bonet",
+      "targetDate": "2026-01-22",
+      "completedDate": "2026-02-05",
+      "status": "in-progress",
+      "comments": "IT engaged, Meridian pending"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Validate CargoOne Ocean Capabilities",
+      "dateRaised": "2026-01-12",
+      "raisedBy": "Marc Bonet",
+      "priority": "Medium",
+      "assignedTo": "Marc Bonet & Patrick Olyhoeck",
+      "targetDate": "2026-01-24",
+      "completedDate": "",
+      "status": "in-progress",
+      "comments": "Ocean RMS fit validation"
+    },
+    {
+      "workstream": "Global Ocean Freight",
+      "issue": "Validate CargoOne MNDA",
+      "dateRaised": "2026-01-21",
+      "raisedBy": "Marc Bonet",
+      "priority": "Medium",
+      "assignedTo": "Marc Bonet & Patrick Olyhoeck",
+      "targetDate": "2026-01-29",
+      "completedDate": "",
+      "status": "in-progress",
+      "comments": "Minor IntelAgree corrections pending"
+    }
+  ],
+  "budgets": [
+    {
+      "concept": "Platform License (Makara/Selected Vendor)",
+      "supplierId": 1,
+      "estimated": 100000,
+      "actual": 0,
+      "status": "not-started",
+      "yearlyCost": true
+    },
+    {
+      "concept": "Integration Development",
+      "supplierId": null,
+      "estimated": 50000,
+      "actual": 0,
+      "status": "not-started"
+    },
+    {
+      "concept": "Training & Change Management",
+      "supplierId": null,
+      "estimated": 25000,
+      "actual": 0,
+      "status": "not-started"
+    },
+    {
+      "concept": "Data Migration & Clean-up",
+      "supplierId": null,
+      "estimated": 20000,
+      "actual": 0,
+      "status": "in-progress"
+    }
+  ],
+  "vacation_coverage": [
+    {
+      "teamMember": "Arturo Tello",
+      "role": "Project Manager",
+      "dates": "2025-12-13 to 2025-12-15",
+      "backup": "Marc Bonet"
+    }
+  ],
+  "kickoff_checklist": [
+    { "category": "Project Setup", "item": "Project charter approved", "completed": true },
+    { "category": "Project Setup", "item": "JIRA project created (GOF-21)", "completed": true },
+    { "category": "Project Setup", "item": "Team structure defined", "completed": true },
+    { "category": "Governance", "item": "Weekly email updates cadence established", "completed": true },
+    { "category": "Governance", "item": "Bi-weekly Scrum meetings scheduled", "completed": true },
+    { "category": "Governance", "item": "Escalation path documented", "completed": true },
+    { "category": "Stakeholders", "item": "Internal team identified", "completed": true },
+    { "category": "Stakeholders", "item": "External vendors contacted", "completed": true },
+    { "category": "Planning", "item": "Scope sign-off target: 09/30/2025", "completed": false },
+    { "category": "Planning", "item": "UAT sign-off date confirmed", "completed": false },
+    { "category": "Planning", "item": "Go-Live target: 04/30/2026", "completed": false }
+  ],
+  "uat_tests": [
+    {
+      "testScenario": "Rate Search - Ocean Freight",
+      "description": "Verify ocean freight rate search functionality",
+      "dependencies": "Vendor selection complete",
+      "status": "not-started",
+      "priority": "High"
+    },
+    {
+      "testScenario": "Surcharge Separation",
+      "description": "Validate separation of ocean freight charges from surcharges & D&D",
+      "dependencies": "Integration complete",
+      "status": "not-started",
+      "priority": "High"
+    },
+    {
+      "testScenario": "Spot Rate Integration",
+      "description": "Test spot rate API integration and web crawling",
+      "dependencies": "API production activation",
+      "status": "not-started",
+      "priority": "High"
+    },
+    {
+      "testScenario": "SmartQuote Integration",
+      "description": "Validate integration with internal SmartQuote system",
+      "dependencies": "Vendor selection, IT alignment",
+      "status": "not-started",
+      "priority": "High"
+    },
+    {
+      "testScenario": "SSO & RBAC",
+      "description": "Test enterprise security and role-based access",
+      "dependencies": "IT Security review",
+      "status": "not-started",
+      "priority": "Medium"
+    }
+  ]
+}
