@@ -33,6 +33,7 @@ const PlansModule = (() => {
 
   let customPlanCategories = [];
   let hiddenPlanCategories = [];
+  let plansUiBound = false;
 
   async function refreshPlanCategories() {
     hiddenPlanCategories = (await DB.getCustomCategories(projectId, 'plan', 'hide')).map(c => c.name);
@@ -69,6 +70,8 @@ const PlansModule = (() => {
   }
 
   function setupButtons() {
+    if (plansUiBound) return;
+
     document.getElementById('plan-file-input').onchange = handleUpload;
 
     const triggerUpload = () => document.getElementById('plan-file-input').click();
@@ -99,6 +102,8 @@ const PlansModule = (() => {
         }
       });
     }
+
+    plansUiBound = true;
   }
 
   async function handleUpload(e) {
@@ -448,7 +453,6 @@ const PlansModule = (() => {
     document.getElementById('plan-anno-zoom-in').addEventListener('click', () => setAnnoZoom(annoZoom * 1.2));
     document.getElementById('plan-anno-zoom-out').addEventListener('click', () => setAnnoZoom(annoZoom / 1.2));
     document.getElementById('plan-anno-fit').addEventListener('click', fitAnnoCanvas);
-    document.getElementById('plan-anno-delete').addEventListener('click', annoDeleteSelection);
     document.getElementById('plan-anno-duplicate').addEventListener('click', annoDuplicateSelection);
 
     overlay.addEventListener('click', (e) => {
@@ -711,13 +715,13 @@ const PlansModule = (() => {
         } else if (action === 'download-annotated') {
           await downloadAnnotatedPlan();
         }
-        document.body.removeChild(menu);
+        if (menu.parentNode) document.body.removeChild(menu);
       });
     });
 
     const closeMenu = (e) => {
       if (!menu.contains(e.target) && e.target !== btn) {
-        document.body.removeChild(menu);
+        if (menu.parentNode) document.body.removeChild(menu);
         document.removeEventListener('click', closeMenu);
       }
     };
@@ -1008,6 +1012,51 @@ const PlansModule = (() => {
       annoCanvas.isDrawingMode = true;
       annoCanvas.freeDrawingBrush.color = color;
       annoCanvas.freeDrawingBrush.width = width;
+    } else if (annoTool === 'erase') {
+      annoCanvas.defaultCursor = 'crosshair';
+      let erasing = false;
+      let didErase = false;
+      const hitRadius = Math.max(6, width * 2);
+
+      const eraseAtPointer = (pointer) => {
+        const objs = annoCanvas.getObjects();
+        if (!objs.length) return;
+        const victims = [];
+        for (let i = objs.length - 1; i >= 0; i--) {
+          const obj = objs[i];
+          const bounds = obj.getBoundingRect(true, true);
+          if (
+            pointer.x >= (bounds.left - hitRadius) &&
+            pointer.x <= (bounds.left + bounds.width + hitRadius) &&
+            pointer.y >= (bounds.top - hitRadius) &&
+            pointer.y <= (bounds.top + bounds.height + hitRadius)
+          ) {
+            victims.push(obj);
+          }
+        }
+        if (!victims.length) return;
+        if (!didErase) {
+          pushHistory();
+          didErase = true;
+        }
+        victims.forEach(obj => annoCanvas.remove(obj));
+        annoCanvas.requestRenderAll();
+      };
+
+      annoCanvas.on('mouse:down', (e) => {
+        erasing = true;
+        didErase = false;
+        const p = annoCanvas.getPointer(e.e);
+        eraseAtPointer(p);
+      });
+      annoCanvas.on('mouse:move', (e) => {
+        if (!erasing) return;
+        const p = annoCanvas.getPointer(e.e);
+        eraseAtPointer(p);
+      });
+      annoCanvas.on('mouse:up', () => {
+        erasing = false;
+      });
     } else if (annoTool === 'text') {
       annoCanvas.defaultCursor = 'text';
       annoCanvas.on('mouse:down', (e) => {
@@ -1153,8 +1202,14 @@ const PlansModule = (() => {
     if (!annoCanvas) return;
     const minZoom = Math.max(0.1, (annoBaseZoom || 1) * 0.5);
     const clamped = Math.max(minZoom, Math.min(nextZoom, 8));
-    const point = new fabric.Point(annoCanvas.getWidth() / 2, annoCanvas.getHeight() / 2);
-    annoCanvas.zoomToPoint(point, clamped);
+
+    if (clamped <= 1) {
+      annoCanvas.setViewportTransform([clamped, 0, 0, clamped, 0, 0]);
+    } else {
+      const point = new fabric.Point(annoCanvas.getWidth() / 2, annoCanvas.getHeight() / 2);
+      annoCanvas.zoomToPoint(point, clamped);
+    }
+
     annoZoom = clamped;
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
