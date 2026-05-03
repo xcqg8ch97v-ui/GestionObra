@@ -899,17 +899,23 @@ const PlansModule = (() => {
 
       body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${cw}" height="${ch}"></canvas></div>`;
 
+      // Wait one frame so layout is calculated before measuring rect
+      await new Promise(r => requestAnimationFrame(r));
+
       annoCanvas = new fabric.Canvas('plan-anno-canvas', {
         width: cw,
         height: ch,
         selection: false,
-        preserveObjectStacking: true
+        preserveObjectStacking: true,
+        backgroundColor: '#ffffff'
       });
 
-      // Set plan as background
-      annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), {
-        scaleX: bgScaleX,
-        scaleY: bgScaleY
+      // Set plan as background — wait for image load to complete
+      await new Promise(resolve => {
+        annoCanvas.setBackgroundImage(bgUrl, () => {
+          annoCanvas.renderAll();
+          resolve();
+        }, { scaleX: bgScaleX, scaleY: bgScaleY });
       });
 
       // Load existing annotations
@@ -928,8 +934,9 @@ const PlansModule = (() => {
 
             await new Promise(resolve => {
               annoCanvas.loadFromJSON(parsed, () => {
-                // Re-set background (loadFromJSON clears it)
+                // loadFromJSON clears background — re-set it and wait
                 annoCanvas.setBackgroundImage(bgUrl, () => {
+                  annoCanvas.backgroundColor = '#ffffff';
                   annoCanvas.renderAll();
                   resolve();
                 }, { scaleX: bgScaleX, scaleY: bgScaleY });
@@ -944,7 +951,13 @@ const PlansModule = (() => {
 
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
-      annoBaseZoom = fitScale;
+
+      // Recalculate fitScale after layout is settled
+      const settledRect = body.getBoundingClientRect();
+      const safeFitScale = (settledRect.width > 0 && settledRect.height > 0)
+        ? Math.min(settledRect.width / cw, settledRect.height / ch, 1)
+        : fitScale;
+      annoBaseZoom = Math.max(0.1, safeFitScale);
       setAnnoZoom(annoBaseZoom);
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
@@ -1167,8 +1180,11 @@ const PlansModule = (() => {
       const bgSx = annoCanvas.backgroundImage?.scaleX || 1;
       const bgSy = annoCanvas.backgroundImage?.scaleY || 1;
       annoCanvas.loadFromJSON(prev, () => {
+        annoCanvas.backgroundColor = '#ffffff';
         if (bgUrl) {
-          annoCanvas.setBackgroundImage(bgUrl, annoCanvas.renderAll.bind(annoCanvas), { scaleX: bgSx, scaleY: bgSy });
+          annoCanvas.setBackgroundImage(bgUrl, () => {
+            annoCanvas.renderAll();
+          }, { scaleX: bgSx, scaleY: bgSy });
         } else {
           annoCanvas.renderAll();
         }
@@ -1203,12 +1219,7 @@ const PlansModule = (() => {
     const minZoom = Math.max(0.1, (annoBaseZoom || 1) * 0.5);
     const clamped = Math.max(minZoom, Math.min(nextZoom, 8));
 
-    if (clamped <= 1) {
-      annoCanvas.setViewportTransform([clamped, 0, 0, clamped, 0, 0]);
-    } else {
-      const point = new fabric.Point(annoCanvas.getWidth() / 2, annoCanvas.getHeight() / 2);
-      annoCanvas.zoomToPoint(point, clamped);
-    }
+    annoCanvas.setViewportTransform([clamped, 0, 0, clamped, 0, 0]);
 
     annoZoom = clamped;
     updateAnnoZoomLabel();
