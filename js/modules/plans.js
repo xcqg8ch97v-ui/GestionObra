@@ -570,7 +570,6 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
 
-    // Check if plan has annotations
     if (!plan.annotations) {
       App.toast(App.t('plan_no_annotations') || 'Este plano no tiene anotaciones', 'warning');
       return;
@@ -595,31 +594,24 @@ const PlansModule = (() => {
     const savedW = Number(parsed?.__canvasWidth || parsed?.canvasWidth || 0);
     const savedH = Number(parsed?.__canvasHeight || parsed?.canvasHeight || 0);
 
-    let bgDataUrl = null;
-    let outW = savedW;
-    let outH = savedH;
+    // Load original image at full resolution for background
+    let bgImg = null;
+    let outW = savedW || 0;
+    let outH = savedH || 0;
 
     if (file.type && file.type.startsWith('image/')) {
       const srcUrl = URL.createObjectURL(sourceBlob);
       try {
-        const img = new Image();
-        img.src = srcUrl;
+        bgImg = new Image();
+        bgImg.src = srcUrl;
         await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
+          bgImg.onload = resolve;
+          bgImg.onerror = reject;
         });
-
         if (!outW || !outH) {
-          outW = img.width;
-          outH = img.height;
+          outW = bgImg.width;
+          outH = bgImg.height;
         }
-
-        const bgCanvas = document.createElement('canvas');
-        bgCanvas.width = outW;
-        bgCanvas.height = outH;
-        const bgCtx = bgCanvas.getContext('2d');
-        bgCtx.drawImage(img, 0, 0, outW, outH);
-        bgDataUrl = bgCanvas.toDataURL('image/png');
       } finally {
         URL.revokeObjectURL(srcUrl);
       }
@@ -645,44 +637,60 @@ const PlansModule = (() => {
       pdfCtx.fillStyle = '#ffffff';
       pdfCtx.fillRect(0, 0, outW, outH);
       await page.render({ canvasContext: pdfCtx, viewport }).promise;
-      bgDataUrl = pdfCanvas.toDataURL('image/png');
+
+      bgImg = new Image();
+      bgImg.src = pdfCanvas.toDataURL('image/png');
+      await new Promise((resolve, reject) => {
+        bgImg.onload = resolve;
+        bgImg.onerror = reject;
+      });
     }
 
-    if (!bgDataUrl || !outW || !outH) {
+    if (!bgImg || !outW || !outH) {
       App.toast(App.t('preview_not_available'), 'error');
       return;
     }
 
+    // Create export canvas with background image
     const exportCanvas = new fabric.StaticCanvas(null, {
       width: outW,
       height: outH,
-      enableRetinaScaling: false
+      enableRetinaScaling: false,
+      backgroundColor: '#ffffff'
     });
 
-    await new Promise(resolve => {
-      exportCanvas.setBackgroundImage(bgDataUrl, () => resolve(), { scaleX: 1, scaleY: 1 });
+    // Set background using pre-loaded Image element (synchronous, reliable)
+    const bgFabricImg = new fabric.Image(bgImg);
+    exportCanvas.setBackgroundImage(bgFabricImg, exportCanvas.renderAll.bind(exportCanvas), {
+      scaleX: outW / bgImg.width,
+      scaleY: outH / bgImg.height
     });
 
+    // Load annotations on top
     await new Promise(resolve => {
       exportCanvas.loadFromJSON(parsed, () => {
-        exportCanvas.renderAll();
-        resolve();
+        // Re-set background after loadFromJSON clears it
+        const bgFabricImg2 = new fabric.Image(bgImg);
+        exportCanvas.backgroundColor = '#ffffff';
+        exportCanvas.setBackgroundImage(bgFabricImg2, () => {
+          exportCanvas.renderAll();
+          resolve();
+        }, { scaleX: outW / bgImg.width, scaleY: outH / bgImg.height });
       });
     });
 
-    const pngDataUrl = exportCanvas.toDataURL({ format: 'png', multiplier: 1 });
-    const res = await fetch(pngDataUrl);
-    const newBlob = await res.blob();
+    // Export as PDF
+    const pngDataUrl = exportCanvas.toDataURL({ format: 'png', multiplier: 2 });
     exportCanvas.dispose();
 
-    const url = URL.createObjectURL(newBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = plan.name + '_anotado.png';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    // Use jsPDF to create PDF at original page size
+    const { jsPDF } = window.jspdf;
+    // Determine page orientation
+    const orientation = outW > outH ? 'l' : 'p';
+    // Use A4 as base, then scale to fit image
+    const pdfDoc = new jsPDF({ orientation, unit: 'px', format: [outW, outH], hotfixes: ['px_scaling'] });
+    pdfDoc.addImage(pngDataUrl, 'PNG', 0, 0, outW, outH);
+    pdfDoc.save(plan.name + '_anotado.pdf');
   }
 
   async function showDownloadMenu() {
@@ -691,17 +699,15 @@ const PlansModule = (() => {
 
     const hasAnnotations = plan.annotations && plan.annotations !== '{}';
     const menu = document.createElement('div');
-    menu.className = 'context-menu';
-    menu.style.position = 'absolute';
-    menu.style.zIndex = '10000';
+    menu.style.cssText = 'position:absolute;z-index:10000;background:#1e293b;border:1px solid #475569;border-radius:8px;padding:4px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-family:inherit;';
 
-    let menuHTML = `<button class="context-menu-item" data-action="download-original">
-      <i data-lucide="download"></i> ${App.t('download_original') || 'Descargar original'}
+    let menuHTML = `<button data-action="download-original" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;color:#e2e8f0;font-size:0.875rem;cursor:pointer;border-radius:6px;text-align:left;font-family:inherit;">
+      <i data-lucide="download" style="width:16px;height:16px;"></i> ${App.t('download_original') || 'Descargar original'}
     </button>`;
 
     if (hasAnnotations) {
-      menuHTML += `<button class="context-menu-item" data-action="download-annotated">
-        <i data-lucide="edit-3"></i> ${App.t('download_annotated') || 'Descargar con anotaciones'}
+      menuHTML += `<button data-action="download-annotated" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;color:#e2e8f0;font-size:0.875rem;cursor:pointer;border-radius:6px;text-align:left;font-family:inherit;">
+        <i data-lucide="edit-3" style="width:16px;height:16px;"></i> ${App.t('download_annotated') || 'Descargar con anotaciones (PDF)'}
       </button>`;
     }
 
@@ -715,7 +721,13 @@ const PlansModule = (() => {
     document.body.appendChild(menu);
     lucide.createIcons();
 
-    menu.querySelectorAll('.context-menu-item').forEach(item => {
+    // Hover effect
+    menu.querySelectorAll('button').forEach(b => {
+      b.addEventListener('mouseenter', () => b.style.background = '#334155');
+      b.addEventListener('mouseleave', () => b.style.background = 'transparent');
+    });
+
+    menu.querySelectorAll('button[data-action]').forEach(item => {
       item.addEventListener('click', async () => {
         const action = item.dataset.action;
         if (action === 'download-original') {
