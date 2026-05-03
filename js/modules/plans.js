@@ -910,13 +910,8 @@ const PlansModule = (() => {
         backgroundColor: '#ffffff'
       });
 
-      // Load background image as fabric.Image first (more reliable than URL string)
-      const bgFabricImg = await new Promise((resolve, reject) => {
-        fabric.Image.fromURL(bgUrl, function(img) {
-          if (img) resolve(img);
-          else reject(new Error('Failed to load background image'));
-        }, { crossOrigin: 'anonymous' });
-      });
+      // Create fabric.Image from the already-loaded HTML Image element (synchronous, no URL issues)
+      const bgFabricImg = new fabric.Image(img);
 
       // Set plan as background
       annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
