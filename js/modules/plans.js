@@ -1575,7 +1575,8 @@ const PlansModule = (() => {
     if (typeof obj.top === 'number') obj.top *= sy;
     if (typeof obj.scaleX === 'number') obj.scaleX *= sx;
     if (typeof obj.scaleY === 'number') obj.scaleY *= sy;
-    if (typeof obj.strokeWidth === 'number') obj.strokeWidth *= Math.max(sx, sy);
+    // strokeWidth is NOT scaled here — Fabric.js applies scaleX/scaleY to stroke visually,
+    // so scaling it separately would cause double-scaling (strokeWidth * scaleX = sx² factor)
     if (Array.isArray(obj.points)) {
       obj.points = obj.points.map(p => ({ ...p, x: (p.x || 0) * sx, y: (p.y || 0) * sy }));
     }
