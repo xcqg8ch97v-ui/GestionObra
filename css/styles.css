@@ -4854,7 +4854,7 @@ body.is-resizing-timeline-label {
 
 .plan-anno-toolbar {
   display: none;
-  width: 56px;
+  width: 44px;
   background: rgba(15,23,42,0.98);
   border-right: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
@@ -4890,14 +4890,14 @@ body.is-resizing-timeline-label {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
+  border-radius: 5px;
   color: rgba(255,255,255,0.8);
-  padding: 8px;
+  padding: 6px 4px;
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   transition: all 0.15s;
   white-space: nowrap;
   width: 100%;
@@ -4909,7 +4909,7 @@ body.is-resizing-timeline-label {
   border-color: var(--primary);
   font-weight: 600;
 }
-.plan-anno-btn svg { width: 18px; height: 18px; }
+.plan-anno-btn svg { width: 16px; height: 16px; }
 .plan-anno-btn span { display: none; }
 
 .plan-anno-save {
@@ -4925,10 +4925,10 @@ body.is-resizing-timeline-label {
 .plan-anno-exit:hover { background: rgba(239,68,68,0.35); }
 
 .plan-anno-color {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   padding: 0;
   background: transparent;
@@ -4937,10 +4937,10 @@ body.is-resizing-timeline-label {
 .plan-anno-select {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
+  border-radius: 5px;
   color: rgba(255,255,255,0.85);
-  padding: 6px 4px;
-  font-size: 0.68rem;
+  padding: 4px 2px;
+  font-size: 0.64rem;
   cursor: pointer;
 }
 .plan-anno-select option {

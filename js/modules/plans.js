@@ -1015,12 +1015,14 @@ const PlansModule = (() => {
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
 
+      // Calculate initial zoom to fit canvas in viewport
+      // Use clientWidth for actual available space (excluding sidebar)
       const rect = body.getBoundingClientRect();
-      const padX = 32, padY = 32;
+      const padX = 16, padY = 16;
       const availW = Math.max(200, rect.width - padX);
       const availH = Math.max(200, rect.height - padY);
-      const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
-      annoBaseZoom = Math.max(0.05, fitScale);
+      const fitScale = Math.min(availW / canvasW, availH / canvasH);
+      annoBaseZoom = Math.max(0.02, fitScale);
       setAnnoZoom(annoBaseZoom);
 
       try { lucide.createIcons(); } catch(e) {}
