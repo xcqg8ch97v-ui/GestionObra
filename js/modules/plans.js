@@ -34,6 +34,7 @@ const PlansModule = (() => {
   let customPlanCategories = [];
   let hiddenPlanCategories = [];
   let plansUiBound = false;
+  let annoGridVisible = false;
 
   async function refreshPlanCategories() {
     hiddenPlanCategories = (await DB.getCustomCategories(projectId, 'plan', 'hide')).map(c => c.name);
@@ -445,15 +446,36 @@ const PlansModule = (() => {
       });
     });
     document.getElementById('plan-anno-undo').addEventListener('click', annoUndo);
-    document.getElementById('plan-anno-clear').addEventListener('click', annoClear);
+    const clearBtn = document.getElementById('plan-anno-clear') || document.getElementById('plan-anno-clear');
+    if (clearBtn) clearBtn.addEventListener('click', annoClear);
     document.getElementById('plan-anno-save').addEventListener('click', annoSave);
     document.getElementById('plan-anno-exit').addEventListener('click', exitAnnotateMode);
     document.getElementById('plan-anno-color').addEventListener('input', applyAnnoTool);
     document.getElementById('plan-anno-width').addEventListener('change', applyAnnoTool);
+    const linestyleEl = document.getElementById('plan-anno-linestyle');
+    if (linestyleEl) linestyleEl.addEventListener('change', applyAnnoTool);
+    const opacityEl = document.getElementById('plan-anno-opacity');
+    if (opacityEl) opacityEl.addEventListener('change', applyAnnoTool);
     document.getElementById('plan-anno-zoom-in').addEventListener('click', () => setAnnoZoom(annoZoom * 1.2));
     document.getElementById('plan-anno-zoom-out').addEventListener('click', () => setAnnoZoom(annoZoom / 1.2));
     document.getElementById('plan-anno-fit').addEventListener('click', fitAnnoCanvas);
     document.getElementById('plan-anno-duplicate').addEventListener('click', annoDuplicateSelection);
+
+    // Grid toggle
+    const gridBtn = document.getElementById('plan-anno-grid');
+    if (gridBtn) {
+      gridBtn.addEventListener('click', () => {
+        annoGridVisible = !annoGridVisible;
+        gridBtn.classList.toggle('active', annoGridVisible);
+        if (annoCanvas) {
+          if (annoGridVisible) {
+            drawAnnoGrid();
+          } else {
+            removeAnnoGrid();
+          }
+        }
+      });
+    }
 
     overlay.addEventListener('click', (e) => {
       if (!annoMode && (e.target === overlay || e.target.classList.contains('plan-viewer-body'))) closeViewer();
@@ -1047,6 +1069,13 @@ const PlansModule = (() => {
     if (!annoCanvas) return;
     const color = document.getElementById('plan-anno-color').value;
     const width = parseInt(document.getElementById('plan-anno-width').value) || 4;
+    const lineStyle = document.getElementById('plan-anno-linestyle')?.value || 'solid';
+    const opacity = parseFloat(document.getElementById('plan-anno-opacity')?.value || '1');
+
+    // Line dash pattern
+    const dashPattern = lineStyle === 'dashed' ? [width * 3, width * 2]
+      : lineStyle === 'dotted' ? [width, width * 2]
+      : null;
 
     annoCanvas.isDrawingMode = false;
     annoCanvas.selection = annoTool === 'select';
@@ -1069,8 +1098,16 @@ const PlansModule = (() => {
       return;
     }
 
+    // Helper: apply common style to an object
+    const applyStyle = (obj) => {
+      if (obj.stroke) obj.stroke = color;
+      if (obj.fill && obj.fill !== 'transparent') obj.fill = color;
+      if (obj.strokeWidth) obj.strokeWidth = width;
+      if (dashPattern) obj.strokeDashArray = dashPattern;
+      if (opacity < 1) obj.opacity = opacity;
+    };
+
     if (annoTool === 'hand') {
-      // Pan mode: drag to move viewport
       annoCanvas.defaultCursor = 'grab';
       let panning = false;
       let lastX, lastY;
@@ -1099,6 +1136,7 @@ const PlansModule = (() => {
       annoCanvas.isDrawingMode = true;
       annoCanvas.freeDrawingBrush.color = color;
       annoCanvas.freeDrawingBrush.width = width;
+      if (opacity < 1) annoCanvas.freeDrawingBrush.opacity = opacity;
     } else if (annoTool === 'erase') {
       annoCanvas.defaultCursor = 'crosshair';
       let erasing = false;
@@ -1122,45 +1160,236 @@ const PlansModule = (() => {
           }
         }
         if (!victims.length) return;
-        if (!didErase) {
-          pushHistory();
-          didErase = true;
-        }
+        if (!didErase) { pushHistory(); didErase = true; }
         victims.forEach(obj => annoCanvas.remove(obj));
         annoCanvas.requestRenderAll();
       };
 
       annoCanvas.on('mouse:down', (e) => {
-        erasing = true;
-        didErase = false;
-        const p = annoCanvas.getPointer(e.e);
-        eraseAtPointer(p);
+        erasing = true; didErase = false;
+        eraseAtPointer(annoCanvas.getPointer(e.e));
       });
       annoCanvas.on('mouse:move', (e) => {
         if (!erasing) return;
-        const p = annoCanvas.getPointer(e.e);
-        eraseAtPointer(p);
+        eraseAtPointer(annoCanvas.getPointer(e.e));
       });
-      annoCanvas.on('mouse:up', () => {
-        erasing = false;
-      });
+      annoCanvas.on('mouse:up', () => { erasing = false; });
     } else if (annoTool === 'text') {
       annoCanvas.defaultCursor = 'text';
       annoCanvas.on('mouse:down', (e) => {
-        if (e.target) return; // clicked existing object
+        if (e.target) return;
         const pointer = annoCanvas.getPointer(e.e);
         const text = new fabric.IText('Nota', {
-          left: pointer.x,
-          top: pointer.y,
+          left: pointer.x, top: pointer.y,
           fontSize: Math.max(16, width * 5),
           fill: color,
           fontFamily: 'Inter, sans-serif',
           fontWeight: '600',
-          shadow: '1px 1px 2px rgba(0,0,0,0.5)'
+          shadow: '1px 1px 2px rgba(0,0,0,0.5)',
+          opacity: opacity
         });
         annoCanvas.add(text);
         annoCanvas.setActiveObject(text);
         text.enterEditing();
+        pushHistory();
+      });
+    } else if (annoTool === 'callout') {
+      // Callout: text box with arrow pointing to a location
+      annoCanvas.defaultCursor = 'crosshair';
+      let startX, startY, tempLine = null, tempText = null;
+      annoCanvas.on('mouse:down', (e) => {
+        if (e.target) return;
+        const p = annoCanvas.getPointer(e.e);
+        startX = p.x; startY = p.y;
+        // Arrow from click point to where user drags
+        tempLine = new fabric.Line([startX, startY, startX, startY], {
+          stroke: color, strokeWidth: width,
+          strokeDashArray: dashPattern, opacity: opacity, selectable: true
+        });
+        annoCanvas.add(tempLine);
+      });
+      annoCanvas.on('mouse:move', (e) => {
+        if (!tempLine) return;
+        const p = annoCanvas.getPointer(e.e);
+        tempLine.set({ x2: p.x, y2: p.y });
+        annoCanvas.renderAll();
+      });
+      annoCanvas.on('mouse:up', (e) => {
+        if (!tempLine) return;
+        const p = annoCanvas.getPointer(e.e);
+        // Add arrowhead
+        const x1 = tempLine.x1, y1 = tempLine.y1, x2 = tempLine.x2, y2 = tempLine.y2;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const headLen = width * 4;
+        const head = new fabric.Polygon([
+          { x: x1, y: y1 },
+          { x: x1 + headLen * Math.cos(angle - Math.PI / 6), y: y1 + headLen * Math.sin(angle - Math.PI / 6) },
+          { x: x1 + headLen * Math.cos(angle + Math.PI / 6), y: y1 + headLen * Math.sin(angle + Math.PI / 6) }
+        ], { fill: color, opacity: opacity, selectable: true });
+
+        // Text box at end of arrow
+        const textContent = new fabric.IText('Nota', {
+          left: p.x + 10, top: p.y - 15,
+          fontSize: Math.max(14, width * 4),
+          fill: color,
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: '600',
+          opacity: opacity,
+          shadow: '1px 1px 2px rgba(0,0,0,0.3)',
+          selectable: true
+        });
+
+        annoCanvas.remove(tempLine);
+        const group = new fabric.Group([tempLine, head, textContent], { selectable: true });
+        annoCanvas.add(group);
+        pushHistory();
+        tempLine = null;
+      });
+    } else if (annoTool === 'line') {
+      // Simple line tool
+      let startX, startY, tempObj = null;
+      annoCanvas.on('mouse:down', (e) => {
+        if (e.target) return;
+        const p = annoCanvas.getPointer(e.e);
+        startX = p.x; startY = p.y;
+        tempObj = new fabric.Line([startX, startY, startX, startY], {
+          stroke: color, strokeWidth: width,
+          strokeDashArray: dashPattern, opacity: opacity, selectable: true
+        });
+        annoCanvas.add(tempObj);
+      });
+      annoCanvas.on('mouse:move', (e) => {
+        if (!tempObj) return;
+        const p = annoCanvas.getPointer(e.e);
+        tempObj.set({ x2: p.x, y2: p.y });
+        annoCanvas.renderAll();
+      });
+      annoCanvas.on('mouse:up', () => {
+        if (tempObj) { pushHistory(); tempObj = null; }
+      });
+    } else if (annoTool === 'cloud') {
+      // Revision cloud: freehand draw with cloud-like bumps
+      annoCanvas.isDrawingMode = true;
+      annoCanvas.freeDrawingBrush.color = color;
+      annoCanvas.freeDrawingBrush.width = width;
+      if (opacity < 1) annoCanvas.freeDrawingBrush.opacity = opacity;
+      // After each stroke, convert path to cloud style
+      const origPathCreated = annoCanvas.__cloudPathHandler;
+      if (origPathCreated) annoCanvas.off('path:created', origPathCreated);
+      annoCanvas.__cloudPathHandler = (e) => {
+        const path = e.path;
+        if (path) {
+          path.strokeDashArray = [width * 2, width];
+          path.stroke = color;
+          path.opacity = opacity;
+          // Make it look like a cloud by thickening and rounding
+          path.strokeLineCap = 'round';
+          path.strokeLineJoin = 'round';
+        }
+      };
+      annoCanvas.on('path:created', annoCanvas.__cloudPathHandler);
+    } else if (annoTool === 'dim') {
+      // Dimension / measurement tool
+      annoCanvas.defaultCursor = 'crosshair';
+      let startX, startY, tempLine = null, tempLabel = null;
+      annoCanvas.on('mouse:down', (e) => {
+        if (e.target) return;
+        const p = annoCanvas.getPointer(e.e);
+        startX = p.x; startY = p.y;
+        tempLine = new fabric.Line([startX, startY, startX, startY], {
+          stroke: color, strokeWidth: Math.max(1, width / 2),
+          strokeDashArray: dashPattern, opacity: opacity, selectable: true
+        });
+        annoCanvas.add(tempLine);
+      });
+      annoCanvas.on('mouse:move', (e) => {
+        if (!tempLine) return;
+        const p = annoCanvas.getPointer(e.e);
+        tempLine.set({ x2: p.x, y2: p.y });
+        annoCanvas.renderAll();
+      });
+      annoCanvas.on('mouse:up', () => {
+        if (!tempLine) return;
+        const x1 = tempLine.x1, y1 = tempLine.y1, x2 = tempLine.x2, y2 = tempLine.y2;
+        const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+
+        // End ticks
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const tickLen = width * 3;
+        const perpX = Math.cos(angle + Math.PI / 2);
+        const perpY = Math.sin(angle + Math.PI / 2);
+        const tick1 = new fabric.Line([
+          x1 - perpX * tickLen, y1 - perpY * tickLen,
+          x1 + perpX * tickLen, y1 + perpY * tickLen
+        ], { stroke: color, strokeWidth: Math.max(1, width / 2), opacity: opacity, selectable: false });
+        const tick2 = new fabric.Line([
+          x2 - perpX * tickLen, y2 - perpY * tickLen,
+          x2 + perpX * tickLen, y2 + perpY * tickLen
+        ], { stroke: color, strokeWidth: Math.max(1, width / 2), opacity: opacity, selectable: false });
+
+        // Label
+        const label = new fabric.Text(Math.round(dist) + ' px', {
+          left: midX, top: midY - 12,
+          fontSize: Math.max(12, width * 3),
+          fill: color,
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: '700',
+          originX: 'center',
+          opacity: opacity,
+          shadow: '0 0 4px rgba(255,255,255,0.8)',
+          selectable: false
+        });
+
+        annoCanvas.remove(tempLine);
+        const group = new fabric.Group([tempLine, tick1, tick2, label], { selectable: true });
+        annoCanvas.add(group);
+        pushHistory();
+        tempLine = null;
+      });
+    } else if (annoTool.startsWith('stamp-')) {
+      // Stamp tools: place pre-defined text stamp
+      annoCanvas.defaultCursor = 'crosshair';
+      const stampConfig = {
+        'stamp-approve': { text: 'APROBADO', bg: '#22c55e', icon: '✓' },
+        'stamp-review': { text: 'REVISADO', bg: '#3b82f6', icon: '👁' },
+        'stamp-reject': { text: 'RECHAZADO', bg: '#ef4444', icon: '✗' }
+      };
+      const cfg = stampConfig[annoTool];
+      if (!cfg) return;
+
+      annoCanvas.on('mouse:down', (e) => {
+        if (e.target) return;
+        const p = annoCanvas.getPointer(e.e);
+
+        // Create stamp as a group of rect + text
+        const stampW = 160, stampH = 50;
+        const stampRect = new fabric.Rect({
+          width: stampW, height: stampH,
+          fill: cfg.bg, rx: 8, ry: 8,
+          opacity: 0.9 * opacity
+        });
+        const stampText = new fabric.Text(cfg.text, {
+          fontSize: 18, fill: '#ffffff',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: '800',
+          originX: 'center', originY: 'center',
+          left: stampW / 2, top: stampH / 2
+        });
+        const stampDate = new fabric.Text(new Date().toLocaleDateString(), {
+          fontSize: 10, fill: 'rgba(255,255,255,0.8)',
+          fontFamily: 'Inter, sans-serif',
+          originX: 'center', originY: 'center',
+          left: stampW / 2, top: stampH / 2 + 14
+        });
+
+        const group = new fabric.Group([stampRect, stampText, stampDate], {
+          left: p.x - stampW / 2, top: p.y - stampH / 2,
+          selectable: true,
+          opacity: opacity
+        });
+        annoCanvas.add(group);
         pushHistory();
       });
     } else if (annoTool === 'arrow' || annoTool === 'rect' || annoTool === 'circle') {
@@ -1175,18 +1404,18 @@ const PlansModule = (() => {
           tempObj = new fabric.Rect({
             left: startX, top: startY, width: 0, height: 0,
             fill: 'transparent', stroke: color, strokeWidth: width,
-            selectable: true
+            strokeDashArray: dashPattern, opacity: opacity, selectable: true
           });
         } else if (annoTool === 'circle') {
           tempObj = new fabric.Ellipse({
             left: startX, top: startY, rx: 0, ry: 0,
             fill: 'transparent', stroke: color, strokeWidth: width,
-            selectable: true
+            strokeDashArray: dashPattern, opacity: opacity, selectable: true
           });
         } else if (annoTool === 'arrow') {
           tempObj = new fabric.Line([startX, startY, startX, startY], {
             stroke: color, strokeWidth: width,
-            selectable: true
+            strokeDashArray: dashPattern, opacity: opacity, selectable: true
           });
         }
         if (tempObj) annoCanvas.add(tempObj);
@@ -1217,7 +1446,6 @@ const PlansModule = (() => {
 
       annoCanvas.on('mouse:up', () => {
         if (tempObj) {
-          // Add arrowhead for lines
           if (annoTool === 'arrow' && tempObj.type === 'line') {
             const x1 = tempObj.x1, y1 = tempObj.y1, x2 = tempObj.x2, y2 = tempObj.y2;
             const angle = Math.atan2(y2 - y1, x2 - x1);
@@ -1226,8 +1454,8 @@ const PlansModule = (() => {
               { x: x2, y: y2 },
               { x: x2 - headLen * Math.cos(angle - Math.PI / 6), y: y2 - headLen * Math.sin(angle - Math.PI / 6) },
               { x: x2 - headLen * Math.cos(angle + Math.PI / 6), y: y2 - headLen * Math.sin(angle + Math.PI / 6) }
-            ], { fill: color, selectable: true });
-            const group = new fabric.Group([tempObj, head], { selectable: true });
+            ], { fill: color, opacity: opacity, selectable: true });
+            const group = new fabric.Group([tempObj, head], { selectable: true, opacity: opacity });
             annoCanvas.remove(tempObj);
             annoCanvas.add(group);
           }
@@ -1236,6 +1464,38 @@ const PlansModule = (() => {
         }
       });
     }
+  }
+
+  function drawAnnoGrid() {
+    if (!annoCanvas) return;
+    removeAnnoGrid();
+    const w = annoCanvas.getWidth();
+    const h = annoCanvas.getHeight();
+    const gridSize = 50;
+    const lines = [];
+    for (let x = gridSize; x < w; x += gridSize) {
+      lines.push(new fabric.Line([x, 0, x, h], {
+        stroke: 'rgba(255,255,255,0.12)', strokeWidth: 0.5,
+        selectable: false, evented: false, excludeFromExport: true,
+        _annoGrid: true
+      }));
+    }
+    for (let y = gridSize; y < h; y += gridSize) {
+      lines.push(new fabric.Line([0, y, w, y], {
+        stroke: 'rgba(255,255,255,0.12)', strokeWidth: 0.5,
+        selectable: false, evented: false, excludeFromExport: true,
+        _annoGrid: true
+      }));
+    }
+    lines.forEach(l => annoCanvas.add(l));
+    annoCanvas.requestRenderAll();
+  }
+
+  function removeAnnoGrid() {
+    if (!annoCanvas) return;
+    const gridLines = annoCanvas.getObjects().filter(o => o._annoGrid);
+    gridLines.forEach(l => annoCanvas.remove(l));
+    annoCanvas.requestRenderAll();
   }
 
   function pushHistory() {
