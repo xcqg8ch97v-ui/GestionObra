@@ -4892,26 +4892,27 @@ body.is-resizing-timeline-label {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 5px;
-  color: rgba(255,255,255,0.8);
-  padding: 6px 4px;
+  gap: 4px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.95);
+  padding: 8px 6px;
   cursor: pointer;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   transition: all 0.15s;
   white-space: nowrap;
   width: 100%;
+  min-height: 40px;
 }
-.plan-anno-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.plan-anno-btn:hover { background: rgba(255,255,255,0.25); color: #fff; }
 .plan-anno-btn.active {
   background: var(--primary);
   color: #000;
   border-color: var(--primary);
   font-weight: 600;
 }
-.plan-anno-btn svg { width: 16px; height: 16px; }
+.plan-anno-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .plan-anno-btn span { display: none; }
 
 .plan-anno-save {

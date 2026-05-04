@@ -1015,17 +1015,21 @@ const PlansModule = (() => {
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
 
-      // Simple centering: calculate scale to fit viewport, then center
+      // Calculate scale to fit viewport
       const rect = body.getBoundingClientRect();
       const sidebarWidth = 60;
-      const availW = rect.width - sidebarWidth - 32; // sidebar + padding
+      const availW = rect.width - sidebarWidth - 32;
       const availH = rect.height - 32;
       const fitScale = Math.min(availW / canvasW, availH / canvasH);
       annoBaseZoom = Math.max(0.02, fitScale);
       
-      // Center the canvas
-      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
-      annoCanvas.centerObject(annoCanvas.getObjects()[0]);
+      // Center canvas in viewport using viewport transform
+      // The transform is [scaleX, skewY, skewX, scaleY, translateX, translateY]
+      const scaledW = canvasW * annoBaseZoom;
+      const scaledH = canvasH * annoBaseZoom;
+      const offsetX = (rect.width - scaledW) / 2;
+      const offsetY = (rect.height - scaledH) / 2;
+      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, offsetX, offsetY]);
       annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.requestRenderAll();
