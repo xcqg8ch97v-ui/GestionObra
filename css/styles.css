@@ -4980,10 +4980,11 @@ body.is-resizing-timeline-label {
 }
 
 @media (max-width: 768px) {
-  .plan-anno-toolbar {
-    width: 28px;
+  .plan-anno-toolbar,
+  .plan-anno-sidebar {
+    width: 60px;
   }
-  .plan-anno-btn { padding: 3px 0; }
+  .plan-anno-btn { padding: 3px 2px; }
   .plan-anno-btn svg { width: 12px; height: 12px; }
   .plan-anno-select { font-size: 0; padding: 2px 0; }
   .plan-anno-color { width: 24px; height: 24px; }
