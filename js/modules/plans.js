@@ -1018,20 +1018,22 @@ const PlansModule = (() => {
       // Calculate initial zoom to fit canvas in viewport
       const rect = body.getBoundingClientRect();
       const padX = 16, padY = 16;
-      const availW = Math.max(200, rect.width - padX);
+      const availW = Math.max(200, rect.width - padX - 40); // Subtract sidebar width
       const availH = Math.max(200, rect.height - padY);
       const fitScale = Math.min(availW / canvasW, availH / canvasH);
       annoBaseZoom = Math.max(0.02, fitScale);
       
       // Center canvas in viewport
-      const vpt = [annoBaseZoom, 0, 0, annoBaseZoom, 0, 0];
+      // The viewport transform is [scaleX, 0, 0, scaleY, translateX, translateY]
+      // translateX = (viewportWidth - canvasWidth * scale) / 2
       const scaledW = canvasW * annoBaseZoom;
       const scaledH = canvasH * annoBaseZoom;
-      const offsetX = (rect.width - scaledW) / 2;
-      const offsetY = (rect.height - scaledH) / 2;
-      vpt[4] = offsetX;
-      vpt[5] = offsetY;
-      annoCanvas.setViewportTransform(vpt);
+      const viewportW = rect.width;
+      const viewportH = rect.height;
+      const centerX = (viewportW - scaledW) / 2;
+      const centerY = (viewportH - scaledH) / 2;
+      
+      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, centerX, centerY]);
       annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.requestRenderAll();
