@@ -4855,19 +4855,20 @@ body.is-resizing-timeline-label {
 .plan-anno-toolbar,
 .plan-anno-sidebar {
   display: none;
-  width: 50px;
+  width: 60px;
   background: rgba(15,23,42,0.98);
   border-right: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  z-index: 10;
 }
 
 .plan-anno-sidebar-section {
-  padding: 8px 4px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .plan-anno-section-label {
