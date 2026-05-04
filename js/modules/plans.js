@@ -850,10 +850,10 @@ const PlansModule = (() => {
       body.innerHTML = `<p style="color:#fff;text-align:center">${App.t('preview_not_available')}</p>`;
     }
 
-    // Auto-enter annotate mode if plan has annotations and showAnnotations is true
-    if (hasAnnotations && !annoMode && showAnnotations && !isClosingViewer) {
-      await enterAnnotateMode();
-    }
+    // Do not auto-enter annotate mode - let user choose when to edit
+    // if (hasAnnotations && !annoMode && showAnnotations && !isClosingViewer) {
+    //   await enterAnnotateMode();
+    // }
 
     try { lucide.createIcons(); } catch(e) {}
   }
