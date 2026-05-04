@@ -4855,7 +4855,7 @@ body.is-resizing-timeline-label {
 .plan-anno-toolbar,
 .plan-anno-sidebar {
   display: none;
-  width: 28px;
+  width: 40px;
   background: rgba(15,23,42,0.98);
   border-right: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
