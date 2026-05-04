@@ -4852,7 +4852,8 @@ body.is-resizing-timeline-label {
 
 /* ---- Plan Annotation Toolbar ---- */
 
-.plan-anno-toolbar {
+.plan-anno-toolbar,
+.plan-anno-sidebar {
   display: none;
   width: 28px;
   background: rgba(15,23,42,0.98);
