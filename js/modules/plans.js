@@ -894,12 +894,20 @@ const PlansModule = (() => {
         document.getElementById(id).style.display = 'none';
       });
 
+      // Request fullscreen
+      const overlay = document.getElementById('plan-viewer-overlay');
+      overlay.classList.add('fullscreen');
+      if (overlay.requestFullscreen) {
+        try { await overlay.requestFullscreen(); } catch(e) { console.warn('Fullscreen request failed:', e); }
+      } else if (overlay.webkitRequestFullscreen) {
+        try { await overlay.webkitRequestFullscreen(); } catch(e) { console.warn('Fullscreen request failed:', e); }
+      }
+
       const body = document.getElementById('plan-viewer-body');
       body.scrollTop = 0;
       body.scrollLeft = 0;
 
       // Render background at HIGH RESOLUTION (300 DPI equivalent)
-      // PDF default is 72 DPI, so scale 4 = ~288 DPI, scale 5 = ~360 DPI
       const HIGH_RES_SCALE = 4.5;
       let bgImg = null;
       let canvasW = 0, canvasH = 0;
@@ -913,8 +921,6 @@ const PlansModule = (() => {
           await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
           canvasW = bgImg.width;
           canvasH = bgImg.height;
-          // For images, use native resolution (already high enough typically)
-          // Optionally could scale up if image is very small
           const minRes = 2000;
           if (canvasW < minRes || canvasH < minRes) {
             const scale = Math.max(minRes / canvasW, minRes / canvasH);
@@ -940,13 +946,9 @@ const PlansModule = (() => {
         const arrayBuf = await blob.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
         const page = await pdf.getPage(1);
-        const baseVp = page.getViewport({ scale: 1 });
-
-        // High-res render
         const viewport = page.getViewport({ scale: HIGH_RES_SCALE });
         canvasW = Math.round(viewport.width);
         canvasH = Math.round(viewport.height);
-
         const pdfCanvas = document.createElement('canvas');
         pdfCanvas.width = canvasW;
         pdfCanvas.height = canvasH;
@@ -954,7 +956,6 @@ const PlansModule = (() => {
         pdfCtx.fillStyle = '#ffffff';
         pdfCtx.fillRect(0, 0, canvasW, canvasH);
         await page.render({ canvasContext: pdfCtx, viewport }).promise;
-
         bgImg = new Image();
         bgImg.src = pdfCanvas.toDataURL('image/png');
         await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
@@ -966,7 +967,6 @@ const PlansModule = (() => {
         return;
       }
 
-      // Create canvas at HIGH RESOLUTION
       body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${canvasW}" height="${canvasH}"></canvas></div>`;
 
       annoCanvas = new fabric.Canvas('plan-anno-canvas', {
@@ -977,7 +977,6 @@ const PlansModule = (() => {
         backgroundColor: '#ffffff'
       });
 
-      // Set background image at 1:1 scale (no scaling needed since canvas is at native resolution)
       const bgFabricImg = new fabric.Image(bgImg);
       annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
         scaleX: 1,
@@ -985,7 +984,6 @@ const PlansModule = (() => {
       });
       annoCanvas.renderAll();
 
-      // Load existing annotations
       if (plan.annotations) {
         try {
           const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
@@ -998,7 +996,6 @@ const PlansModule = (() => {
               const sy = canvasH / savedHeight;
               parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
             }
-
             await new Promise(resolve => {
               annoCanvas.loadFromJSON(parsed, () => {
                 annoCanvas.backgroundColor = '#ffffff';
@@ -1018,7 +1015,6 @@ const PlansModule = (() => {
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
 
-      // Calculate initial zoom to fit canvas in viewport
       const rect = body.getBoundingClientRect();
       const padX = 32, padY = 32;
       const availW = Math.max(200, rect.width - padX);
@@ -1040,6 +1036,15 @@ const PlansModule = (() => {
     annoBaseZoom = 1;
     destroyAnnoCanvas();
     document.getElementById('plan-anno-toolbar').style.display = 'none';
+
+    // Exit fullscreen
+    const overlay = document.getElementById('plan-viewer-overlay');
+    overlay.classList.remove('fullscreen');
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(e => console.warn('Fullscreen exit failed:', e));
+    } else if (document.webkitFullscreenElement) {
+      document.webkitExitFullscreen().catch(e => console.warn('Fullscreen exit failed:', e));
+    }
 
     // Restore viewer buttons
     document.getElementById('plan-viewer-annotate').style.display = '';

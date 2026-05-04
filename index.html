@@ -667,69 +667,80 @@
           <button class="plan-viewer-btn plan-viewer-close" id="plan-viewer-close" title="Cerrar" data-i18n-attr="title" data-i18n="plan_viewer_close"><i data-lucide="x"></i></button>
         </div>
       </div>
-      <!-- Annotation toolbar (hidden until annotate mode) -->
-      <div class="plan-anno-toolbar" id="plan-anno-toolbar">
-        <!-- Navigation group -->
-        <button class="plan-anno-btn" data-tool="hand" title="Desplazar"><i data-lucide="hand"></i></button>
-        <button class="plan-anno-btn" data-tool="select" title="Seleccionar"><i data-lucide="mouse-pointer-2"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Drawing tools group -->
-        <button class="plan-anno-btn active" data-tool="draw" title="Dibujo libre"><i data-lucide="pencil"></i></button>
-        <button class="plan-anno-btn" data-tool="line" title="Línea"><i data-lucide="minus"></i></button>
-        <button class="plan-anno-btn" data-tool="arrow" title="Flecha"><i data-lucide="move-right"></i></button>
-        <button class="plan-anno-btn" data-tool="callout" title="Callout"><i data-lucide="message-square"></i></button>
-        <button class="plan-anno-btn" data-tool="text" title="Texto"><i data-lucide="type"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Shapes group -->
-        <button class="plan-anno-btn" data-tool="rect" title="Rectángulo"><i data-lucide="square"></i></button>
-        <button class="plan-anno-btn" data-tool="circle" title="Círculo"><i data-lucide="circle"></i></button>
-        <button class="plan-anno-btn" data-tool="cloud" title="Nube de revisión"><i data-lucide="cloud"></i></button>
-        <button class="plan-anno-btn" data-tool="dim" title="Cota / Medida"><i data-lucide="ruler"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Stamps group -->
-        <button class="plan-anno-btn" data-tool="stamp-approve" title="Sello APROBADO"><i data-lucide="check-circle"></i></button>
-        <button class="plan-anno-btn" data-tool="stamp-review" title="Sello REVISADO"><i data-lucide="search"></i></button>
-        <button class="plan-anno-btn" data-tool="stamp-reject" title="Sello RECHAZADO"><i data-lucide="x-circle"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Zoom group -->
-        <button class="plan-anno-btn" id="plan-anno-zoom-out" title="Reducir"><i data-lucide="zoom-out"></i></button>
-        <span class="plan-anno-zoom-label" id="plan-anno-zoom-label">100%</span>
-        <button class="plan-anno-btn" id="plan-anno-zoom-in" title="Ampliar"><i data-lucide="zoom-in"></i></button>
-        <button class="plan-anno-btn" id="plan-anno-fit" title="Ajustar"><i data-lucide="maximize-2"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Style controls -->
-        <input type="color" id="plan-anno-color" value="#EF4444" class="plan-anno-color" title="Color">
-        <select id="plan-anno-width" class="plan-anno-select" title="Grosor">
-          <option value="1">1px</option>
-          <option value="2">2px</option>
-          <option value="4" selected>4px</option>
-          <option value="6">6px</option>
-          <option value="8">8px</option>
-          <option value="12">12px</option>
-        </select>
-        <select id="plan-anno-linestyle" class="plan-anno-select" title="Estilo línea">
-          <option value="solid">Sólida</option>
-          <option value="dashed">Punteada</option>
-          <option value="dotted">Puntos</option>
-        </select>
-        <select id="plan-anno-opacity" class="plan-anno-select" title="Opacidad">
-          <option value="1">100%</option>
-          <option value="0.75">75%</option>
-          <option value="0.5">50%</option>
-          <option value="0.25">25%</option>
-        </select>
-        <button class="plan-anno-btn" id="plan-anno-grid" title="Cuadrícula"><i data-lucide="grid-3x3"></i></button>
-        <span class="plan-anno-sep"></span>
-        <!-- Actions group -->
-        <button class="plan-anno-btn" id="plan-anno-duplicate" title="Duplicar"><i data-lucide="copy"></i></button>
-        <button class="plan-anno-btn" id="plan-anno-delete" data-tool="erase" title="Borrador"><i data-lucide="eraser"></i></button>
-        <button class="plan-anno-btn" id="plan-anno-undo" title="Deshacer"><i data-lucide="undo-2"></i></button>
-        <button class="plan-anno-btn" id="plan-anno-clear" title="Borrar todo"><i data-lucide="trash-2"></i></button>
-        <span class="plan-anno-sep"></span>
-        <button class="plan-anno-btn plan-anno-save" id="plan-anno-save" title="Guardar"><i data-lucide="save"></i> <span>Guardar</span></button>
-        <button class="plan-anno-btn plan-anno-exit" id="plan-anno-exit" title="Salir"><i data-lucide="x"></i> <span>Salir</span></button>
+      <div class="plan-viewer-content">
+        <!-- Annotation sidebar (hidden until annotate mode) -->
+        <div class="plan-anno-sidebar" id="plan-anno-toolbar">
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Navegación</div>
+            <button class="plan-anno-btn" data-tool="hand" title="Desplazar"><i data-lucide="hand"></i></button>
+            <button class="plan-anno-btn" data-tool="select" title="Seleccionar"><i data-lucide="mouse-pointer-2"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Dibujo</div>
+            <button class="plan-anno-btn active" data-tool="draw" title="Dibujo libre"><i data-lucide="pencil"></i></button>
+            <button class="plan-anno-btn" data-tool="line" title="Línea"><i data-lucide="minus"></i></button>
+            <button class="plan-anno-btn" data-tool="arrow" title="Flecha"><i data-lucide="move-right"></i></button>
+            <button class="plan-anno-btn" data-tool="callout" title="Callout"><i data-lucide="message-square"></i></button>
+            <button class="plan-anno-btn" data-tool="text" title="Texto"><i data-lucide="type"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Formas</div>
+            <button class="plan-anno-btn" data-tool="rect" title="Rectángulo"><i data-lucide="square"></i></button>
+            <button class="plan-anno-btn" data-tool="circle" title="Círculo"><i data-lucide="circle"></i></button>
+            <button class="plan-anno-btn" data-tool="cloud" title="Nube de revisión"><i data-lucide="cloud"></i></button>
+            <button class="plan-anno-btn" data-tool="dim" title="Cota / Medida"><i data-lucide="ruler"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Sellos</div>
+            <button class="plan-anno-btn" data-tool="stamp-approve" title="APROBADO"><i data-lucide="check-circle"></i></button>
+            <button class="plan-anno-btn" data-tool="stamp-review" title="REVISADO"><i data-lucide="search"></i></button>
+            <button class="plan-anno-btn" data-tool="stamp-reject" title="RECHAZADO"><i data-lucide="x-circle"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Zoom</div>
+            <button class="plan-anno-btn" id="plan-anno-zoom-out" title="Reducir"><i data-lucide="zoom-out"></i></button>
+            <span class="plan-anno-zoom-label" id="plan-anno-zoom-label">100%</span>
+            <button class="plan-anno-btn" id="plan-anno-zoom-in" title="Ampliar"><i data-lucide="zoom-in"></i></button>
+            <button class="plan-anno-btn" id="plan-anno-fit" title="Ajustar"><i data-lucide="maximize-2"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Estilo</div>
+            <input type="color" id="plan-anno-color" value="#EF4444" class="plan-anno-color" title="Color">
+            <select id="plan-anno-width" class="plan-anno-select" title="Grosor">
+              <option value="1">1px</option>
+              <option value="2">2px</option>
+              <option value="4" selected>4px</option>
+              <option value="6">6px</option>
+              <option value="8">8px</option>
+              <option value="12">12px</option>
+            </select>
+            <select id="plan-anno-linestyle" class="plan-anno-select" title="Estilo línea">
+              <option value="solid">Sólida</option>
+              <option value="dashed">Punteada</option>
+              <option value="dotted">Puntos</option>
+            </select>
+            <select id="plan-anno-opacity" class="plan-anno-select" title="Opacidad">
+              <option value="1">100%</option>
+              <option value="0.75">75%</option>
+              <option value="0.5">50%</option>
+              <option value="0.25">25%</option>
+            </select>
+            <button class="plan-anno-btn" id="plan-anno-grid" title="Cuadrícula"><i data-lucide="grid-3x3"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section">
+            <div class="plan-anno-section-label">Acciones</div>
+            <button class="plan-anno-btn" id="plan-anno-duplicate" title="Duplicar"><i data-lucide="copy"></i></button>
+            <button class="plan-anno-btn" id="plan-anno-delete" data-tool="erase" title="Borrador"><i data-lucide="eraser"></i></button>
+            <button class="plan-anno-btn" id="plan-anno-undo" title="Deshacer"><i data-lucide="undo-2"></i></button>
+            <button class="plan-anno-btn" id="plan-anno-clear" title="Borrar todo"><i data-lucide="trash-2"></i></button>
+          </div>
+          <div class="plan-anno-sidebar-section plan-anno-sidebar-footer">
+            <button class="plan-anno-btn plan-anno-save" id="plan-anno-save" title="Guardar"><i data-lucide="save"></i> <span>Guardar</span></button>
+            <button class="plan-anno-btn plan-anno-exit" id="plan-anno-exit" title="Salir"><i data-lucide="x"></i> <span>Salir</span></button>
+          </div>
+        </div>
+        <div class="plan-viewer-body" id="plan-viewer-body"></div>
       </div>
-      <div class="plan-viewer-body" id="plan-viewer-body"></div>
     </div>
 
     <section id="section-files" class="content-section">
@@ -934,7 +945,7 @@
   <script src="js/modules/timeline.js?v=16"></script>
   <script src="js/modules/diary.js?v=16"></script>
   <script src="js/modules/overview.js?v=17"></script>
-  <script src="js/modules/plans.js?v=32"></script>
+  <script src="js/modules/plans.js?v=33"></script>
   <script src="js/modules/files.js?v=16"></script>
   <script src="js/modules/expenses.js?v=2"></script>
   <script src="js/modules/participants.js?v=16"></script>
