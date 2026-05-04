@@ -897,84 +897,76 @@ const PlansModule = (() => {
       const body = document.getElementById('plan-viewer-body');
       body.scrollTop = 0;
       body.scrollLeft = 0;
-      let bgUrl;
+
+      // Render background at HIGH RESOLUTION (300 DPI equivalent)
+      // PDF default is 72 DPI, so scale 4 = ~288 DPI, scale 5 = ~360 DPI
+      const HIGH_RES_SCALE = 4.5;
+      let bgImg = null;
+      let canvasW = 0, canvasH = 0;
 
       if (isImage) {
         const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-        bgUrl = URL.createObjectURL(blob);
-        annoBgObjectUrl = bgUrl;
-      } else if (isPDF) {
+        const srcUrl = URL.createObjectURL(blob);
+        try {
+          bgImg = new Image();
+          bgImg.src = srcUrl;
+          await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
+          canvasW = bgImg.width;
+          canvasH = bgImg.height;
+          // For images, use native resolution (already high enough typically)
+          // Optionally could scale up if image is very small
+          const minRes = 2000;
+          if (canvasW < minRes || canvasH < minRes) {
+            const scale = Math.max(minRes / canvasW, minRes / canvasH);
+            canvasW = Math.round(canvasW * scale);
+            canvasH = Math.round(canvasH * scale);
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = canvasW;
+            tmpCanvas.height = canvasH;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            tmpCtx.fillStyle = '#ffffff';
+            tmpCtx.fillRect(0, 0, canvasW, canvasH);
+            tmpCtx.drawImage(bgImg, 0, 0, canvasW, canvasH);
+            const newImg = new Image();
+            newImg.src = tmpCanvas.toDataURL('image/png');
+            await new Promise((resolve, reject) => { newImg.onload = resolve; newImg.onerror = reject; });
+            bgImg = newImg;
+          }
+        } finally {
+          URL.revokeObjectURL(srcUrl);
+        }
+      } else if (isPDF && typeof pdfjsLib !== 'undefined') {
         const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
         const arrayBuf = await blob.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
         const page = await pdf.getPage(1);
-        const vp = page.getViewport({ scale: 1 });
-        const scale = Math.min(2400 / vp.width, 3);
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        bgUrl = canvas.toDataURL('image/png');
+        const baseVp = page.getViewport({ scale: 1 });
+
+        // High-res render
+        const viewport = page.getViewport({ scale: HIGH_RES_SCALE });
+        canvasW = Math.round(viewport.width);
+        canvasH = Math.round(viewport.height);
+
+        const pdfCanvas = document.createElement('canvas');
+        pdfCanvas.width = canvasW;
+        pdfCanvas.height = canvasH;
+        const pdfCtx = pdfCanvas.getContext('2d');
+        pdfCtx.fillStyle = '#ffffff';
+        pdfCtx.fillRect(0, 0, canvasW, canvasH);
+        await page.render({ canvasContext: pdfCtx, viewport }).promise;
+
+        bgImg = new Image();
+        bgImg.src = pdfCanvas.toDataURL('image/png');
+        await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
       }
 
-      // Load image to get dimensions
-      const img = new Image();
-      img.src = bgUrl;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
-      // Pre-scale image to a reasonable max resolution for annotation quality
-      const maxAnnoSide = 2400;
-      const imgScale = Math.min(1, maxAnnoSide / img.width, maxAnnoSide / img.height);
-      const nativeW = Math.max(1, Math.round(img.width * imgScale));
-      const nativeH = Math.max(1, Math.round(img.height * imgScale));
-
-      // Draw image at native annotation resolution onto temp canvas
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = nativeW;
-      tmpCanvas.height = nativeH;
-      const tmpCtx = tmpCanvas.getContext('2d');
-      tmpCtx.fillStyle = '#ffffff';
-      tmpCtx.fillRect(0, 0, nativeW, nativeH);
-      tmpCtx.drawImage(img, 0, 0, nativeW, nativeH);
-      const nativeDataUrl = tmpCanvas.toDataURL('image/png');
-
-      // Load pre-scaled image
-      const scaledImg = new Image();
-      scaledImg.src = nativeDataUrl;
-      await new Promise((resolve, reject) => {
-        scaledImg.onload = resolve;
-        scaledImg.onerror = reject;
-      });
-
-      // Calculate canvas display size to fit in viewport
-      const rect = body.getBoundingClientRect();
-      const padX = 32, padY = 32;
-      const availW = Math.max(200, rect.width - padX);
-      const availH = Math.max(200, rect.height - padY);
-      const imgAspect = nativeW / nativeH;
-      const viewAspect = availW / availH;
-
-      let canvasW, canvasH;
-      if (imgAspect > viewAspect) {
-        canvasW = Math.min(availW, nativeW);
-        canvasH = Math.round(canvasW / imgAspect);
-      } else {
-        canvasH = Math.min(availH, nativeH);
-        canvasW = Math.round(canvasH * imgAspect);
+      if (!bgImg || !canvasW || !canvasH) {
+        App.toast(App.t('preview_not_available'), 'error');
+        exitAnnotateMode({ suppressRender: false });
+        return;
       }
-      canvasW = Math.max(1, Math.round(canvasW));
-      canvasH = Math.max(1, Math.round(canvasH));
 
-      const bgScaleX = canvasW / nativeW;
-      const bgScaleY = canvasH / nativeH;
-
+      // Create canvas at HIGH RESOLUTION
       body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${canvasW}" height="${canvasH}"></canvas></div>`;
 
       annoCanvas = new fabric.Canvas('plan-anno-canvas', {
@@ -985,13 +977,11 @@ const PlansModule = (() => {
         backgroundColor: '#ffffff'
       });
 
-      // Create fabric.Image from the pre-scaled HTML Image element (synchronous)
-      const bgFabricImg = new fabric.Image(scaledImg);
-
-      // Set plan as background — fills canvas exactly
+      // Set background image at 1:1 scale (no scaling needed since canvas is at native resolution)
+      const bgFabricImg = new fabric.Image(bgImg);
       annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
-        scaleX: bgScaleX,
-        scaleY: bgScaleY
+        scaleX: 1,
+        scaleY: 1
       });
       annoCanvas.renderAll();
 
@@ -1015,7 +1005,7 @@ const PlansModule = (() => {
                 annoCanvas.setBackgroundImage(bgFabricImg, () => {
                   annoCanvas.renderAll();
                   resolve();
-                }, { scaleX: bgScaleX, scaleY: bgScaleY });
+                }, { scaleX: 1, scaleY: 1 });
               });
             });
           }
@@ -1027,8 +1017,16 @@ const PlansModule = (() => {
 
       applyAnnoTool();
       annoHistory = [snapshotAnnoState()];
-      annoBaseZoom = 1;
-      setAnnoZoom(1);
+
+      // Calculate initial zoom to fit canvas in viewport
+      const rect = body.getBoundingClientRect();
+      const padX = 32, padY = 32;
+      const availW = Math.max(200, rect.width - padX);
+      const availH = Math.max(200, rect.height - padY);
+      const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
+      annoBaseZoom = Math.max(0.05, fitScale);
+      setAnnoZoom(annoBaseZoom);
+
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
       console.error('Error entering annotate mode:', e);
