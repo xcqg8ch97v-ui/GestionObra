@@ -4864,6 +4864,11 @@ body.is-resizing-timeline-label {
   z-index: 10;
 }
 
+.plan-anno-toolbar.visible,
+.plan-anno-sidebar.visible {
+  display: flex;
+}
+
 .plan-anno-sidebar-section {
   padding: 8px 6px;
   display: flex;

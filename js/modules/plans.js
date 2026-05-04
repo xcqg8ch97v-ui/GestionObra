@@ -883,7 +883,7 @@ const PlansModule = (() => {
       annoBaseZoom = 1;
       annoHistory = [];
       annoTool = 'draw';
-      document.getElementById('plan-anno-toolbar').style.display = 'flex';
+      document.getElementById('plan-anno-toolbar').classList.add('visible');
       document.getElementById('plan-viewer-annotate').style.display = 'none';
       const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
       document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
@@ -1046,7 +1046,7 @@ const PlansModule = (() => {
     annoMode = false;
     annoBaseZoom = 1;
     destroyAnnoCanvas();
-    document.getElementById('plan-anno-toolbar').style.display = 'none';
+    document.getElementById('plan-anno-toolbar').classList.remove('visible');
 
     // Exit fullscreen
     const overlay = document.getElementById('plan-viewer-overlay');
