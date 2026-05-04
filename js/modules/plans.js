@@ -1553,13 +1553,15 @@ const PlansModule = (() => {
 
   function setAnnoZoom(nextZoom) {
     if (!annoCanvas) return;
-    const clamped = Math.max(0.1, Math.min(nextZoom, 8));
+    const clamped = Math.max(0.05, Math.min(nextZoom, 20));
     const w = annoCanvas.getWidth();
     const h = annoCanvas.getHeight();
+    // Actual scale is relative to base zoom (fit to viewport)
+    const actualScale = clamped * annoBaseZoom;
     // Zoom from center: keep center point fixed
-    const panX = (w / 2) * (1 - clamped);
-    const panY = (h / 2) * (1 - clamped);
-    annoCanvas.setViewportTransform([clamped, 0, 0, clamped, panX, panY]);
+    const panX = (w / 2) * (1 - actualScale);
+    const panY = (h / 2) * (1 - actualScale);
+    annoCanvas.setViewportTransform([actualScale, 0, 0, actualScale, panX, panY]);
     annoZoom = clamped;
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
