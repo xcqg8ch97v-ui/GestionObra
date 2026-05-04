@@ -1018,7 +1018,7 @@ const PlansModule = (() => {
       // Calculate initial zoom to fit canvas in viewport
       const rect = body.getBoundingClientRect();
       const padX = 16, padY = 16;
-      const availW = Math.max(200, rect.width - padX - 40); // Subtract sidebar width
+      const availW = Math.max(200, rect.width - padX - 50); // Subtract sidebar width
       const availH = Math.max(200, rect.height - padY);
       const fitScale = Math.min(availW / canvasW, availH / canvasH);
       annoBaseZoom = Math.max(0.02, fitScale);
