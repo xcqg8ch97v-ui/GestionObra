@@ -4854,7 +4854,7 @@ body.is-resizing-timeline-label {
 
 .plan-anno-toolbar {
   display: none;
-  width: 36px;
+  width: 28px;
   background: rgba(15,23,42,0.98);
   border-right: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
@@ -4893,9 +4893,9 @@ body.is-resizing-timeline-label {
   gap: 0;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px;
+  border-radius: 3px;
   color: rgba(255,255,255,0.8);
-  padding: 5px 2px;
+  padding: 4px 1px;
   cursor: pointer;
   font-size: 0;
   transition: all 0.15s;
@@ -4909,7 +4909,7 @@ body.is-resizing-timeline-label {
   border-color: var(--primary);
   font-weight: 600;
 }
-.plan-anno-btn svg { width: 14px; height: 14px; }
+.plan-anno-btn svg { width: 12px; height: 12px; }
 .plan-anno-btn span { display: none; }
 
 .plan-anno-save {
@@ -4925,10 +4925,10 @@ body.is-resizing-timeline-label {
 .plan-anno-exit:hover { background: rgba(239,68,68,0.35); }
 
 .plan-anno-color {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   padding: 0;
   background: transparent;
@@ -4937,9 +4937,9 @@ body.is-resizing-timeline-label {
 .plan-anno-select {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px;
+  border-radius: 3px;
   color: rgba(255,255,255,0.85);
-  padding: 3px 1px;
+  padding: 2px 0;
   font-size: 0;
   cursor: pointer;
 }
@@ -4978,13 +4978,13 @@ body.is-resizing-timeline-label {
 
 @media (max-width: 768px) {
   .plan-anno-toolbar {
-    width: 36px;
+    width: 28px;
   }
-  .plan-anno-btn { padding: 4px 1px; }
-  .plan-anno-btn svg { width: 14px; height: 14px; }
-  .plan-anno-select { font-size: 0; padding: 3px 1px; }
-  .plan-anno-color { width: 28px; height: 28px; }
-  .plan-anno-section-label { font-size: 0.55rem; }
+  .plan-anno-btn { padding: 3px 0; }
+  .plan-anno-btn svg { width: 12px; height: 12px; }
+  .plan-anno-select { font-size: 0; padding: 2px 0; }
+  .plan-anno-color { width: 24px; height: 24px; }
+  .plan-anno-section-label { font-size: 0.5rem; }
 }
 
 /* ========================================
