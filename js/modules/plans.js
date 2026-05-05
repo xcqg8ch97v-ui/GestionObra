@@ -1025,23 +1025,30 @@ const PlansModule = (() => {
       const availH = rect.height - 32;
       console.log('Viewport size:', rect.width, 'x', rect.height, 'Canvas:', canvasW, 'x', canvasH);
       const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
-      annoBaseZoom = Math.max(0.05, fitScale);
+      annoBaseZoom = Math.max(0.1, fitScale);
       console.log('Base zoom:', annoBaseZoom);
       
       // Center canvas: use absolute positioning via CSS
       const stage = body.querySelector('.plan-anno-stage');
       if (stage) {
-        stage.style.width = (canvasW * annoBaseZoom) + 'px';
-        stage.style.height = (canvasH * annoBaseZoom) + 'px';
-        stage.style.margin = 'auto';
+        stage.style.width = '100%';
+        stage.style.height = '100%';
+        stage.style.display = 'flex';
+        stage.style.alignItems = 'center';
+        stage.style.justifyContent = 'center';
       }
       
-      // Set viewport transform without offset (stage handles positioning)
-      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
+      // Set viewport transform to center and scale
+      const vp = annoCanvas.viewportTransform;
+      vp[0] = annoBaseZoom;
+      vp[3] = annoBaseZoom;
+      vp[4] = (availW - canvasW * annoBaseZoom) / 2;
+      vp[5] = (availH - canvasH * annoBaseZoom) / 2;
+      annoCanvas.setViewportTransform(vp);
       annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.renderAll();
-      console.log('Canvas rendered');
+      console.log('Canvas rendered with transform:', vp);
 
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
