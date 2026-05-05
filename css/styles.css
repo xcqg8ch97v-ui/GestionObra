@@ -4854,12 +4854,7 @@ body.is-resizing-timeline-label {
 
 .plan-anno-toolbar,
 .plan-anno-sidebar {
-  display: none;
   width: 60px;
-  height: 100vh;
-  position: fixed;
-  left: 0;
-  top: 0;
   background: rgba(15,23,42,0.98);
   border-right: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
@@ -4867,11 +4862,12 @@ body.is-resizing-timeline-label {
   overflow-x: hidden;
   z-index: 10;
   flex-direction: column;
+  display: none;
 }
 
 .plan-anno-toolbar.visible,
 .plan-anno-sidebar.visible {
-  display: flex;
+  display: flex !important;
 }
 
 .plan-anno-sidebar-section {

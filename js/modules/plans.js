@@ -868,10 +868,11 @@ const PlansModule = (() => {
   // ======== ANNOTATION MODE ========
 
   async function enterAnnotateMode() {
+    console.log('ENTER ANNOTATE MODE called');
     const plan = viewerPlans[viewerIndex];
-    if (!plan) return;
+    if (!plan) { console.log('No plan'); return; }
     const file = await DB.getFile(plan.fileId);
-    if (!file) return;
+    if (!file) { console.log('No file'); return; }
 
     const isImage = file.type && file.type.startsWith('image/');
     const isPDF = file.type === 'application/pdf';
@@ -883,7 +884,9 @@ const PlansModule = (() => {
       annoBaseZoom = 1;
       annoHistory = [];
       annoTool = 'draw';
-      document.getElementById('plan-anno-toolbar').classList.add('visible');
+      const toolbar = document.getElementById('plan-anno-toolbar');
+      toolbar.classList.add('visible');
+      console.log('Toolbar visible:', toolbar.classList.contains('visible'), 'Display:', getComputedStyle(toolbar).display);
       document.getElementById('plan-viewer-annotate').style.display = 'none';
       const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
       document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
