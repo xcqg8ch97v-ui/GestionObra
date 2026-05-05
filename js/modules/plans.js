@@ -911,7 +911,7 @@ const PlansModule = (() => {
       body.scrollLeft = 0;
 
       // Render background at HIGH RESOLUTION (300 DPI equivalent)
-      const HIGH_RES_SCALE = 4.5;
+      const HIGH_RES_SCALE = 2;
       let bgImg = null;
       let canvasW = 0, canvasH = 0;
 
