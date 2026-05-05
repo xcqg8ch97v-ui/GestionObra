@@ -1021,8 +1021,9 @@ const PlansModule = (() => {
       // Calculate scale to fit viewport
       const rect = body.getBoundingClientRect();
       const sidebarWidth = 60;
-      const availW = rect.width - sidebarWidth - 32;
-      const availH = rect.height - 32;
+      const bodyPadding = 16; // padding from CSS
+      const availW = rect.width - sidebarWidth - (bodyPadding * 2);
+      const availH = rect.height - (bodyPadding * 2);
       console.log('Viewport size:', rect.width, 'x', rect.height, 'Canvas:', canvasW, 'x', canvasH);
       const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
       annoBaseZoom = Math.max(0.1, fitScale);
@@ -1036,6 +1037,7 @@ const PlansModule = (() => {
         stage.style.display = 'flex';
         stage.style.alignItems = 'center';
         stage.style.justifyContent = 'center';
+        stage.style.padding = '0';
       }
       
       // Set viewport transform to center and scale
@@ -1046,7 +1048,7 @@ const PlansModule = (() => {
       annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.renderAll();
-      console.log('Canvas rendered with transform:', vp);
+      console.log('Canvas rendered with transform:', vp, 'Offset X:', offsetX, 'Offset Y:', offsetY);
       console.log('Canvas element:', document.getElementById('plan-anno-canvas'));
       console.log('Stage element:', body.querySelector('.plan-anno-stage'));
 
