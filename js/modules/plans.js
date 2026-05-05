@@ -1039,16 +1039,16 @@ const PlansModule = (() => {
       }
       
       // Set viewport transform to center and scale
-      const vp = annoCanvas.viewportTransform;
-      vp[0] = annoBaseZoom;
-      vp[3] = annoBaseZoom;
-      vp[4] = (availW - canvasW * annoBaseZoom) / 2;
-      vp[5] = (availH - canvasH * annoBaseZoom) / 2;
+      const offsetX = (availW - canvasW * annoBaseZoom) / 2;
+      const offsetY = (availH - canvasH * annoBaseZoom) / 2;
+      const vp = [annoBaseZoom, 0, 0, annoBaseZoom, offsetX, offsetY];
       annoCanvas.setViewportTransform(vp);
       annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.renderAll();
       console.log('Canvas rendered with transform:', vp);
+      console.log('Canvas element:', document.getElementById('plan-anno-canvas'));
+      console.log('Stage element:', body.querySelector('.plan-anno-stage'));
 
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
