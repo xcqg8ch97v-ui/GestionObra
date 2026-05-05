@@ -893,7 +893,7 @@ const PlansModule = (() => {
       if (defaultBtn) defaultBtn.classList.add('active');
 
       // Hide zoom/nav buttons during annotation
-      ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next'].forEach(id => {
+      ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next', 'plan-viewer-download'].forEach(id => {
         document.getElementById(id).style.display = 'none';
       });
 
@@ -1075,7 +1075,7 @@ const PlansModule = (() => {
 
     // Restore viewer buttons
     document.getElementById('plan-viewer-annotate').style.display = '';
-    ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next'].forEach(id => {
+    ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next', 'plan-viewer-download'].forEach(id => {
       document.getElementById(id).style.display = '';
     });
 
