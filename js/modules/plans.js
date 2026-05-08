@@ -909,6 +909,8 @@ const PlansModule = (() => {
       const body = document.getElementById('plan-viewer-body');
       body.scrollTop = 0;
       body.scrollLeft = 0;
+      // Remove padding in annotation mode to prevent layout issues
+      body.style.padding = '0';
 
       // Render background at HIGH RESOLUTION (300 DPI equivalent)
       const HIGH_RES_SCALE = 2;
@@ -1078,6 +1080,8 @@ const PlansModule = (() => {
     ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next', 'plan-viewer-download'].forEach(id => {
       document.getElementById(id).style.display = '';
     });
+    // Restore body padding
+    document.getElementById('plan-viewer-body').style.padding = '';
 
     if (!suppressRender && !isClosingViewer) {
       renderViewerContent();
@@ -1581,14 +1585,10 @@ const PlansModule = (() => {
   function setAnnoZoom(nextZoom) {
     if (!annoCanvas) return;
     const clamped = Math.max(0.05, Math.min(nextZoom, 20));
-    const w = annoCanvas.getWidth();
-    const h = annoCanvas.getHeight();
     // Actual scale is relative to base zoom (fit to viewport)
     const actualScale = clamped * annoBaseZoom;
-    // Zoom from center: keep center point fixed
-    const panX = (w / 2) * (1 - actualScale);
-    const panY = (h / 2) * (1 - actualScale);
-    annoCanvas.setViewportTransform([actualScale, 0, 0, actualScale, panX, panY]);
+    // With CSS flexbox centering, we only need to set the scale, no offsets
+    annoCanvas.setViewportTransform([actualScale, 0, 0, actualScale, 0, 0]);
     annoZoom = clamped;
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
