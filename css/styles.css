@@ -4971,7 +4971,12 @@ body.is-resizing-timeline-label {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;
+  position: relative;
+}
+
+.plan-anno-stage .canvas-container {
+  margin: auto;
 }
 
 .plan-viewer-annotate {

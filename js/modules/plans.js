@@ -505,14 +505,15 @@ const PlansModule = (() => {
       if (annoMode) {
         e.preventDefault();
         if (e.ctrlKey) {
-          // Ctrl+wheel = zoom
+          // Ctrl+wheel = zoom using CSS transform
           setAnnoZoom(annoZoom * (e.deltaY > 0 ? 0.9 : 1.1));
         } else {
-          // Wheel = pan
-          const vpt = annoCanvas.viewportTransform.slice();
-          vpt[4] -= e.deltaX || 0;
-          vpt[5] -= e.deltaY || 0;
-          annoCanvas.setViewportTransform(vpt);
+          // Wheel = pan using scroll
+          const stage = document.querySelector('.plan-anno-stage');
+          if (stage) {
+            stage.scrollLeft += e.deltaX || 0;
+            stage.scrollTop += e.deltaY || 0;
+          }
         }
         return;
       }
@@ -1042,17 +1043,23 @@ const PlansModule = (() => {
         stage.style.overflow = 'auto';
       }
       
-      // Calculate initial zoom to fit viewport
-      // With HIGH_RES_SCALE, the canvas is larger, so we need to scale it down to fit
-      const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
-      annoBaseZoom = fitScale;
-      annoZoom = 1; // Relative zoom starts at 1 (100% of base zoom)
+      // Calculate initial zoom to fit viewport using CSS transform
+      const initialZoom = Math.min(availW / canvasW, availH / canvasH, 1);
+      annoZoom = initialZoom;
+      annoBaseZoom = initialZoom;
       
-      // Set viewport transform to scale canvas to fit viewport
-      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
+      // Apply initial zoom to canvas-container via CSS transform
+      const container = document.querySelector('.canvas-container');
+      if (container) {
+        container.style.transform = `scale(${initialZoom})`;
+        container.style.transformOrigin = '0 0';
+      }
+      
+      // Set viewport transform to 1 (no scaling) for native quality
+      annoCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
       updateAnnoZoomLabel();
       annoCanvas.renderAll();
-      console.log('Canvas rendered with base zoom:', annoBaseZoom, '(canvas at full resolution)');
+      console.log('Canvas rendered with CSS zoom:', initialZoom, '(native quality)');
 
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
@@ -1147,6 +1154,7 @@ const PlansModule = (() => {
       annoCanvas.defaultCursor = 'grab';
       let panning = false;
       let lastX, lastY;
+      const stage = document.querySelector('.plan-anno-stage');
       annoCanvas.on('mouse:down', (e) => {
         panning = true;
         lastX = e.e.clientX;
@@ -1159,10 +1167,11 @@ const PlansModule = (() => {
         const dy = e.e.clientY - lastY;
         lastX = e.e.clientX;
         lastY = e.e.clientY;
-        const vpt = annoCanvas.viewportTransform.slice();
-        vpt[4] += dx;
-        vpt[5] += dy;
-        annoCanvas.setViewportTransform(vpt);
+        // Use scroll for panning instead of viewportTransform
+        if (stage) {
+          stage.scrollLeft -= dx;
+          stage.scrollTop -= dy;
+        }
       });
       annoCanvas.on('mouse:up', () => {
         panning = false;
@@ -1586,16 +1595,18 @@ const PlansModule = (() => {
 
   function setAnnoZoom(nextZoom) {
     if (!annoCanvas) return;
-    // Increased max zoom from 20 to 50 to take advantage of higher resolution
     const clamped = Math.max(0.05, Math.min(nextZoom, 50));
     annoZoom = clamped;
     
-    // Actual scale is relative to base zoom (fit to viewport)
-    // With HIGH_RES_SCALE=6, the canvas has 6x resolution, so zoom can go higher
-    const actualScale = clamped * annoBaseZoom;
+    // Use CSS transform on canvas-container for native quality zoom
+    const container = document.querySelector('.canvas-container');
+    if (container) {
+      container.style.transform = `scale(${annoZoom})`;
+      container.style.transformOrigin = '0 0';
+    }
     
-    // With CSS flexbox centering, we only need to set the scale, no offsets
-    annoCanvas.setViewportTransform([actualScale, 0, 0, actualScale, 0, 0]);
+    // Keep viewport transform at 1 (no scaling) for native quality
+    annoCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
   }
