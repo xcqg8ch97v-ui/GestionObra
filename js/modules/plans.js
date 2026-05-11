@@ -408,6 +408,13 @@ const PlansModule = (() => {
   let annoBaseZoom = 1;
   let annoBgObjectUrl = null;
   let isClosingViewer = false;
+  let annoPdfDoc = null;
+  let annoPdfPageCount = 1;
+  let annoCurrentPage = 1;
+  let annoPageStates = {};
+  let annoIsPdf = false;
+  let annoCurrentFile = null;
+  let annoImageElement = null;
 
   let showAnnotations = true;
 
@@ -417,6 +424,212 @@ const PlansModule = (() => {
     delete normalized.backgroundImage;
     delete normalized.background;
     return normalized;
+  }
+
+  function normalizeAnnoPagesPayload(raw) {
+    const result = { pages: {} };
+    if (!raw) return result;
+    if (raw.pages && typeof raw.pages === 'object') {
+      Object.keys(raw.pages).forEach((pageKey) => {
+        result.pages[pageKey] = normalizeAnnoPayload(raw.pages[pageKey]);
+      });
+      result.pageCount = raw.pageCount || Object.keys(result.pages).length;
+    } else {
+      result.pages['1'] = normalizeAnnoPayload(raw);
+      result.pageCount = 1;
+    }
+    return result;
+  }
+
+  function updateAnnoPageLabel() {
+    const label = document.getElementById('plan-anno-page-label');
+    if (label) {
+      label.textContent = `${annoCurrentPage}/${annoPdfPageCount}`;
+    }
+    const prevBtn = document.getElementById('plan-anno-prev-page');
+    const nextBtn = document.getElementById('plan-anno-next-page');
+    if (prevBtn) prevBtn.disabled = annoCurrentPage <= 1;
+    if (nextBtn) nextBtn.disabled = annoCurrentPage >= annoPdfPageCount;
+  }
+
+  function storeCurrentAnnoPageState() {
+    if (!annoCanvas) return null;
+    const snap = snapshotAnnoState();
+    if (!snap) return null;
+    snap.__canvasWidth = annoCanvas.getWidth();
+    snap.__canvasHeight = annoCanvas.getHeight();
+    annoPageStates[String(annoCurrentPage)] = snap;
+    return snap;
+  }
+
+  async function getAnnoImageElement() {
+    if (annoImageElement) {
+      return {
+        image: annoImageElement,
+        width: annoImageElement.width,
+        height: annoImageElement.height
+      };
+    }
+    if (!annoCurrentFile) return null;
+    const blob = annoCurrentFile.blob || (annoCurrentFile.data ? new Blob([annoCurrentFile.data], { type: annoCurrentFile.type }) : null);
+    if (!blob) return null;
+    const srcUrl = URL.createObjectURL(blob);
+    try {
+      let img = await new Promise((resolve, reject) => {
+        const tmp = new Image();
+        tmp.onload = () => resolve(tmp);
+        tmp.onerror = reject;
+        tmp.src = srcUrl;
+      });
+      let width = img.width;
+      let height = img.height;
+      const minRes = 2000;
+      if (width < minRes || height < minRes) {
+        const scale = Math.max(minRes / width, minRes / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = width;
+        tmpCanvas.height = height;
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.fillStyle = '#ffffff';
+        tmpCtx.fillRect(0, 0, width, height);
+        tmpCtx.drawImage(img, 0, 0, width, height);
+        const scaledImg = await new Promise((resolve, reject) => {
+          const newImg = new Image();
+          newImg.onload = () => resolve(newImg);
+          newImg.onerror = reject;
+          newImg.src = tmpCanvas.toDataURL('image/png');
+        });
+        img = scaledImg;
+      }
+      annoImageElement = img;
+      return {
+        image: annoImageElement,
+        width: annoImageElement.width,
+        height: annoImageElement.height
+      };
+    } finally {
+      URL.revokeObjectURL(srcUrl);
+    }
+  }
+
+  async function renderAnnoPage(pageNumber) {
+    const body = document.getElementById('plan-viewer-body');
+    if (!body) return;
+    body.scrollTop = 0;
+    body.scrollLeft = 0;
+
+    const HIGH_RES_SCALE = 2;
+    let bgImg = null;
+    let canvasW = 0;
+    let canvasH = 0;
+
+    if (annoIsPdf && annoPdfDoc) {
+      const page = await annoPdfDoc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: HIGH_RES_SCALE });
+      canvasW = Math.round(viewport.width);
+      canvasH = Math.round(viewport.height);
+      const pdfCanvas = document.createElement('canvas');
+      pdfCanvas.width = canvasW;
+      pdfCanvas.height = canvasH;
+      const pdfCtx = pdfCanvas.getContext('2d');
+      pdfCtx.fillStyle = '#ffffff';
+      pdfCtx.fillRect(0, 0, canvasW, canvasH);
+      await page.render({ canvasContext: pdfCtx, viewport }).promise;
+      bgImg = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = pdfCanvas.toDataURL('image/png');
+      });
+    } else {
+      const cached = await getAnnoImageElement();
+      if (cached) {
+        bgImg = cached.image;
+        canvasW = cached.width;
+        canvasH = cached.height;
+      }
+    }
+
+    if (!bgImg || !canvasW || !canvasH) {
+      App.toast(App.t('preview_not_available'), 'error');
+      return;
+    }
+
+    destroyAnnoCanvas();
+    body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${canvasW}" height="${canvasH}"></canvas></div>`;
+
+    annoCanvas = new fabric.Canvas('plan-anno-canvas', {
+      width: canvasW,
+      height: canvasH,
+      selection: false,
+      preserveObjectStacking: true,
+      backgroundColor: '#ffffff'
+    });
+
+    const bgFabricImg = new fabric.Image(bgImg);
+    annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
+      scaleX: 1,
+      scaleY: 1
+    });
+    annoCanvas.renderAll();
+
+    const pageKey = String(pageNumber);
+    const storedStateRaw = annoPageStates[pageKey];
+    if (storedStateRaw && storedStateRaw.objects && storedStateRaw.objects.length > 0) {
+      const pageState = JSON.parse(JSON.stringify(storedStateRaw));
+      const savedWidth = Number(pageState.__canvasWidth || pageState.canvasWidth || canvasW);
+      const savedHeight = Number(pageState.__canvasHeight || pageState.canvasHeight || canvasH);
+      if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - canvasW) > 1 || Math.abs(savedHeight - canvasH) > 1)) {
+        const sx = canvasW / savedWidth;
+        const sy = canvasH / savedHeight;
+        pageState.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+      }
+      await new Promise(resolve => {
+        annoCanvas.loadFromJSON(pageState, () => {
+          annoCanvas.backgroundColor = '#ffffff';
+          annoCanvas.setBackgroundImage(bgFabricImg, () => {
+            annoCanvas.renderAll();
+            resolve();
+          }, { scaleX: 1, scaleY: 1 });
+        });
+      });
+    } else {
+      annoPageStates[pageKey] = normalizeAnnoPayload(null);
+    }
+
+    annoCanvas.on('object:modified', pushHistory);
+    annoCanvas.on('path:created', pushHistory);
+
+    applyAnnoTool();
+    annoHistory = [snapshotAnnoState()];
+
+    const rect = body.getBoundingClientRect();
+    const sidebarWidth = 60;
+    const availW = rect.width - sidebarWidth;
+    const availH = rect.height;
+    annoBaseZoom = Math.min(availW / canvasW, availH / canvasH);
+    if (!isFinite(annoBaseZoom) || annoBaseZoom <= 0) annoBaseZoom = 1;
+    annoZoom = 1;
+    annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
+    updateAnnoZoomLabel();
+    annoCanvas.renderAll();
+
+    if (annoGridVisible) {
+      drawAnnoGrid();
+    }
+
+    updateAnnoPageLabel();
+  }
+
+  async function changeAnnoPage(delta) {
+    if (!annoIsPdf || !annoPdfDoc || !delta) return;
+    const target = annoCurrentPage + delta;
+    if (target < 1 || target > annoPdfPageCount) return;
+    storeCurrentAnnoPageState();
+    annoCurrentPage = target;
+    await renderAnnoPage(annoCurrentPage);
   }
 
   function snapshotAnnoState() {
@@ -460,6 +673,10 @@ const PlansModule = (() => {
     document.getElementById('plan-anno-zoom-out').addEventListener('click', () => setAnnoZoom(annoZoom / 1.2));
     document.getElementById('plan-anno-fit').addEventListener('click', fitAnnoCanvas);
     document.getElementById('plan-anno-duplicate').addEventListener('click', annoDuplicateSelection);
+    const prevPageBtn = document.getElementById('plan-anno-prev-page');
+    const nextPageBtn = document.getElementById('plan-anno-next-page');
+    if (prevPageBtn) prevPageBtn.addEventListener('click', () => changeAnnoPage(-1));
+    if (nextPageBtn) nextPageBtn.addEventListener('click', () => changeAnnoPage(1));
 
     // Grid toggle
     const gridBtn = document.getElementById('plan-anno-grid');
@@ -603,121 +820,158 @@ const PlansModule = (() => {
     const sourceBlob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
     if (!sourceBlob) return;
 
-    let parsed = null;
+    let parsedPages;
     try {
       const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
-      parsed = normalizeAnnoPayload(parsedRaw);
+      parsedPages = normalizeAnnoPagesPayload(parsedRaw);
     } catch(e) {
       console.warn('Error parsing annotations:', e);
       App.toast(App.t('file_content_unavailable'), 'error');
       return;
     }
 
-    // Annotation canvas dimensions (may be display-size, not full-res)
-    const annoW = Number(parsed?.__canvasWidth || parsed?.canvasWidth || 0);
-    const annoH = Number(parsed?.__canvasHeight || parsed?.canvasHeight || 0);
+    const HIGH_RES_SCALE = 3;
+    const pageKeys = Object.keys(parsedPages.pages || { '1': {} }).map(Number).sort((a, b) => a - b);
+    if (!pageKeys.length) {
+      App.toast(App.t('plan_no_annotations') || 'Este plano no tiene anotaciones', 'warning');
+      return;
+    }
 
-    // Render background at HIGH resolution (300 DPI equivalent)
-    const HIGH_RES_SCALE = 3; // 3x PDF default 72dpi = ~216 DPI; for 300 DPI use ~4.17
-    let bgImg = null;
-    let outW = 0, outH = 0;
-    let pdfPageW_mm = 210, pdfPageH_mm = 297; // default A4
+    const imagesPerPage = [];
+    let pdfPageW_mm = 210;
+    let pdfPageH_mm = 297;
 
     if (file.type && file.type.startsWith('image/')) {
       const srcUrl = URL.createObjectURL(sourceBlob);
       try {
-        bgImg = new Image();
-        bgImg.src = srcUrl;
-        await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
-        outW = bgImg.width;
-        outH = bgImg.height;
-        // Estimate page size: assume 96 DPI for image
+        const baseImg = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = srcUrl;
+        });
+        const outW = baseImg.width;
+        const outH = baseImg.height;
         pdfPageW_mm = outW * 25.4 / 96;
         pdfPageH_mm = outH * 25.4 / 96;
+
+        const exportCanvas = new fabric.StaticCanvas(null, {
+          width: outW,
+          height: outH,
+          enableRetinaScaling: false,
+          backgroundColor: '#ffffff'
+        });
+        for (const pageNum of pageKeys) {
+          const annotations = JSON.parse(JSON.stringify(parsedPages.pages[String(pageNum)] || { objects: [] }));
+          if (annotations.objects && annotations.objects.length) {
+            const annoW = Number(annotations.__canvasWidth || annotations.canvasWidth || outW);
+            const annoH = Number(annotations.__canvasHeight || annotations.canvasHeight || outH);
+            const sx = outW / annoW;
+            const sy = outH / annoH;
+            if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
+              annotations.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+            }
+          }
+          await new Promise(resolve => {
+            exportCanvas.clear();
+            exportCanvas.setWidth(outW);
+            exportCanvas.setHeight(outH);
+            exportCanvas.setBackgroundImage(new fabric.Image(baseImg), () => {
+              exportCanvas.loadFromJSON(annotations, () => {
+                exportCanvas.renderAll();
+                const imgDataUrl = exportCanvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 1 });
+                imagesPerPage.push({ dataUrl: imgDataUrl, width: pdfPageW_mm, height: pdfPageH_mm });
+                resolve();
+              });
+            }, {
+              scaleX: outW / baseImg.width,
+              scaleY: outH / baseImg.height
+            });
+          });
+        }
+        exportCanvas.dispose();
       } finally {
         URL.revokeObjectURL(srcUrl);
       }
     } else if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
       const arrayBuf = await sourceBlob.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-      const page = await pdf.getPage(1);
-      const baseVp = page.getViewport({ scale: 1 });
+      for (const pageNum of pageKeys) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: HIGH_RES_SCALE });
+        const outW = Math.round(viewport.width);
+        const outH = Math.round(viewport.height);
+        const pdfCanvas = document.createElement('canvas');
+        pdfCanvas.width = outW;
+        pdfCanvas.height = outH;
+        const pdfCtx = pdfCanvas.getContext('2d');
+        pdfCtx.fillStyle = '#ffffff';
+        pdfCtx.fillRect(0, 0, outW, outH);
+        await page.render({ canvasContext: pdfCtx, viewport }).promise;
 
-      // High-res render
-      const renderScale = HIGH_RES_SCALE;
-      const viewport = page.getViewport({ scale: renderScale });
-      outW = Math.round(viewport.width);
-      outH = Math.round(viewport.height);
+        const bgImg = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = pdfCanvas.toDataURL('image/png');
+        });
 
-      const pdfCanvas = document.createElement('canvas');
-      pdfCanvas.width = outW;
-      pdfCanvas.height = outH;
-      const pdfCtx = pdfCanvas.getContext('2d');
-      pdfCtx.fillStyle = '#ffffff';
-      pdfCtx.fillRect(0, 0, outW, outH);
-      await page.render({ canvasContext: pdfCtx, viewport }).promise;
+        const annotations = JSON.parse(JSON.stringify(parsedPages.pages[String(pageNum)] || { objects: [] }));
+        const annoW = Number(annotations.__canvasWidth || annotations.canvasWidth || outW);
+        const annoH = Number(annotations.__canvasHeight || annotations.canvasHeight || outH);
+        const sx = outW / annoW;
+        const sy = outH / annoH;
+        if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
+          annotations.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
+        }
 
-      bgImg = new Image();
-      bgImg.src = pdfCanvas.toDataURL('image/png');
-      await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
+        const exportCanvas = new fabric.StaticCanvas(null, {
+          width: outW,
+          height: outH,
+          enableRetinaScaling: false,
+          backgroundColor: '#ffffff'
+        });
+        exportCanvas.setBackgroundImage(new fabric.Image(bgImg), exportCanvas.renderAll.bind(exportCanvas), {
+          scaleX: outW / bgImg.width,
+          scaleY: outH / bgImg.height
+        });
+        await new Promise(resolve => {
+          exportCanvas.loadFromJSON(annotations, () => {
+            exportCanvas.backgroundColor = '#ffffff';
+            exportCanvas.renderAll();
+            resolve();
+          });
+        });
 
-      // Get original PDF page size in mm
-      const pdfPage = page.getViewport({ scale: 1 });
-      // PDF units: 1 point = 1/72 inch
-      pdfPageW_mm = pdfPage.width * 25.4 / 72;
-      pdfPageH_mm = pdfPage.height * 25.4 / 72;
-    }
+        const imgDataUrl = exportCanvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 1 });
+        exportCanvas.dispose();
 
-    if (!bgImg || !outW || !outH) {
+        const baseViewport = page.getViewport({ scale: 1 });
+        pdfPageW_mm = baseViewport.width * 25.4 / 72;
+        pdfPageH_mm = baseViewport.height * 25.4 / 72;
+        imagesPerPage.push({ dataUrl: imgDataUrl, width: pdfPageW_mm, height: pdfPageH_mm });
+      }
+    } else {
       App.toast(App.t('preview_not_available'), 'error');
       return;
     }
 
-    // Scale annotations from annotation-canvas coords to high-res output coords
-    if (annoW > 0 && annoH > 0) {
-      const sx = outW / annoW;
-      const sy = outH / annoH;
-      if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
-        parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
-      }
+    if (!imagesPerPage.length) {
+      App.toast(App.t('plan_no_annotations') || 'Este plano no tiene anotaciones', 'warning');
+      return;
     }
 
-    // Create export canvas at high resolution
-    const exportCanvas = new fabric.StaticCanvas(null, {
-      width: outW,
-      height: outH,
-      enableRetinaScaling: false,
-      backgroundColor: '#ffffff'
-    });
-
-    // Set background using pre-loaded Image element
-    const bgFabricImg = new fabric.Image(bgImg);
-    exportCanvas.setBackgroundImage(bgFabricImg, exportCanvas.renderAll.bind(exportCanvas), {
-      scaleX: outW / bgImg.width,
-      scaleY: outH / bgImg.height
-    });
-
-    // Load annotations on top
-    await new Promise(resolve => {
-      exportCanvas.loadFromJSON(parsed, () => {
-        const bgFabricImg2 = new fabric.Image(bgImg);
-        exportCanvas.backgroundColor = '#ffffff';
-        exportCanvas.setBackgroundImage(bgFabricImg2, () => {
-          exportCanvas.renderAll();
-          resolve();
-        }, { scaleX: outW / bgImg.width, scaleY: outH / bgImg.height });
-      });
-    });
-
-    // Export as high-quality image
-    const imgDataUrl = exportCanvas.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 1 });
-    exportCanvas.dispose();
-
-    // Create PDF at original page dimensions
     const { jsPDF } = window.jspdf;
-    const orientation = pdfPageW_mm > pdfPageH_mm ? 'l' : 'p';
-    const pdfDoc = new jsPDF({ orientation, unit: 'mm', format: [pdfPageW_mm, pdfPageH_mm] });
-    pdfDoc.addImage(imgDataUrl, 'JPEG', 0, 0, pdfPageW_mm, pdfPageH_mm, undefined, 'FAST');
+    const first = imagesPerPage[0];
+    const orientation = first.width > first.height ? 'l' : 'p';
+    const pdfDoc = new jsPDF({ orientation, unit: 'mm', format: [first.width, first.height] });
+    imagesPerPage.forEach((page, idx) => {
+      if (idx > 0) {
+        const orient = page.width > page.height ? 'l' : 'p';
+        pdfDoc.addPage([page.width, page.height], orient);
+      }
+      pdfDoc.addImage(page.dataUrl, 'JPEG', 0, 0, page.width, page.height, undefined, 'FAST');
+    });
     pdfDoc.save(plan.name + '_anotado.pdf');
   }
 
@@ -875,8 +1129,13 @@ const PlansModule = (() => {
     if (!file) { console.log('No file'); return; }
 
     const isImage = file.type && file.type.startsWith('image/');
+    const pdfSupported = typeof pdfjsLib !== 'undefined';
     const isPDF = file.type === 'application/pdf';
     if (!isImage && !isPDF) return;
+    if (isPDF && !pdfSupported) {
+      App.toast(App.t('pdf_js_missing') || 'No se puede editar PDFs en este dispositivo', 'error');
+      return;
+    }
 
     try {
       annoMode = true;
@@ -884,20 +1143,26 @@ const PlansModule = (() => {
       annoBaseZoom = 1;
       annoHistory = [];
       annoTool = 'draw';
+      annoPageStates = {};
+      annoPdfDoc = null;
+      annoPdfPageCount = 1;
+      annoCurrentPage = 1;
+      annoIsPdf = isPDF && pdfSupported;
+      annoCurrentFile = file;
+      annoImageElement = null;
+
       const toolbar = document.getElementById('plan-anno-toolbar');
-      toolbar.classList.add('visible');
-      console.log('Toolbar visible:', toolbar.classList.contains('visible'), 'Display:', getComputedStyle(toolbar).display);
+      if (toolbar) toolbar.classList.add('visible');
       document.getElementById('plan-viewer-annotate').style.display = 'none';
       const defaultBtn = document.querySelector('.plan-anno-btn[data-tool="draw"]');
       document.querySelectorAll('.plan-anno-btn[data-tool]').forEach(b => b.classList.remove('active'));
       if (defaultBtn) defaultBtn.classList.add('active');
 
-      // Hide zoom/nav buttons during annotation
       ['plan-viewer-zoom-in', 'plan-viewer-zoom-out', 'plan-viewer-fit', 'plan-viewer-prev', 'plan-viewer-next', 'plan-viewer-download'].forEach(id => {
-        document.getElementById(id).style.display = 'none';
+        const btn = document.getElementById(id);
+        if (btn) btn.style.display = 'none';
       });
 
-      // Request fullscreen
       const overlay = document.getElementById('plan-viewer-overlay');
       overlay.classList.add('fullscreen');
       if (overlay.requestFullscreen) {
@@ -909,146 +1174,44 @@ const PlansModule = (() => {
       const body = document.getElementById('plan-viewer-body');
       body.scrollTop = 0;
       body.scrollLeft = 0;
-      // Remove padding in annotation mode to prevent layout issues
       body.style.padding = '0';
 
-      // Render background at high resolution for better zoom quality
-      const HIGH_RES_SCALE = 2;
-      let bgImg = null;
-      let canvasW = 0, canvasH = 0;
-
-      if (isImage) {
-        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-        const srcUrl = URL.createObjectURL(blob);
-        try {
-          bgImg = new Image();
-          bgImg.src = srcUrl;
-          await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
-          canvasW = bgImg.width;
-          canvasH = bgImg.height;
-          const minRes = 2000;
-          if (canvasW < minRes || canvasH < minRes) {
-            const scale = Math.max(minRes / canvasW, minRes / canvasH);
-            canvasW = Math.round(canvasW * scale);
-            canvasH = Math.round(canvasH * scale);
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width = canvasW;
-            tmpCanvas.height = canvasH;
-            const tmpCtx = tmpCanvas.getContext('2d');
-            tmpCtx.fillStyle = '#ffffff';
-            tmpCtx.fillRect(0, 0, canvasW, canvasH);
-            tmpCtx.drawImage(bgImg, 0, 0, canvasW, canvasH);
-            const newImg = new Image();
-            newImg.src = tmpCanvas.toDataURL('image/png');
-            await new Promise((resolve, reject) => { newImg.onload = resolve; newImg.onerror = reject; });
-            bgImg = newImg;
-          }
-        } finally {
-          URL.revokeObjectURL(srcUrl);
-        }
-      } else if (isPDF && typeof pdfjsLib !== 'undefined') {
-        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
-        const arrayBuf = await blob.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: HIGH_RES_SCALE });
-        canvasW = Math.round(viewport.width);
-        canvasH = Math.round(viewport.height);
-        const pdfCanvas = document.createElement('canvas');
-        pdfCanvas.width = canvasW;
-        pdfCanvas.height = canvasH;
-        const pdfCtx = pdfCanvas.getContext('2d');
-        pdfCtx.fillStyle = '#ffffff';
-        pdfCtx.fillRect(0, 0, canvasW, canvasH);
-        await page.render({ canvasContext: pdfCtx, viewport }).promise;
-        bgImg = new Image();
-        bgImg.src = pdfCanvas.toDataURL('image/png');
-        await new Promise((resolve, reject) => { bgImg.onload = resolve; bgImg.onerror = reject; });
-      }
-
-      if (!bgImg || !canvasW || !canvasH) {
-        App.toast(App.t('preview_not_available'), 'error');
-        exitAnnotateMode({ suppressRender: false });
-        return;
-      }
-
-      body.innerHTML = `<div class="plan-anno-stage"><canvas id="plan-anno-canvas" width="${canvasW}" height="${canvasH}"></canvas></div>`;
-
-      annoCanvas = new fabric.Canvas('plan-anno-canvas', {
-        width: canvasW,
-        height: canvasH,
-        selection: false,
-        preserveObjectStacking: true,
-        backgroundColor: '#ffffff'
-      });
-
-      const bgFabricImg = new fabric.Image(bgImg);
-      annoCanvas.setBackgroundImage(bgFabricImg, annoCanvas.renderAll.bind(annoCanvas), {
-        scaleX: 1,
-        scaleY: 1
-      });
-      annoCanvas.renderAll();
+      const pageNav = document.getElementById('plan-anno-page-nav');
+      if (pageNav) pageNav.style.display = 'none';
 
       if (plan.annotations) {
         try {
           const parsedRaw = typeof plan.annotations === 'string' ? JSON.parse(plan.annotations) : plan.annotations;
-          const parsed = normalizeAnnoPayload(parsedRaw);
-          if (parsed.objects && parsed.objects.length > 0) {
-            const savedWidth = Number(parsed.__canvasWidth || parsed.canvasWidth || canvasW);
-            const savedHeight = Number(parsed.__canvasHeight || parsed.canvasHeight || canvasH);
-            if (savedWidth > 0 && savedHeight > 0 && (Math.abs(savedWidth - canvasW) > 1 || Math.abs(savedHeight - canvasH) > 1)) {
-              const sx = canvasW / savedWidth;
-              const sy = canvasH / savedHeight;
-              parsed.objects.forEach(obj => scaleAnnoObject(obj, sx, sy));
-            }
-            await new Promise(resolve => {
-              annoCanvas.loadFromJSON(parsed, () => {
-                annoCanvas.backgroundColor = '#ffffff';
-                annoCanvas.setBackgroundImage(bgFabricImg, () => {
-                  annoCanvas.renderAll();
-                  resolve();
-                }, { scaleX: 1, scaleY: 1 });
-              });
-            });
-          }
-        } catch(e) { console.warn('Error loading annotations:', e); }
+          const normalized = normalizeAnnoPagesPayload(parsedRaw);
+          annoPageStates = normalized.pages || {};
+        } catch (err) {
+          console.warn('Error loading annotations:', err);
+          annoPageStates = {};
+        }
       }
 
-      annoCanvas.on('object:modified', pushHistory);
-      annoCanvas.on('path:created', pushHistory);
-
-      applyAnnoTool();
-      annoHistory = [snapshotAnnoState()];
-
-      // Calculate scale to fit viewport
-      const rect = body.getBoundingClientRect();
-      const sidebarWidth = 60;
-      const availW = rect.width - sidebarWidth;
-      const availH = rect.height;
-      console.log('Viewport size:', rect.width, 'x', rect.height, 'Canvas:', canvasW, 'x', canvasH);
-      
-      // Center canvas using CSS on the canvas-container
-      const stage = body.querySelector('.plan-anno-stage');
-      if (stage) {
-        stage.style.width = '100%';
-        stage.style.height = '100%';
-        stage.style.display = 'flex';
-        stage.style.alignItems = 'center';
-        stage.style.justifyContent = 'center';
-        stage.style.padding = '0';
-        stage.style.position = 'relative';
+      if (annoIsPdf && typeof pdfjsLib !== 'undefined') {
+        const blob = file.blob || (file.data ? new Blob([file.data], { type: file.type }) : null);
+        if (blob) {
+          const arrayBuf = await blob.arrayBuffer();
+          annoPdfDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+          annoPdfPageCount = Math.max(1, annoPdfDoc.numPages || 1);
+        }
+      } else {
+        annoPdfPageCount = 1;
+        annoPdfDoc = null;
       }
-      
-      // Calculate initial zoom to fit viewport
-      const initialZoom = Math.min(availW / canvasW, availH / canvasH);
-      annoBaseZoom = initialZoom;
-      annoZoom = 1; // Relative zoom starts at 1 (100%)
-      
-      // Use viewportTransform for zoom (Fabric.js native, with 2x res canvas)
-      annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
-      updateAnnoZoomLabel();
-      annoCanvas.renderAll();
-      console.log('Canvas rendered with base zoom:', annoBaseZoom);
+
+      if (!annoPageStates['1']) {
+        annoPageStates['1'] = normalizeAnnoPayload(null);
+      }
+
+      if (pageNav) {
+        pageNav.style.display = (annoIsPdf && annoPdfPageCount > 1) ? 'flex' : 'none';
+      }
+      updateAnnoPageLabel();
+
+      await renderAnnoPage(annoCurrentPage);
 
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
@@ -1059,10 +1222,20 @@ const PlansModule = (() => {
   }
 
   function exitAnnotateMode({ suppressRender = false } = {}) {
+    storeCurrentAnnoPageState();
     annoMode = false;
     annoBaseZoom = 1;
     destroyAnnoCanvas();
     document.getElementById('plan-anno-toolbar').classList.remove('visible');
+    const pageNav = document.getElementById('plan-anno-page-nav');
+    if (pageNav) pageNav.style.display = 'none';
+    annoPdfDoc = null;
+    annoPdfPageCount = 1;
+    annoCurrentPage = 1;
+    annoPageStates = {};
+    annoIsPdf = false;
+    annoCurrentFile = null;
+    annoImageElement = null;
 
     // Exit fullscreen
     const overlay = document.getElementById('plan-viewer-overlay');
@@ -1646,12 +1819,27 @@ const PlansModule = (() => {
     const plan = viewerPlans[viewerIndex];
     if (!plan) return;
 
-    // Save annotation JSON for future editing (don't modify original file)
-    const json = snapshotAnnoState();
-    if (!json) return;
-    json.__canvasWidth = annoCanvas.getWidth();
-    json.__canvasHeight = annoCanvas.getHeight();
-    plan.annotations = JSON.stringify(json);
+    storeCurrentAnnoPageState();
+    const payloadPages = {};
+    Object.keys(annoPageStates).forEach((pageKey) => {
+      const snap = annoPageStates[pageKey];
+      if (snap) {
+        payloadPages[pageKey] = JSON.parse(JSON.stringify(snap));
+      }
+    });
+
+    let payload;
+    if ((annoIsPdf && annoPdfPageCount > 1) || Object.keys(payloadPages).length > 1) {
+      payload = {
+        version: 'multi-page-v1',
+        pageCount: annoPdfPageCount,
+        pages: payloadPages
+      };
+    } else {
+      payload = payloadPages['1'] || snapshotAnnoState();
+    }
+
+    plan.annotations = JSON.stringify(payload);
 
     await DB.put('plans', plan);
     App.toast(App.t('annotations_saved_on_plan'), 'success');
