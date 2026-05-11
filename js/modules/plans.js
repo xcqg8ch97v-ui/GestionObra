@@ -1023,9 +1023,8 @@ const PlansModule = (() => {
       // Calculate scale to fit viewport
       const rect = body.getBoundingClientRect();
       const sidebarWidth = 60;
-      const bodyPadding = 0; // No padding in annotation mode
-      const availW = rect.width - sidebarWidth - (bodyPadding * 2);
-      const availH = rect.height - (bodyPadding * 2);
+      const availW = rect.width - sidebarWidth;
+      const availH = rect.height;
       console.log('Viewport size:', rect.width, 'x', rect.height, 'Canvas:', canvasW, 'x', canvasH);
       
       // Center canvas using CSS on the canvas-container
@@ -1038,7 +1037,6 @@ const PlansModule = (() => {
         stage.style.justifyContent = 'center';
         stage.style.padding = '0';
         stage.style.position = 'relative';
-        stage.style.overflow = 'auto';
       }
       
       // Calculate initial zoom to fit viewport
@@ -1573,8 +1571,8 @@ const PlansModule = (() => {
 
   function fitAnnoCanvas() {
     if (!annoCanvas) return;
-    annoCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    setAnnoZoom(annoBaseZoom || 1);
+    annoZoom = 1;
+    setAnnoZoom(1);
     const body = document.getElementById('plan-viewer-body');
     if (body) {
       body.scrollTop = 0;
