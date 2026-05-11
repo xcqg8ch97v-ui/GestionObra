@@ -912,8 +912,9 @@ const PlansModule = (() => {
       // Remove padding in annotation mode to prevent layout issues
       body.style.padding = '0';
 
-      // Render background at HIGH RESOLUTION (300 DPI equivalent)
-      const HIGH_RES_SCALE = 2;
+      // Render background at HIGH RESOLUTION for better zoom quality
+      // Higher resolution allows zoom without losing quality
+      const HIGH_RES_SCALE = 6; // Increased for better zoom quality
       let bgImg = null;
       let canvasW = 0, canvasH = 0;
 
@@ -1023,13 +1024,10 @@ const PlansModule = (() => {
       // Calculate scale to fit viewport
       const rect = body.getBoundingClientRect();
       const sidebarWidth = 60;
-      const bodyPadding = 16; // padding from CSS
+      const bodyPadding = 0; // No padding in annotation mode
       const availW = rect.width - sidebarWidth - (bodyPadding * 2);
       const availH = rect.height - (bodyPadding * 2);
       console.log('Viewport size:', rect.width, 'x', rect.height, 'Canvas:', canvasW, 'x', canvasH);
-      const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
-      annoBaseZoom = Math.max(0.1, fitScale);
-      console.log('Base zoom:', annoBaseZoom);
       
       // Center canvas using CSS on the canvas-container
       const stage = body.querySelector('.plan-anno-stage');
@@ -1041,16 +1039,20 @@ const PlansModule = (() => {
         stage.style.justifyContent = 'center';
         stage.style.padding = '0';
         stage.style.position = 'relative';
+        stage.style.overflow = 'auto';
       }
       
-      // Set viewport transform with only scale (no offsets)
+      // Calculate initial zoom to fit viewport
+      // With HIGH_RES_SCALE, the canvas is larger, so we need to scale it down to fit
+      const fitScale = Math.min(availW / canvasW, availH / canvasH, 1);
+      annoBaseZoom = fitScale;
+      annoZoom = 1; // Relative zoom starts at 1 (100% of base zoom)
+      
+      // Set viewport transform to scale canvas to fit viewport
       annoCanvas.setViewportTransform([annoBaseZoom, 0, 0, annoBaseZoom, 0, 0]);
-      annoZoom = 1;
       updateAnnoZoomLabel();
       annoCanvas.renderAll();
-      console.log('Canvas rendered with zoom:', annoBaseZoom);
-      console.log('Canvas element:', document.getElementById('plan-anno-canvas'));
-      console.log('Canvas container:', body.querySelector('.canvas-container'));
+      console.log('Canvas rendered with base zoom:', annoBaseZoom, '(canvas at full resolution)');
 
       try { lucide.createIcons(); } catch(e) {}
     } catch (e) {
@@ -1584,12 +1586,16 @@ const PlansModule = (() => {
 
   function setAnnoZoom(nextZoom) {
     if (!annoCanvas) return;
-    const clamped = Math.max(0.05, Math.min(nextZoom, 20));
+    // Increased max zoom from 20 to 50 to take advantage of higher resolution
+    const clamped = Math.max(0.05, Math.min(nextZoom, 50));
+    annoZoom = clamped;
+    
     // Actual scale is relative to base zoom (fit to viewport)
+    // With HIGH_RES_SCALE=6, the canvas has 6x resolution, so zoom can go higher
     const actualScale = clamped * annoBaseZoom;
+    
     // With CSS flexbox centering, we only need to set the scale, no offsets
     annoCanvas.setViewportTransform([actualScale, 0, 0, actualScale, 0, 0]);
-    annoZoom = clamped;
     updateAnnoZoomLabel();
     annoCanvas.requestRenderAll();
   }
