@@ -913,9 +913,8 @@ const PlansModule = (() => {
       // Remove padding in annotation mode to prevent layout issues
       body.style.padding = '0';
 
-      // Render background at HIGH RESOLUTION for better zoom quality
-      // Higher resolution allows zoom without losing quality
-      const HIGH_RES_SCALE = 6; // Increased for better zoom quality
+      // Render background at high resolution for better zoom quality
+      const HIGH_RES_SCALE = 2;
       let bgImg = null;
       let canvasW = 0, canvasH = 0;
 
@@ -1044,7 +1043,8 @@ const PlansModule = (() => {
       }
       
       // Calculate initial zoom to fit viewport using CSS transform
-      const initialZoom = Math.min(availW / canvasW, availH / canvasH, 1);
+      // No upper limit so canvas always fits the viewport
+      const initialZoom = Math.min(availW / canvasW, availH / canvasH);
       annoZoom = initialZoom;
       annoBaseZoom = initialZoom;
       
